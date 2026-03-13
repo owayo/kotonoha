@@ -1,0 +1,18 @@
+[project]
+name = "training"
+version = "0.1.0"
+description = "CRF/ONNX accent model training for kotonoha"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.10.0",
+    "onnx>=1.20.1",
+    "onnxruntime-gpu>=1.24.3",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }

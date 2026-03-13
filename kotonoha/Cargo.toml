@@ -1,0 +1,32 @@
+[package]
+name = "kotonoha"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Japanese prosody engine for TTS, replacing OpenJTalk"
+repository = "https://github.com/owayo/kotonoha"
+keywords = ["japanese", "tts", "prosody", "nlp", "speech"]
+categories = ["text-processing", "science"]
+
+[features]
+default = []
+cuda = ["ort"]
+
+[dependencies]
+hasami = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+csv = { workspace = true }
+thiserror = { workspace = true }
+rayon = { workspace = true }
+once_cell = { workspace = true }
+ort = { version = "2.0.0-rc.12", optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+criterion = { workspace = true }
+
+[[bench]]
+name = "benchmark"
+harness = false

@@ -1,0 +1,15 @@
+[package]
+name = "kotonoha-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kotonoha"
+path = "src/main.rs"
+
+[dependencies]
+kotonoha = { workspace = true }
+hasami = { workspace = true }
+clap = { version = "4.6.0", features = ["derive"] }
+serde_json = { workspace = true }
