@@ -1,6 +1,24 @@
-# kotonoha
+<p align="center">
+  <img src="docs/images/app.png" width="128" alt="kotonoha">
+</p>
 
-Rust 製日本語韻律エンジン。OpenJTalk の機能を置き換え、HTS Full-Context Label および PhoneTone を生成する。
+<h1 align="center">kotonoha</h1>
+
+<p align="center">
+  <strong>Rust 製日本語韻律エンジン — HTS Full-Context Label & PhoneTone 生成</strong>
+</p>
+
+<p align="center">
+  <a href="LICENSE">
+    <img alt="License" src="https://img.shields.io/github/license/owayo/kotonoha">
+  </a>
+</p>
+
+---
+
+## 概要
+
+OpenJTalk の機能を置き換え、HTS Full-Context Label および PhoneTone を生成する。
 
 ## 機能
 
