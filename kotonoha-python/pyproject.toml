@@ -29,6 +29,18 @@ classifiers = [
 [project.optional-dependencies]
 cuda = []
 
+[tool.uv]
+cache-keys = [
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../Cargo.toml" },
+    { file = "../Cargo.lock" },
+    { file = "../kotonoha/Cargo.toml" },
+    { file = "../kotonoha/src/**/*.rs" },
+    { file = "../../hasami/Cargo.toml" },
+    { file = "../../hasami/src/**/*.rs" },
+]
+
 [tool.maturin]
 features = ["pyo3/extension-module", "cuda"]
 module-name = "kotonoha"
