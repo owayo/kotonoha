@@ -58,3 +58,9 @@ cargo test
 ```bash
 maturin develop  # 開発用ビルド・インストール
 ```
+
+## 学習済みモデル
+
+ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
+
+ファイル名規則: `accent_model_v{N}.onnx` (例: `accent_model_v11.onnx`)
