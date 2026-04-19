@@ -1548,13 +1548,19 @@ def _train_single(  # noqa: PLR0913, PLR0915
         lr=stage2_lr,
         weight_decay=weight_decay,
     )
-    if use_cosine:
+    use_warm_restarts = use_cosine and warm_restarts_t0 > 0
+    if use_warm_restarts:
         # v26: Cosine Warm Restarts for checkpoint diversity
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
             optimizer,
             T_0=warm_restarts_t0,
             T_mult=1,
             eta_min=5e-7,
+        )
+    elif use_cosine:
+        # v25-compatible: single-cycle Cosine
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=stage2_epochs, eta_min=5e-7
         )
     else:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -1649,7 +1655,7 @@ def _train_single(  # noqa: PLR0913, PLR0915
 
         # v26: restart boundaries = pre-restart flat-region checkpoints
         # CosineAnnealingWarmRestarts restarts at epoch == T_0, 2*T_0, 3*T_0, ...
-        if use_cosine and epoch % warm_restarts_t0 == 0:
+        if use_warm_restarts and epoch % warm_restarts_t0 == 0:
             restart_states.append((va_acc, state_copy))
             print(f"    [restart boundary] ep {epoch} va={va_acc:.4f}")
 
