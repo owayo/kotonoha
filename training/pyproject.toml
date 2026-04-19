@@ -16,3 +16,9 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
+
+[dependency-groups]
+dev = [
+    "fugashi>=1.5.2",
+    "unidic-lite>=1.0.8",
+]
