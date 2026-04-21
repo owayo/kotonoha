@@ -77,6 +77,12 @@ def main() -> None:
         default=0.0,
         help="Greedy soup tolerance",
     )
+    parser.add_argument(
+        "--val-split-seed",
+        type=int,
+        default=42,
+        help="Val split seed (must match training)",
+    )
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -90,13 +96,13 @@ def main() -> None:
         jsut = json.load(f)["utterances"]
     _enrich_utterances(jsut, accent_dict)
 
-    random.seed(42)
+    random.seed(args.val_split_seed)
     indices = list(range(len(jsut)))
     random.shuffle(indices)
     val_size = int(len(indices) * 0.1)
     val_idx = set(indices[:val_size])
     val_utts = [u for i, u in enumerate(jsut) if i in val_idx]
-    print(f"Val utts: {len(val_utts)}")
+    print(f"Val utts: {len(val_utts)} (split_seed={args.val_split_seed})")
 
     val_ds = _AccentDataset(val_utts, augment=False)
     val_loader = DataLoader(
