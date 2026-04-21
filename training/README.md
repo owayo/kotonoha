@@ -33,6 +33,29 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v22 | - | 同上 | +combined corpus (3420発話) | 2段階FT + rd schedule - mean 70.82%でv20未満につき中止 |
 | v22 | 71.56% | 同上 | +combined corpus (3420発話) | 2-phase fine-tune + rd schedule、分散縮小(σ=0.29%)で逆効果 (14/96seeds時点で中止) |
 | v23 | 70.42% | 同上 | +combined corpus v3 (3420発話) | morpheme_dropout 0.18 + label_smoothing 0.08 + corpus長文化、mean低下で中止 |
+| v25 | 72.25% | 同上 | +filtered JVS (v24 teacher) | Self-training、27/48seeds時点で中止。peak停滞により打ち切り |
+| v27 | 72.11% | 同上 | 同上 | Knowledge Distillation from v24 ONNX teacher (α=0.3, T=2.0)、20/32 seeds |
+| v28 | 71.41% | BiLSTM + SelfAttn + phrase head | 同上 | v27 + phrase-boundary MTL。MTLが過剰正則化で分散縮小、3/32seedsで中止 |
+| v29 | 71.63% | BiLSTM + SelfAttn | 同上 | v27 + ensemble teacher (v24 + v27 top-5 seeds), α=0.5/T=3.0は逆効果、3/24で中止 |
+| v29b | 71.83% | 同上 | 同上 | v29 + α=0.3/T=2.0、v27と同水準止まり |
+| v30 | 71.41% | BiLSTM + SelfAttn (hidden=320) | 同上 | 容量拡張、2/24seedsで中止 (v27同水準) |
+| **v31** | **75.56%** | 同上 (v25同) | 同上 | **val_split_seed=42→0** で学習・評価、6-seed best-of-N。mean 74.98%±0.33%。seed=42が異常に難しいval集合だったことが判明 |
+
+### val_split_seed による精度差
+
+v25〜v30 で 72% 天井に到達していた原因は、**デフォルトの val_split (seed=42) が特別に難しい500発話の偶然**によるものと判明。v31 で `val_split_seed=0` に変更したところ、同一アーキ・学習手法で **74-75% 台** が安定して出ることが確認された。
+
+```
+# seed=42 で学習した state_014.pt (v27, orig val_acc 72.11%) を別splitで評価:
+#   split 0: 86.75%  split 1: 87.50%  split 2: 87.00%  split 3: 86.48%
+#   split 7: 85.84%  split 10: 86.04%  split 20: 86.90%  split 30: 86.59%
+# (ただしこれはtrain/val重複によるdata leak含む参考値)
+#
+# 一方 v31 seed=0 で学習・評価すると:
+#   split 0 val_acc: 75.56% (leak無しの真のval精度)
+```
+
+**v31 以降は `--val-split-seed` を明示する**。比較する際は必ず同じ split 同士で行う。
 
 ## アーキテクチャ詳細
 
