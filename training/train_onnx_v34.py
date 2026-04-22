@@ -1573,6 +1573,7 @@ def _train_single(  # noqa: PLR0913, PLR0915
                 device,
                 scaler,
                 label_smoothing=label_smoothing,
+                mixup_alpha=0.0,
             )
             if epoch % 10 == 0 or epoch == stage1_epochs:
                 print(f"    ep {epoch:2d}: loss={loss:.4f} acc={acc:.4f}")
