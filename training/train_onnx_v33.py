@@ -2024,6 +2024,12 @@ def main() -> None:
         default=42,
         help="v31: val split random seed (42=JSUT default, others for new splits)",
     )
+    parser.add_argument(
+        "--label-smoothing",
+        type=float,
+        default=0.1,
+        help="Label smoothing value (v33+: try 0.2 to tolerate adjacent accent types)",
+    )
     args = parser.parse_args()
 
     seeds = [int(s) for s in args.seeds.split(",")]
@@ -2238,6 +2244,7 @@ def main() -> None:
                 kd_alpha=args.kd_alpha,
                 kd_temperature=args.kd_temperature,
                 val_split_seed=args.val_split_seed,
+                label_smoothing=args.label_smoothing,
             )
             # v26: persist per-seed best state
             torch.save({"acc": acc, "state": state, "seed": seed}, state_path)
