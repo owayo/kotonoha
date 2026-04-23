@@ -45,7 +45,21 @@ def main() -> None:
     providers = ["CPUExecutionProvider"]  # GPU busy
 
     # Only strong models
-    candidates = ["v20", "v24", "v17", "v13", "v14", "v19", "v18", "v15", "v15b", "v16", "v12", "v38", "v41"]
+    candidates = [
+        "v20",
+        "v24",
+        "v17",
+        "v13",
+        "v14",
+        "v19",
+        "v18",
+        "v15",
+        "v15b",
+        "v16",
+        "v12",
+        "v38",
+        "v41",
+    ]
     sessions: dict[str, ort.InferenceSession] = {}
     dims: dict[str, int] = {}
     for name in candidates:
@@ -68,7 +82,10 @@ def main() -> None:
             continue
         n = len(ms)
         feats13 = np.array(
-            [_extract_morpheme_features(m, i / max(n - 1, 1)) for i, m in enumerate(ms)],
+            [
+                _extract_morpheme_features(m, i / max(n - 1, 1))
+                for i, m in enumerate(ms)
+            ],
             dtype=np.float32,
         )
         labs = np.array(
@@ -96,7 +113,9 @@ def main() -> None:
             elif d == 14 and feats14 is not None:
                 inp = feats14
             else:
-                softmax_all[name].append(np.zeros((len(ms), NUM_CLASSES), dtype=np.float32))
+                softmax_all[name].append(
+                    np.zeros((len(ms), NUM_CLASSES), dtype=np.float32)
+                )
                 continue
             logits = sess.run(None, {"input": inp})[0]
             softmax_all[name].append(_softmax(logits))
@@ -157,7 +176,10 @@ def main() -> None:
         ws = rng.dirichlet(np.ones(len(best_members)))
         avg_preds_list = []
         for i in range(len(labels_list)):
-            avg = sum(ws[k] * softmax_all[best_members[k]][i] for k in range(len(best_members)))
+            avg = sum(
+                ws[k] * softmax_all[best_members[k]][i]
+                for k in range(len(best_members))
+            )
             avg_preds_list.append(avg.argmax(-1))
         preds = np.concatenate(avg_preds_list)
         acc = (preds == flat_labels).mean()
