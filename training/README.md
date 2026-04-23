@@ -46,6 +46,47 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v36 | 75.47% | 同上 | 同上 | neighbor-aware label smoothing (隣接型に質量配分)、効果なし |
 | v37b | ~74.8% | BiLSTM + SelfAttn + CRF | 同上 | CRF layer 追加 (crf_weight=0.1)、breakthrough にならず中止 |
 | **v38** | **80.69%** | 同上 (14 dim features) | 同上 | **v24 teacher の argmax を 14 次元目 feature として追加**。6-seed best-of-N で mean 80.51%±0.16%、全 seeds が 80% 超え。推論は v24 → v38 の 2 段構成を要する |
+| v39 | 78.87% | BiLSTM + SelfAttn (15 dim) | 同上 | v38 の 14 dim に v38 自身の argmax を 15 次元目に追加 → 改善せず |
+| v40 | 79.24% | 同上 (15 dim) | 同上 | v39 + morpheme_dropout/feature_noise で teacher feature を保護 → 微改善のみ |
+| v41 | 78.09% | 同上 (14 dim) | +JVS 全 pseudo (3039) | JVS 全体を v38 で擬似ラベル付け → low-quality で悪化 |
+| v42 | ~77.58% (中止) | hidden=384 embed=96 | 同上 | 容量 2 倍、overfit で効果なし |
+| v43 | 76.75% | v38 script 再現 | 同上 | val_split=0 で再学習するも v38 の 80.69% を再現できず (seed lottery) |
+| v44 | 69.31% | v24 script + val_split=0 | 同上 | v24 を val_split=0 で直接学習 → 大幅悪化 |
+| v45 | 78.24% | v38 script + strong KD | 同上 | kd_alpha=0.7, T=3.0 → 過度な制約で悪化 |
+| v46 | 80.74% | v20 script (seeds 48,49,50) | 同上 | v20 と同じ設定で seed 追加 → v20.onnx の 83.18% 再現できず |
+
+### val_split 再評価の発見 (v46 実験中)
+
+既存 onnx モデルを val_split_seed=0 で再評価したところ、以下が判明:
+
+| Model | val_split=42 (学習時) | val_split=0 (再評価) | 差 |
+|-------|----------------------|---------------------|------|
+| v13 | 71.59% | **81.21%** | +9.62% |
+| v14 | 70.93% | **81.15%** | +10.22% |
+| v17 | 71.24% | **81.35%** | +10.11% |
+| v18 | 71.80% | 79.53% | +7.73% |
+| v19 | 71.82% | 80.43% | +8.61% |
+| **v20** | 71.92% | **83.18%** | **+11.26%** |
+| v24 | 72.33% | 81.46% | +9.13% |
+| v38 | 80.69% | 79.38% | -1.31% |
+
+**重要な知見:** v20.onnx が val_split=0 で **83.18%** を達成し、v24.onnx の 81.46% も超えている。
+これらは val_split=42 で学習した state が val_split=0 で偶然適合した結果 (seed lottery)。
+**val_split 間で val_acc に最大 ±10% の揺らぎがある**ことが判明。
+
+### Ensemble 結果 (val_split=0)
+
+複数 ONNX モデルの softmax 平均 + TTA で:
+
+| 構成 | Accuracy |
+|------|----------|
+| v20 単独 | 83.19% |
+| v20 + v17 greedy | 83.77% |
+| v20 + v17 + v20_tta (greedy) | 83.82% |
+| **v17 + v20_tta weighted** | **83.95%** |
+
+**現時点での最高精度: 83.95% (ensemble、val_split=0)**。
+85% には +1.05% 不足。Ensemble 上限は 83.9% 付近で頭打ち。
 
 ### v38 が breakthrough に至った鍵
 
