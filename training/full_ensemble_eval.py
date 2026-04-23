@@ -142,7 +142,9 @@ def main() -> None:
             elif d == 14 and feats14 is not None:
                 inp = feats14
             else:
-                softmax_all[name].append(np.zeros((len(ms), NUM_CLASSES), dtype=np.float32))
+                softmax_all[name].append(
+                    np.zeros((len(ms), NUM_CLASSES), dtype=np.float32)
+                )
                 continue
             logits = sess.run(None, {"input": inp})[0]
             softmax_all[name].append(_softmax(logits))
@@ -207,10 +209,7 @@ def main() -> None:
             f"(members: {len(best_members)})"
         )
 
-    print(
-        f"\nBest greedy ensemble: {'+'.join(best_members)} = "
-        f"{best_acc * 100:.2f}%"
-    )
+    print(f"\nBest greedy ensemble: {'+'.join(best_members)} = {best_acc * 100:.2f}%")
     print(f"Total morphemes: {total}")
 
 
