@@ -40,6 +40,30 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v29b | 71.83% | 同上 | 同上 | v29 + α=0.3/T=2.0、v27と同水準止まり |
 | v30 | 71.41% | BiLSTM + SelfAttn (hidden=320) | 同上 | 容量拡張、2/24seedsで中止 (v27同水準) |
 | **v31** | **75.56%** | 同上 (v25同) | 同上 | **val_split_seed=42→0** で学習・評価、6-seed best-of-N。mean 74.98%±0.33%。seed=42が異常に難しいval集合だったことが判明 |
+| v33 | 75.58% | 同上 (13 dim features) | 同上 | 読みハッシュを head2+tail2 に拡張、12-seed で v31 と同水準止まり (mean 74.95%±0.42%) |
+| v34 | - | Transformer Encoder (4層) | 同上 | ONNX export で動的 seq_len 失敗、断念 |
+| v35 | 74.45% | BiLSTM + SelfAttn | 同上 | label_smoothing 0.1→0.2、v33 未満で中止 |
+| v36 | 75.47% | 同上 | 同上 | neighbor-aware label smoothing (隣接型に質量配分)、効果なし |
+| v37b | ~74.8% | BiLSTM + SelfAttn + CRF | 同上 | CRF layer 追加 (crf_weight=0.1)、breakthrough にならず中止 |
+| **v38** | **80.69%** | 同上 (14 dim features) | 同上 | **v24 teacher の argmax を 14 次元目 feature として追加**。6-seed best-of-N で mean 80.51%±0.16%、全 seeds が 80% 超え。推論は v24 → v38 の 2 段構成を要する |
+
+### v38 が breakthrough に至った鍵
+
+v33 (15 dim features), v34 (Transformer), v35 (label smoothing), v36 (neighbor-aware), v37 (CRF) は全て 75-76% の天井を突破できなかった。v38 は **v24 teacher モデルの予測 (argmax) を 14 次元目 feature として student に渡す** ことで **75% → 80%+ に一気に +5%** 押し上げた。
+
+- v24 teacher 単体: 72.33%
+- v38 student (14 dim): **80.69%** (+8.36%)
+
+これは「teacher の baseline 予測を入力として、student は誤差補正を学ぶ」という設計。学習データ、アーキ、特徴量の各テコは効果限定的だったが、teacher 予測を明示的 feature 化することで大幅改善が実現した。
+
+### 推論時の 2 段構成
+
+v38 モデル推論には先に v24 モデルで argmax 予測を計算する必要がある。
+
+1. `accent_model_v24.onnx` を `[seq_len, 11]` float32 入力で推論 → `[seq_len, 21]` logits
+2. logits の argmax を `[seq_len]` int として取り出し `pred/20.0` で正規化
+3. v38 用 14 dim 入力: `[pos_id, pd1_id, pd2_id, ct_id, cf_id, mora_count, reading_hash, first_char_hash, last_char_hash, position, dict_accent_type, reading_head2_hash, reading_tail2_hash, teacher_pred/20.0]`
+4. `accent_model_v38.onnx` で推論 → 最終予測
 
 ### val_split_seed による精度差
 
