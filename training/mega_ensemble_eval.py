@@ -44,7 +44,19 @@ def main() -> None:
     onnx_dir = Path("/mnt/c/GitHub/kotonoha-models")
     providers = ["CPUExecutionProvider"]
 
-    all_models = ["v20", "v24", "v17", "v13", "v14", "v19", "v18", "v15", "v15b", "v38", "v46"]
+    all_models = [
+        "v20",
+        "v24",
+        "v17",
+        "v13",
+        "v14",
+        "v19",
+        "v18",
+        "v15",
+        "v15b",
+        "v38",
+        "v46",
+    ]
     sessions: dict[str, ort.InferenceSession] = {}
     dims: dict[str, int] = {}
     for name in all_models:
@@ -71,7 +83,10 @@ def main() -> None:
             continue
         n = len(ms)
         feats13 = np.array(
-            [_extract_morpheme_features(m, i / max(n - 1, 1)) for i, m in enumerate(ms)],
+            [
+                _extract_morpheme_features(m, i / max(n - 1, 1))
+                for i, m in enumerate(ms)
+            ],
             dtype=np.float32,
         )
         labs = np.array(
@@ -99,7 +114,9 @@ def main() -> None:
             elif d == 14 and feats14 is not None:
                 inp = feats14
             else:
-                softmax_all[name].append(np.zeros((len(ms), NUM_CLASSES), dtype=np.float32))
+                softmax_all[name].append(
+                    np.zeros((len(ms), NUM_CLASSES), dtype=np.float32)
+                )
                 continue
             logits = sess.run(None, {"input": inp})[0]
             softmax_all[name].append(_softmax(logits))
@@ -107,13 +124,21 @@ def main() -> None:
         # TTA with different seeds
         for base_name, key, seed_idx in tta_configs:
             if base_name not in sessions:
-                softmax_all[key].append(np.zeros((len(ms), NUM_CLASSES), dtype=np.float32))
+                softmax_all[key].append(
+                    np.zeros((len(ms), NUM_CLASSES), dtype=np.float32)
+                )
                 continue
             sess = sessions[base_name]
             d = dims[base_name]
-            base_inp = feats13[:, :11] if d == 11 else (feats13[:, :13] if d == 13 else feats14)
+            base_inp = (
+                feats13[:, :11]
+                if d == 11
+                else (feats13[:, :13] if d == 13 else feats14)
+            )
             if base_inp is None:
-                softmax_all[key].append(np.zeros((len(ms), NUM_CLASSES), dtype=np.float32))
+                softmax_all[key].append(
+                    np.zeros((len(ms), NUM_CLASSES), dtype=np.float32)
+                )
                 continue
             rng2 = np.random.default_rng(seed_idx * 100 + 7)
             sm_sum = _softmax(sess.run(None, {"input": base_inp})[0])
@@ -179,7 +204,10 @@ def main() -> None:
         ws = rng.dirichlet(np.ones(len(best_members)))
         avg_preds_list = []
         for i in range(len(labels_list)):
-            avg = sum(ws[k] * softmax_all[best_members[k]][i] for k in range(len(best_members)))
+            avg = sum(
+                ws[k] * softmax_all[best_members[k]][i]
+                for k in range(len(best_members))
+            )
             avg_preds_list.append(avg.argmax(-1))
         preds = np.concatenate(avg_preds_list)
         acc = (preds == flat_labels).mean()

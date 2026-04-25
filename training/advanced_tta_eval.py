@@ -74,7 +74,10 @@ def main() -> None:
             continue
         n = len(ms)
         feats13 = np.array(
-            [_extract_morpheme_features(m, i / max(n - 1, 1)) for i, m in enumerate(ms)],
+            [
+                _extract_morpheme_features(m, i / max(n - 1, 1))
+                for i, m in enumerate(ms)
+            ],
             dtype=np.float32,
         )
         labs = np.array(
@@ -109,7 +112,9 @@ def main() -> None:
                         aug[:, 5:] += noise
                     elif aug_type == "pos_shift":
                         # shift position column (index 9) slightly
-                        shift = rng.normal(0, 0.02, size=aug.shape[0]).astype(np.float32)
+                        shift = rng.normal(0, 0.02, size=aug.shape[0]).astype(
+                            np.float32
+                        )
                         aug[:, 9] = np.clip(aug[:, 9] + shift, 0, 1)
                     elif aug_type == "morph_drop":
                         # zero out ~10% random positions
@@ -173,7 +178,10 @@ def main() -> None:
         ws = rng.dirichlet(np.ones(len(best_members)))
         avg_preds_list = []
         for i in range(len(labels_list)):
-            avg = sum(ws[k] * sm_variants[best_members[k]][i] for k in range(len(best_members)))
+            avg = sum(
+                ws[k] * sm_variants[best_members[k]][i]
+                for k in range(len(best_members))
+            )
             avg_preds_list.append(avg.argmax(-1))
         preds = np.concatenate(avg_preds_list)
         acc = (preds == flat_labels).mean()
