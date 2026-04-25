@@ -61,7 +61,10 @@ def main() -> None:
             continue
         n = len(ms)
         feats13 = np.array(
-            [_extract_morpheme_features(m, i / max(n - 1, 1)) for i, m in enumerate(ms)],
+            [
+                _extract_morpheme_features(m, i / max(n - 1, 1))
+                for i, m in enumerate(ms)
+            ],
             dtype=np.float32,
         )
         logits = sess.run(None, {"input": feats13[:, :11]})[0]
@@ -102,8 +105,12 @@ def main() -> None:
     print(f"Total morphemes: {total}")
     dict_covered = total - no_dict
     print(f"Dict covered: {dict_covered} ({dict_covered / total * 100:.2f}%)")
-    print(f"  Dict matches label: {dict_matches_label} ({dict_matches_label / dict_covered * 100:.2f}%)")
-    print(f"  Dict matches pred (NOISE): {dict_matches_pred} ({dict_matches_pred / dict_covered * 100:.2f}%)")
+    print(
+        f"  Dict matches label: {dict_matches_label} ({dict_matches_label / dict_covered * 100:.2f}%)"
+    )
+    print(
+        f"  Dict matches pred (NOISE): {dict_matches_pred} ({dict_matches_pred / dict_covered * 100:.2f}%)"
+    )
 
     out_path = Path("/tmp/v48_label_noise_candidates.json")
     with open(out_path, "w", encoding="utf-8") as f:

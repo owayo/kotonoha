@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+
 # Hiragana to Katakana mapping
 def _hira_to_kata(s: str) -> str:
     out = []

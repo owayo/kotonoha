@@ -119,15 +119,14 @@ def main() -> None:
                 )
 
     print(f"\nTotal morphemes: {total}")
-    print(
-        f"Disagreement (pred != label): {disagree} "
-        f"({disagree / total * 100:.2f}%)"
-    )
+    print(f"Disagreement (pred != label): {disagree} ({disagree / total * 100:.2f}%)")
     print(f"No dict entry: {no_dict} ({no_dict / total * 100:.2f}%)")
     dict_covered = total - no_dict
     print(f"Dict covered: {dict_covered} ({dict_covered / total * 100:.2f}%)")
     if dict_covered > 0:
-        print(f"  Dict matches label: {dict_matches_label} ({dict_matches_label / dict_covered * 100:.2f}%)")
+        print(
+            f"  Dict matches label: {dict_matches_label} ({dict_matches_label / dict_covered * 100:.2f}%)"
+        )
         print(
             f"  Dict matches pred (label noise candidates): {dict_matches_pred} "
             f"({dict_matches_pred / dict_covered * 100:.2f}%)"

@@ -58,7 +58,10 @@ def main() -> None:
             continue
         n = len(ms)
         feats13 = np.array(
-            [_extract_morpheme_features(m, i / max(n - 1, 1)) for i, m in enumerate(ms)],
+            [
+                _extract_morpheme_features(m, i / max(n - 1, 1))
+                for i, m in enumerate(ms)
+            ],
             dtype=np.float32,
         )
         logits = sess.run(None, {"input": feats13[:, :11]})[0]
@@ -82,7 +85,9 @@ def main() -> None:
                 fixed += 1
 
     print(f"Fixed {fixed} / {total} ({fixed / total * 100:.3f}%)")
-    out = Path("/mnt/c/GitHub/kotonoha-training-data/train/jsut_accent_data_v3_cleaned_v2.json")
+    out = Path(
+        "/mnt/c/GitHub/kotonoha-training-data/train/jsut_accent_data_v3_cleaned_v2.json"
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
