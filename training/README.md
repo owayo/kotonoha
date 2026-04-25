@@ -54,6 +54,9 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v44 | 69.31% | v24 script + val_split=0 | 同上 | v24 を val_split=0 で直接学習 → 大幅悪化 |
 | v45 | 78.24% | v38 script + strong KD | 同上 | kd_alpha=0.7, T=3.0 → 過度な制約で悪化 |
 | v46 | 80.74% | v20 script (seeds 48,49,50) | 同上 | v20 と同じ設定で seed 追加 → v20.onnx の 83.18% 再現できず |
+| v47 | (中止) | v38 + cleaned JSUT (302) | 同上 | cleaning (raw 評価) で改善せず、v48 へ |
+| v48 | 76.47% (raw) | v38 + cleaned JSUT (1906) + merged dict (130k) | 同上 | Kanjium 124k 追加で noise 検出 6 倍だが、cleaning bias で raw 評価悪化 |
+| v49 | (中止) | v38 + extended dict のみ | 同上 | kanjium dict は lemma form (JSUT は context form) で不整合、76% 圏 |
 
 ### val_split 再評価の発見 (v46 実験中)
 
