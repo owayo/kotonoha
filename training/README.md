@@ -62,6 +62,11 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v52 | 77.19% (中止) | v38 + ensemble teacher argmax (v17+v20+v24 平均) feature | 同上 | teacher feature 単独では breakthrough なし |
 | v53 | 79.16% | v52 + ensemble teacher logits KD (kd_alpha=0.5) | 同上 | KD でも teacher を超えず |
 | v54_split1 | 86.47% (leak) / 77.44% (valid) | v38 setting を val_split_seed=1 で学習 | 同上 | **DATA LEAK 発覚**: val_split=1 の train set は val_split=0 の val 500 utts のうち ~450 を含むため、val_split=0 評価 86.47% は train 込みの値。真の held-out 精度 (val_split=1 評価) は 77.44%。v17/v20/v24 (val=42 学習) を val=0 で評価していた値も同様に leak を含む。 |
+| v55 | 60.70% (中止) | char-BERT-v3 全層 FT + BiLSTM head | 同上 | BERT 110M params が JSUT 5000 utts に対し overcapacity、tr 92% / va 60% の重篤 overfit |
+| v56 (5 seeds) | 78.00% (5-seed ens) | v38 setting × val=0 × seeds 0-4 | 同上 | 各 seed 76-78%、ensemble 78%、saturated |
+| v56 + v38.onnx weighted ens | **79.69%** | 上記 + v38.onnx | 同上 | **本セッションの真の最高値 (no leak)** |
+| v57 | 73.90% (中止) | v38 + JVS pseudo (v38+v56 ens conf>=0.9) | 同上 | pseudo 23% が orig label と不一致でnoise化、悪化 |
+| v58 | 56.06% (中止) | char-BERT-v3 上位 4 層のみ FT | 同上 | partial freeze でも JSUT 5000 utts に対し overfit |
 
 ### 重要な評価方法論の訂正
 
