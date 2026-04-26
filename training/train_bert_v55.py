@@ -187,9 +187,7 @@ class _BertAccentDataset(Dataset):
                     idxs = [0]  # fallback to CLS
                 morph_token_lists.append(idxs)
 
-            labels = [
-                min(m.get("accent_type", 0), NUM_CLASSES - 1) for m in ms
-            ]
+            labels = [min(m.get("accent_type", 0), NUM_CLASSES - 1) for m in ms]
             self.samples.append(
                 {
                     "input_ids": input_ids,
@@ -211,9 +209,7 @@ def _collate(batch: list[dict], pad_token_id: int = 0) -> dict:
     """Pad and stack."""
     max_t = max(len(s["input_ids"]) for s in batch)
     max_m = max(len(s["labels"]) for s in batch)
-    max_k = max(
-        max(len(idxs) for idxs in s["morph_token_lists"]) for s in batch
-    )
+    max_k = max(max(len(idxs) for idxs in s["morph_token_lists"]) for s in batch)
     b = len(batch)
 
     input_ids = torch.full((b, max_t), pad_token_id, dtype=torch.long)
@@ -268,9 +264,7 @@ def main() -> None:
     ap.add_argument("--head-lr", type=float, default=5e-4)
     ap.add_argument("--weight-decay", type=float, default=0.01)
     ap.add_argument("--patience", type=int, default=5)
-    ap.add_argument(
-        "--bert-model", default="tohoku-nlp/bert-base-japanese-char-v3"
-    )
+    ap.add_argument("--bert-model", default="tohoku-nlp/bert-base-japanese-char-v3")
     ap.add_argument(
         "--output", default="/mnt/c/GitHub/kotonoha-models/accent_model_v55.pt"
     )
@@ -328,8 +322,10 @@ def main() -> None:
     print(f"train ds: {len(train_ds)} val ds: {len(val_ds)}")
 
     pad_id = tk.pad_token_id or 0
+
     def _coll(b: list[dict]) -> dict:
         return _collate(b, pad_token_id=pad_id)
+
     train_loader = DataLoader(
         train_ds,
         batch_size=args.batch_size,
