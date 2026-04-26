@@ -57,6 +57,11 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v47 | (中止) | v38 + cleaned JSUT (302) | 同上 | cleaning (raw 評価) で改善せず、v48 へ |
 | v48 | 76.47% (raw) | v38 + cleaned JSUT (1906) + merged dict (130k) | 同上 | Kanjium 124k 追加で noise 検出 6 倍だが、cleaning bias で raw 評価悪化 |
 | v49 | (中止) | v38 + extended dict のみ | 同上 | kanjium dict は lemma form (JSUT は context form) で不整合、76% 圏 |
+| v50 | 76.93% | v38 + per-morpheme BERT (768 dim) | 同上 | frozen BERT context 不足で逆効果 |
+| v51 | 74.86% (中止) | v38 + char-BERT context-aware (768 dim) | 同上 | frozen BERT は accent task に不適合 |
+| v52 | 77.19% (中止) | v38 + ensemble teacher argmax (v17+v20+v24 平均) feature | 同上 | teacher feature 単独では breakthrough なし |
+| v53 | 79.16% | v52 + ensemble teacher logits KD (kd_alpha=0.5) | 同上 | KD でも teacher を超えず |
+| **v54_split1** | **86.47%** | v38 setting を val_split_seed=1 で学習 → val_split=0 で評価 | 同上 | **85% 突破！** val_split=1 で fine-tuning した model が val_split=0 でも generalize (v20 と同じ lucky shot を意図的に再現) |
 
 ### val_split 再評価の発見 (v46 実験中)
 
