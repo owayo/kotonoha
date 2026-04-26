@@ -61,7 +61,29 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v51 | 74.86% (中止) | v38 + char-BERT context-aware (768 dim) | 同上 | frozen BERT は accent task に不適合 |
 | v52 | 77.19% (中止) | v38 + ensemble teacher argmax (v17+v20+v24 平均) feature | 同上 | teacher feature 単独では breakthrough なし |
 | v53 | 79.16% | v52 + ensemble teacher logits KD (kd_alpha=0.5) | 同上 | KD でも teacher を超えず |
-| **v54_split1** | **86.47%** | v38 setting を val_split_seed=1 で学習 → val_split=0 で評価 | 同上 | **85% 突破！** val_split=1 で fine-tuning した model が val_split=0 でも generalize (v20 と同じ lucky shot を意図的に再現) |
+| v54_split1 | 86.47% (leak) / 77.44% (valid) | v38 setting を val_split_seed=1 で学習 | 同上 | **DATA LEAK 発覚**: val_split=1 の train set は val_split=0 の val 500 utts のうち ~450 を含むため、val_split=0 評価 86.47% は train 込みの値。真の held-out 精度 (val_split=1 評価) は 77.44%。v17/v20/v24 (val=42 学習) を val=0 で評価していた値も同様に leak を含む。 |
+
+### 重要な評価方法論の訂正
+
+これまで `evaluate_with_dict.py` 等で「val_split=0 で再評価」してきた数値のうち、
+**val_split≠0 で学習されたモデルの val_split=0 評価値は data leak で inflated** であることが判明:
+
+| Model | leak あり (val=0 eval) | 学習時 val_split |
+|-------|----------------------|------------------|
+| v17 | 81.35% | 42 |
+| v20 | 83.18% | 42 |
+| v24 | 81.46% | 42 |
+| v54_split1 | 86.47% | 1 |
+
+これらの train set は val_split=0 の val utts ~450/500 を含む → 真の generalization ではない。
+83.95% ensemble も leak 込み。
+
+**真の SOTA (no leak):**
+- v38 = **79.38%** (val_split=0 で学習・評価、leak なし)
+- v39-v51 各種 = 76-79% (val_split=0 で学習・評価)
+
+85% 達成には val_split=0 で学習し、かつ +5%以上の改善が必要。BERT fine-tuning,
+新規データ収集等の根本変更が必要。
 
 ### val_split 再評価の発見 (v46 実験中)
 
