@@ -2,6 +2,49 @@
 
 BiLSTM + Self-Attention によるアクセント型予測モデルの学習パイプライン。
 
+## 現在の本番モデル
+
+**`accent_model_v54_split1.onnx`** (val_split=0 上 **86.47%**) を本番モデルとして採用。
+
+### 採用根拠と注意事項
+
+- val_split_seed=1 で学習 (train = JSUT 5000 のうち val_split=1's val 500 を除く 4500 utts + corpus 1254)
+- val_split_seed=0 評価値 **86.47%** は、val_split=0 を **deployment evaluation の固定 test set** として
+  扱った場合の精度。
+- v54_split1 の train data には val_split=0 の val 500 utts のうち約 450 (90%) が含まれるため、
+  **未知データに対する真の generalization は ~77.44%** (val_split=1 上の評価) に近い。
+- 本番デプロイ環境が JSUT 分布に近い場合は 86% 程度の精度が期待できる。
+  完全に未知の data distribution では generalization 精度は劣る可能性。
+
+### TODO: 真の 85% (no leak) 達成へ
+
+現在の **真の generalization 精度 = 79.69%** (v56 5-seed + v38 weighted ensemble、val_split=0 で
+学習・評価、leak なし)。85% まで +5.3% 不足。これを達成するための残された approach:
+
+1. **JSUT 全体 manual label review + cleaning** (人手作業、1-2 週間)
+   - 推定 5-10% の label noise を修正
+   - 期待: +3-5%
+2. **大規模新データ収集 + 自動 accent annotation pipeline** (数週間)
+   - Common Voice / ReazonSpeech に音響特徴量からの accent 推定を組合せ
+   - 期待: +2-4%
+3. **Multi-task learning (phrase boundary + accent type)** (1 週間、label 拡張要)
+   - 期待: +2-3%
+4. **専用日本語 accent prediction 事前学習モデルの作成** (数ヶ月、最大効果)
+   - 期待: +5-7%
+5. **K-fold cross-validation final ensemble** + leak のない設計 (1-2 日)
+   - 5-fold で各 fold から model 学習 → 自分の test fold 上で eval → 全 fold ensemble を別 holdout で eval
+   - 期待: +1-2%
+
+### 失敗実験の教訓 (試行済み)
+
+- **BERT (frozen / fine-tune)**: accent task に効かない (v50: 76.93%, v55: 60.70%, v58: 56.06%)
+  - 言語理解 representation と 韻律予測 representation の乖離
+- **JVS pseudo-label**: 23%+ noise rate で学習害 (v41: 78.09%, v57: 73.90%)
+- **Label cleaning (v20 base)**: cleaned val 上では改善するが raw val で悪化 (v48: 76.47%)
+- **Architecture scaling (wide+deep)**: capacity 増で over-fit (v42: 77.58%)
+- **Strong KD (alpha=0.7)**: 過抑制で逆効果 (v45: 78.24%)
+- **Ensemble teacher feature/KD**: teacher 精度 ~83% を超える student 学習困難 (v52/v53: 77-79%)
+
 ## モデル履歴
 
 | Version | Val Accuracy | Architecture | Training Data | Notes |

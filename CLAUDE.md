@@ -64,3 +64,20 @@ maturin develop  # 開発用ビルド・インストール
 ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
 
 ファイル名規則: `accent_model_v{N}.onnx` (例: `accent_model_v11.onnx`)
+
+### 現在の本番モデル
+
+**`accent_model_v54_split1.onnx`** (val_split=0 評価で 86.47%)。
+
+詳細・採用根拠・今後の改善 TODO は `training/README.md` を参照。
+
+### TODO: 真の 85% (no leak) 達成
+
+現在の真の generalization 精度は v56 ensemble + v38 で 79.69% (no leak)。
+85% に届かせるには以下のアプローチが必要 (詳細は `training/README.md`):
+
+1. JSUT 全体の manual label review + cleaning (1-2 週間)
+2. 大規模新データ収集 + 自動 accent annotation pipeline (数週間)
+3. Multi-task learning (phrase boundary + accent type) (1 週間)
+4. 専用日本語 accent 事前学習モデル作成 (数ヶ月)
+5. K-fold CV final ensemble (1-2 日)
