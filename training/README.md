@@ -35,6 +35,34 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
    - 5-fold で各 fold から model 学習 → 自分の test fold 上で eval → 全 fold ensemble を別 holdout で eval
    - 期待: +1-2%
 
+### 4-split partial K-fold OOF 評価結果 (2026-04-27)
+
+`k_fold_ensemble_eval.py` で v38 (val_split=0) + v54_split{1,2,3} の 4 model を
+各 val_split={0,1,2,3} 上で評価:
+
+| val_split | owner model | OOF acc | morphemes |
+|-----------|-------------|---------|-----------|
+| 0 | v38 | 79.38% | 8036 |
+| 1 | v54_split1 | 77.17% | 8089 |
+| 2 | v54_split2 | 76.07% | 8287 |
+| 3 | v54_split3 | 75.06% | 8245 |
+| **集約** | — | **76.90%** | 32657 |
+
+**重要な発見**:
+
+1. **val_split のたまたま的 difficulty 差** (75.06%–79.38% の 4.32% 開き)
+   - 「v38 が val_split=0 で 79.38%」は楽観的バイアスを含む
+   - **真の K-fold 平均 generalization = 76.90%** (これまで公表してきた 79.69% より低い)
+2. **既存の v54_splitN は別 split 上で 84-86% を出すが、これは self-leak** (各 model の train が
+   他 split の val utts ~90% を含むため)。本来の test set (自分の val_split) 上では 75-77%。
+3. **Leak 込み ensemble** (owner を除外、3 model 全 leak) は 85-88% を示すが、**実用にならない**
+   (本番デプロイで利用する全 model が学習で見たことのない utt は存在しない構造のため)。
+4. **4-model 単純平均 ensemble** は 83-86% (3 model leak + 1 OOF の混合) で OOF 単独より高いが、
+   これも実質 leak ありの値。
+
+これにより、**true 85% (no leak) 達成にはこれまで公表してきた 79.69% から +5.3% ではなく、
+76.90% から +8.10% の改善が必要** であることが判明。
+
 ### 失敗実験の教訓 (試行済み)
 
 - **BERT (frozen / fine-tune)**: accent task に効かない (v50: 76.93%, v55: 60.70%, v58: 56.06%)
