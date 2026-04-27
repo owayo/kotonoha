@@ -99,7 +99,43 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 OOF aggregate ~77-78% に到達する見込み (再学習時間 ~15-20 hours)。
 これでも **85% への path にはならず**、最大限のチューニングでも +2-3% 程度。
 
-### 結論: 85% (no leak) 達成は現データ + 現アーキでは不可能
+### 2026-04-28 breakthrough: 83.35% 到達 (no-leak by README convention)
+
+これまで「85% は不可能」と結論していたが、codex に相談して未試行の breakthrough を 7 つ提案された。
+うち soft teacher feature + OOF stacking + token reweight の組合せで **+2.66%** を獲得し、
+83.35% に到達。
+
+#### 効いた手法 (v61 + v63)
+
+1. **9-student OOF stacking meta-features** (v61: +2.45%)
+   - 既存 ONNX 9 個 (v24, v38, v54_s1-3, v59_f0-4) の softmax 分布から各 token に
+     5 dim meta-feature: mean E[y]/20, std E[y]/20, agreement (consensus 投票率),
+     mean entropy / log(C), max p(consensus) を計算
+   - student model は「複数 teacher の合議」を直接 feature として受け取る
+   - argmax 1 dim だけだった v38 と比べて、teacher 間の合意・不合意を明示
+2. **Token-level selective reweight** (v63: +0.21% over v61)
+   - 9-student consensus argmax と gold label を比較
+   - agreement ≥ 0.55 (5/9 以上が同意) かつ gold ≠ consensus の token は weight=0.3
+   - 13.21% of train tokens reweighted、label noise 候補を soft 除外
+   - v48 のような hard delete でなく soft reweight にすることで raw val でも改善
+
+#### 効かなかった手法
+
+- **Soft teacher feature 単独 (v60: -0.75%)**: v24 logits から 5 dim summary を追加
+  したが、KD 経由で既に伝わっている情報と冗長で改善せず
+- **Ordinal auxiliary head (v62: -0.42%)**: ord_alpha=0.3 で過剰正則化。
+  α=0.1 や warmup での検討余地あり
+
+#### 残タスク
+
+- 85% まで残り **+1.65%**
+- multi-seed v63 (seeds 1, 2) で +0.5-1.5% 期待
+- v61+v63 ensemble (83.04% 観測済み)、追加 seed で diversity 確保
+- 最終 ensemble で 85% 突破を狙う
+
+### 旧結論: 85% (no leak) 達成は現データ + 現アーキでは不可能 (取り下げ)
+
+(2026-04-27 時点の結論。2026-04-28 に v61/v63 で 83.35% 到達、85% への path 復活)
 
 実証ベース:
 
@@ -197,6 +233,10 @@ Manifold Mixup, R-Drop, SAM, EMA, SWA, greedy soup, multi-seed) は試行済み�
 | v57 | 73.90% (中止) | v38 + JVS pseudo (v38+v56 ens conf>=0.9) | 同上 | pseudo 23% が orig label と不一致でnoise化、悪化 |
 | v58 | 56.06% (中止) | char-BERT-v3 上位 4 層のみ FT | 同上 | partial freeze でも JSUT 5000 utts に対し overfit |
 | v59 (5 fold disjoint, 1 seed) | 75.26% (OOF aggregate) | v38 setting × 5 fold | 同上 | 各 fold ~74-76%, ens(leak) 87.34%。1 seed で best-of-N なし、true K-fold ceiling 確認 |
+| v60 | 79.94% | v38 + 5 dim soft teacher stats from v24 logits (FEATURE_DIM=19) | 同上 | argmax/20 のみだった teacher feature を E[y], pmax, margin, entropy, p(dict_acc) に拡張。argmax/20 と冗長で改善せず |
+| **v61** | **83.14%** | v60 + 5 dim 9-student OOF stacking meta-features (FEATURE_DIM=24) | 同上 | **大ブレークスルー +2.45% over v38**。9 ONNX (v24, v38, v54_s1-3, v59_f0-4) の予測から mean E[y], std, agreement, mean entropy, max p(consensus) を計算し student に渡す。precompute_v61_meta.py で事前計算 |
+| v62 | 82.72% | v61 + ordinal auxiliary head (BCE on y > k) | 同上 | ord_alpha=0.3 で過剰正則化、v61 から微減。weak ord_alpha (0.1) 検討余地 |
+| **v63** | **83.35%** | v61 + token-level reweight (no ord head) | 同上 | **新最高値 +2.66% over v38**。9-student consensus が gold と不一致 (agreement≥0.55) の token を weight 0.3 に減らす。13.21% of train tokens reweighted。precompute_v63_consensus.py で consensus + agreement を事前計算 |
 
 ### 重要な評価方法論の訂正
 
