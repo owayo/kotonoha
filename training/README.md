@@ -63,6 +63,64 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 これにより、**true 85% (no leak) 達成にはこれまで公表してきた 79.69% から +5.3% ではなく、
 76.90% から +8.10% の改善が必要** であることが判明。
 
+### v59: Disjoint 5-fold CV 結果 (2026-04-27)
+
+`train_onnx_v59.py` で JSUT 5000 utts を **重複なし 5 fold** に分割
+(`fold_base_seed=0`、`fold_id=0..4`)、各 fold で v38 setting (14 dim teacher feature) を
+1 seed で学習。OOF prediction を集計:
+
+| fold | val utts | morphemes | OOF acc | 学習時 best |
+|------|----------|-----------|---------|-------------|
+| 0 | 1000 | 16337 | 75.34% | 75.55% |
+| 1 | 1000 | 16186 | 74.39% | 74.80% |
+| 2 | 1000 | 16486 | 75.45% | 75.98% |
+| 3 | 1000 | 16390 | 74.69% | 75.04% |
+| 4 | 1000 | 16509 | 76.39% | 76.95% |
+| **集約** | 5000 | 81908 | **75.26%** | 平均 75.66% |
+
+**Ensemble eval (`v59_ensemble_eval.py`)**:
+
+| 構成 | Acc | leak の有無 |
+|------|-----|-------------|
+| OOF aggregate (各 utt は own fold model のみ) | **75.26%** | leak なし (真の精度) |
+| 5-fold ensemble (own fold 除外、4 model 平均) | 87.34% | 4 model は in-train、本質 leak |
+| 5-fold full ensemble (5 model 平均) | 85.95% | 同上、own fold だけ OOF |
+
+**重要な解釈**:
+
+1. **真の generalization = 75.26%** (4-split partial K-fold の 76.90% より低いのは、各 fold の
+   train data が少ない 4000+1254 utts、かつ 1 seed で best-of-N なしのため)
+2. **Excl-own-fold ensemble 87.34% は leak ベース**: 4 of 5 model が当該 utt を train で見ている
+   ため、メモ化した予測の平均値。本番デプロイで未見 utt に対しては成立しない。
+3. **Full ensemble 85.95% も leak ベース**: 同様。本番デプロイ精度は OOF aggregate 値が上限。
+
+**v59 multi-seed 拡張の見込み**:
+6 seeds best-of-N + greedy soup を全 fold に適用すれば、各 fold +1-2% (現在の v38 と同等の補正)、
+OOF aggregate ~77-78% に到達する見込み (再学習時間 ~15-20 hours)。
+これでも **85% への path にはならず**、最大限のチューニングでも +2-3% 程度。
+
+### 結論: 85% (no leak) 達成は現データ + 現アーキでは不可能
+
+実証ベース:
+
+| アプローチ | 結果 / 期待 | 85% への gap |
+|-----------|-------------|-----------------|
+| v38 単独 (val_split=0) | 79.38% (leak含む可能性あり) | -5.62% |
+| v56 5-seed + v38 weighted ens | 79.69% (val_split=0 のみ) | -5.31% |
+| 4-split partial K-fold OOF | 76.90% (no leak) | -8.10% |
+| v59 disjoint 5-fold OOF (1 seed) | **75.26%** (no leak) | -9.74% |
+| v59 multi-seed best-of-N (推定) | ~77-78% (no leak) | -7-8% |
+
+実装上のあらゆる工夫 (BERT, KD, MTL, scaling, augmentation, label cleaning, ensemble teacher,
+Manifold Mixup, R-Drop, SAM, EMA, SWA, greedy soup, multi-seed) は試行済みで、すべて
+75-80% 帯で plateau。これ以上は **データ品質または事前学習基盤の根本的拡張** が必要:
+
+1. JSUT 全 5000 utts の人手 label review + cleaning (~1-2 週間)
+2. 大規模新データ (~10x) + 高品質 accent annotation (数週間)
+3. accent task 特化 pretrain model (BERT-style 但しタスク向け、数ヶ月)
+
+これらは autonomous な 1 セッションでは実現不可。
+
 ### 失敗実験の教訓 (試行済み)
 
 - **BERT (frozen / fine-tune)**: accent task に効かない (v50: 76.93%, v55: 60.70%, v58: 56.06%)
@@ -138,6 +196,7 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 | v56 + v38.onnx weighted ens | **79.69%** | 上記 + v38.onnx | 同上 | **本セッションの真の最高値 (no leak)** |
 | v57 | 73.90% (中止) | v38 + JVS pseudo (v38+v56 ens conf>=0.9) | 同上 | pseudo 23% が orig label と不一致でnoise化、悪化 |
 | v58 | 56.06% (中止) | char-BERT-v3 上位 4 層のみ FT | 同上 | partial freeze でも JSUT 5000 utts に対し overfit |
+| v59 (5 fold disjoint, 1 seed) | 75.26% (OOF aggregate) | v38 setting × 5 fold | 同上 | 各 fold ~74-76%, ens(leak) 87.34%。1 seed で best-of-N なし、true K-fold ceiling 確認 |
 
 ### 重要な評価方法論の訂正
 

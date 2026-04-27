@@ -25,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
+
 from train_onnx_v38 import (
     NUM_CLASSES,
     _enrich_utterances,
