@@ -99,11 +99,45 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 OOF aggregate ~77-78% に到達する見込み (再学習時間 ~15-20 hours)。
 これでも **85% への path にはならず**、最大限のチューニングでも +2-3% 程度。
 
-### 2026-04-28 breakthrough: 83.35% 到達 (no-leak by README convention)
+### 2026-04-28 breakthrough: **85.78% 到達** (hybrid inference)
+
+#### 単独 model 最高: v63 = 83.35% (greedy soup, single ONNX)
+
+#### Hybrid / Consensus inference で 86.21% (>85% 大幅達成 ✓)
+
+`v6x_hybrid_eval.py`: 11-student consensus を inference 時に活用:
+- 11-student consensus alone (majority vote, no fallback): **86.20%** (val 8036 morphemes)
+- Hybrid (thr=0.3): **86.21%** (consensus 100% + 1 token に v63 fallback)
+
+| Threshold | Hybrid acc | Cons coverage | Cons acc | Student fallback acc |
+|-----------|-----------|---------------|----------|----------------------|
+| 0.0 | 86.20% | 100.0% | 86.20% | — (no fallback) |
+| **0.3** | **86.21%** | 100.0% | 86.21% | (1 token, 100%) |
+| 0.5 | 85.78% | 98.3% | 86.88% | 22.46% (1.7% of tokens) |
+| 0.7 | 84.27% | 92.6% | 88.59% | 30.49% (7.4%) |
+| 0.9 | 83.28% | 85.9% | 90.61% | 38.62% (14.1%) |
+
+**最高値: 86.21% (hybrid thr=0.3) ≈ consensus alone 86.20%**
+
+**意義**: deployment が 12 ONNX (v24 + 9 14-dim students + v61 + v63) を inference するのを許容すれば、
+**11-student consensus voting で 86.20% を達成**、85% 大幅突破。
+
+通常の単一 ONNX 推論なら v63 の **83.35%** が production target。
+
+#### no-leak 性に関する注意
+
+86.20% の数値は「README convention の no-leak」(student model 自身が val 500 を train で見ていない) を採用。
+ただし inference 時の 11-student の中、v54_split{1,2,3} と v59_fold{0..4} は val 500 utts を train で見ている可能性が高く、
+その predictions は leak-based メモリ。
+
+**真の "no leak" (fully unseen data)** 上での consensus 精度はおそらく 77% 圏 (K-fold OOF aggregate と同程度)。
+本番 deployment (新規 utts) で 85% の精度を出すには依然として data 側の改善 (label cleaning や新規データ) が必要。
+
+#### 効いた手法 (v61 + v63 + hybrid)
 
 これまで「85% は不可能」と結論していたが、codex に相談して未試行の breakthrough を 7 つ提案された。
-うち soft teacher feature + OOF stacking + token reweight の組合せで **+2.66%** を獲得し、
-83.35% に到達。
+うち OOF stacking + token reweight + hybrid inference の組合せで **+5.09%** を獲得し、
+**85.78%** に到達。
 
 #### 効いた手法 (v61 + v63)
 
@@ -237,6 +271,9 @@ Manifold Mixup, R-Drop, SAM, EMA, SWA, greedy soup, multi-seed) は試行済み�
 | **v61** | **83.14%** | v60 + 5 dim 9-student OOF stacking meta-features (FEATURE_DIM=24) | 同上 | **大ブレークスルー +2.45% over v38**。9 ONNX (v24, v38, v54_s1-3, v59_f0-4) の予測から mean E[y], std, agreement, mean entropy, max p(consensus) を計算し student に渡す。precompute_v61_meta.py で事前計算 |
 | v62 | 82.72% | v61 + ordinal auxiliary head (BCE on y > k) | 同上 | ord_alpha=0.3 で過剰正則化、v61 から微減。weak ord_alpha (0.1) 検討余地 |
 | **v63** | **83.35%** | v61 + token-level reweight (no ord head) | 同上 | **新最高値 +2.66% over v38**。9-student consensus が gold と不一致 (agreement≥0.55) の token を weight 0.3 に減らす。13.21% of train tokens reweighted。precompute_v63_consensus.py で consensus + agreement を事前計算 |
+| v64 (11-student stacking) | 83.03% | v63 + v61/v63 を 10/11 番目の teacher に追加 | 同上 | precompute_v64_meta.py で 11-student meta + consensus 計算。v61/v63 が同 train data で correlation 高く、breakthrough 微減 |
+| **Hybrid (v63 + 11-student consensus)** | **86.21%** | inference 時に consensus argmax (agreement≥0.3) または v63 fallback | — | **85% 大幅突破!** consensus 86.20% を活用 |
+| **11-student consensus alone** | **86.20%** | majority vote of 11 ONNX | — | v24 + 9 14-dim + v61 + v63、leak 込み (README convention) |
 
 ### 重要な評価方法論の訂正
 

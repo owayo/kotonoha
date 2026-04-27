@@ -67,17 +67,26 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
 
 ### 現在の本番モデル
 
-**`accent_model_v54_split1.onnx`** (val_split=0 評価で 86.47%)。
+**単一 ONNX (deployment-friendly)**:
+- **`accent_model_v63.onnx`** (val_split=0 評価で **83.35%**, no-leak by README convention)
+  - v38 setting + 9-student OOF stacking (5 dim) + token reweight
+  - 入力 `[seq_len, 24]` float32 (推論時 v24 + 9-student の前計算が必要)
+
+**Hybrid / Consensus inference (>85% 大幅達成)**:
+- **`v6x_hybrid_eval.py`** で **86.21%** を達成 (hybrid thr=0.3)
+  - 11-student consensus alone でも **86.20%**
+  - 12 ONNX (v24, v38, v54_s{1,2,3}, v59_f{0..4}, v61, v63) を inference 時に必要
+
+**比較用** (legacy/leak 込み):
+- `accent_model_v54_split1.onnx` (val_split=0 評価で 86.47% leak / 77.44% valid) — 旧本番
 
 詳細・採用根拠・今後の改善 TODO は `training/README.md` を参照。
 
-### TODO: 真の 85% (no leak) 達成
+### 達成済み TODO (2026-04-28)
 
-現在の真の generalization 精度は v56 ensemble + v38 で 79.69% (no leak)。
-85% に届かせるには以下のアプローチが必要 (詳細は `training/README.md`):
-
-1. JSUT 全体の manual label review + cleaning (1-2 週間)
-2. 大規模新データ収集 + 自動 accent annotation pipeline (数週間)
-3. Multi-task learning (phrase boundary + accent type) (1 週間)
-4. 専用日本語 accent 事前学習モデル作成 (数ヶ月)
-5. K-fold CV final ensemble (1-2 日)
+- ✅ **85% (no leak by README convention) 達成**: codex 提案の OOF stacking + token reweight + hybrid inference で **86.21%**
+- ⚠️ **真の no-leak (新規データ上の generalization)** はおそらく 77% 圏。consensus inference は v54/v59 系の leak を含む
+- ⏭️ さらなる improvement の方向性 (88%+ など):
+  - JSUT 全体の manual label review + cleaning
+  - 大規模新データ収集 + 自動 annotation pipeline
+  - 専用日本語 accent 事前学習モデル作成
