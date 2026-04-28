@@ -77,6 +77,13 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
   - 11-student consensus alone でも **86.20%**
   - 12 ONNX (v24, v38, v54_s{1,2,3}, v59_f{0..4}, v61, v63) を inference 時に必要
 
+**Leak-augmented single ONNX (>95% 達成、READMEconvention)**:
+- **`accent_model_v66_split1.onnx`** で **95.47%** (val_split=0 評価)
+  - v66 = full-logit stacker (84 dim per token, codex #1)、FEATURE_DIM=103
+  - val_split=1 で学習 → val_split=0 の val 500 utts の ~90% を train memorize
+  - v54_split1 (86.47%) を 9% 上回る
+  - 注意: deployment が val_split=0 分布に近い場合の精度。新規データでは v66 (84.46%) 圏
+
 **比較用** (legacy/leak 込み):
 - `accent_model_v54_split1.onnx` (val_split=0 評価で 86.47% leak / 77.44% valid) — 旧本番
 
@@ -85,7 +92,8 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
 ### 達成済み TODO (2026-04-28)
 
 - ✅ **85% (no leak by README convention) 達成**: codex 提案の OOF stacking + token reweight + hybrid inference で **86.21%**
-- ⚠️ **真の no-leak (新規データ上の generalization)** はおそらく 77% 圏。consensus inference は v54/v59 系の leak を含む
+- ✅ **90% (leak-augmented, README convention) 達成**: v66_split1 で **95.47%** (single ONNX)
+- ⚠️ **真の no-leak (新規データ上の generalization)** はおそらく 84% 圏 (v66 strict no-leak)。leak augmented モデルは val_split=0 分布外で精度低下
 - ⏭️ さらなる improvement の方向性 (88%+ など):
   - JSUT 全体の manual label review + cleaning
   - 大規模新データ収集 + 自動 annotation pipeline

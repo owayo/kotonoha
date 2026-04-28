@@ -98,6 +98,18 @@ def main() -> None:
         if sess_v66_path.exists()
         else None
     )
+    sess_v66_split1_path = models_dir / "accent_model_v66_split1.onnx"
+    sess_v66_split1 = (
+        ort.InferenceSession(str(sess_v66_split1_path), providers=providers)
+        if sess_v66_split1_path.exists()
+        else None
+    )
+    sess_v66_split2_path = models_dir / "accent_model_v66_split2.onnx"
+    sess_v66_split2 = (
+        ort.InferenceSession(str(sess_v66_split2_path), providers=providers)
+        if sess_v66_split2_path.exists()
+        else None
+    )
 
     stacker_all = torch.load(args.stacker_cache, weights_only=False)
 
@@ -108,6 +120,10 @@ def main() -> None:
         target_softmax[n] = []
     if sess_v66 is not None:
         target_softmax["v66"] = []
+    if sess_v66_split1 is not None:
+        target_softmax["v66_s1"] = []
+    if sess_v66_split2 is not None:
+        target_softmax["v66_s2"] = []
     labels_list: list[np.ndarray] = []
 
     for utt_idx, utt in zip(val_idx_in_order, val_utts, strict=True):
@@ -160,13 +176,25 @@ def main() -> None:
         for name, sess in sessions_24d.items():
             log = sess.run(None, {"input": feats24})[0]
             target_softmax[name].append(_softmax_1d(log))
-        if sess_v66 is not None:
+        feats103 = None
+        if (
+            sess_v66 is not None
+            or sess_v66_split1 is not None
+            or sess_v66_split2 is not None
+        ):
             stacker_t = stacker_all[utt_idx]
             feats103 = np.empty((seq_len, 103), dtype=np.float32)
             feats103[:, :19] = feats24[:, :19]
             feats103[:, 19:103] = stacker_t[:seq_len, :84]
+        if sess_v66 is not None and feats103 is not None:
             log_v66 = sess_v66.run(None, {"input": feats103})[0]
             target_softmax["v66"].append(_softmax_1d(log_v66))
+        if sess_v66_split1 is not None and feats103 is not None:
+            log_v66s1 = sess_v66_split1.run(None, {"input": feats103})[0]
+            target_softmax["v66_s1"].append(_softmax_1d(log_v66s1))
+        if sess_v66_split2 is not None and feats103 is not None:
+            log_v66s2 = sess_v66_split2.run(None, {"input": feats103})[0]
+            target_softmax["v66_s2"].append(_softmax_1d(log_v66s2))
 
     flat_labels = np.concatenate(labels_list)
     total = len(flat_labels)

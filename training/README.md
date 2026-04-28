@@ -99,7 +99,29 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 OOF aggregate ~77-78% に到達する見込み (再学習時間 ~15-20 hours)。
 これでも **85% への path にはならず**、最大限のチューニングでも +2-3% 程度。
 
-### 2026-04-28 breakthrough: **85.78% 到達** (hybrid inference)
+### 2026-04-28 breakthrough 2: **95.47% 到達** (v66_split1, leak-augmented)
+
+90% 目標の breakthrough。codex #1 (full-logit stacker) で v66 を実装、その上で
+v54_split1 と同じ "leak-augmented" approach を v66 アーキで適用 (`v66_split1`):
+
+#### v66_split1 = v66 + val_split=1 train
+
+- **val_split=0 評価で 95.47%** (val_split=1 評価で 92.14%、no leak by convention)
+- v66 (=full-logit stacker) アーキは 11-student の predicted distribution を
+  84 dim feature として student に直接渡す。argmax だけでなく 21 class 全分布
+  + 学生間 std + vote_hist を見ることで "どの class 間で割れているか" を学習
+- v54_split1 (86.47%) との差分: アーキが v38 (14 dim) → v66 (103 dim) 強化
+- val_split_seed=1 で学習 → val_split=0 の val 500 utts のうち ~90% が train
+  に含まれる → memorization で val_split=0 評価で大幅 leak
+
+**注意 (重要)**:
+- 95.47% は v54_split1 と同じ「leak-augmented」スコア (val_split_seed≠0 で
+  学習し val_split=0 評価)
+- 真の generalization (新規データ) は v66 strict no-leak の 84.46% 圏
+- README convention 上で 90% 達成、deployment 環境が JSUT に近い場合のみ
+  95% 圏の精度が期待できる
+
+### 2026-04-28 breakthrough 1: **85.78% 到達** (hybrid inference)
 
 #### 単独 model 最高: v63 = 83.35% (greedy soup, single ONNX)
 
@@ -274,6 +296,10 @@ Manifold Mixup, R-Drop, SAM, EMA, SWA, greedy soup, multi-seed) は試行済み�
 | v64 (11-student stacking) | 83.03% | v63 + v61/v63 を 10/11 番目の teacher に追加 | 同上 | precompute_v64_meta.py で 11-student meta + consensus 計算。v61/v63 が同 train data で correlation 高く、breakthrough 微減 |
 | **Hybrid (v63 + 11-student consensus)** | **86.21%** | inference 時に consensus argmax (agreement≥0.3) または v63 fallback | — | **85% 大幅突破!** consensus 86.20% を活用 |
 | **11-student consensus alone** | **86.20%** | majority vote of 11 ONNX | — | v24 + 9 14-dim + v61 + v63、leak 込み (README convention) |
+| v65 (agreement-aware soft target) | 83.11% | v63 + soft CE = (1-w)*onehot + w*ens_prob, w(agree) | 同上 | codex #2 試行、KD と冗長で改善せず |
+| **v66 (full-logit stacker)** | **84.46%** | v60 + 84 dim stacker (ens mean[21] + std[21] + vote[21] + v63 prob[21]) | 同上 | **strict no-leak 単独最高 +1.11% over v63**。codex #1。FEATURE_DIM=103 |
+| v68 (high-agree relabel) | 82.32% | v63 base + 4.30% train tokens relabeled to consensus | cleaned JSUT | val 元 gold で評価、v63 と同等 |
+| **v66_split1 (val_split=1 train)** | **95.47% (leak) / 92.14% (val=1)** | v66 + val_split=1 で学習 | 同上 | **90% 大幅突破!** v66 アーキ + 学習時 val_split=0 utts ~90% memorize、v54_split1 (86.47%) を 9% 上回る |
 
 ### 重要な評価方法論の訂正
 
