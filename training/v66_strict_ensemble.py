@@ -110,6 +110,12 @@ def main() -> None:
         if sess_v66_split2_path.exists()
         else None
     )
+    sess_v66_split3_path = models_dir / "accent_model_v66_split3.onnx"
+    sess_v66_split3 = (
+        ort.InferenceSession(str(sess_v66_split3_path), providers=providers)
+        if sess_v66_split3_path.exists()
+        else None
+    )
 
     stacker_all = torch.load(args.stacker_cache, weights_only=False)
 
@@ -124,6 +130,8 @@ def main() -> None:
         target_softmax["v66_s1"] = []
     if sess_v66_split2 is not None:
         target_softmax["v66_s2"] = []
+    if sess_v66_split3 is not None:
+        target_softmax["v66_s3"] = []
     labels_list: list[np.ndarray] = []
 
     for utt_idx, utt in zip(val_idx_in_order, val_utts, strict=True):
@@ -195,6 +203,9 @@ def main() -> None:
         if sess_v66_split2 is not None and feats103 is not None:
             log_v66s2 = sess_v66_split2.run(None, {"input": feats103})[0]
             target_softmax["v66_s2"].append(_softmax_1d(log_v66s2))
+        if sess_v66_split3 is not None and feats103 is not None:
+            log_v66s3 = sess_v66_split3.run(None, {"input": feats103})[0]
+            target_softmax["v66_s3"].append(_softmax_1d(log_v66s3))
 
     flat_labels = np.concatenate(labels_list)
     total = len(flat_labels)
@@ -255,6 +266,53 @@ def main() -> None:
             cur_acc = a
             print(f"  + {cand}: {a * 100:.2f}% [{','.join(cur)}]")
     print(f"  Best README-convention: {cur_acc * 100:.2f}% [{','.join(cur)}]")
+
+    # v66_split family weighted ensemble
+    print("\n=== v66_split family weighted ensembles ===")
+    split_models = [n for n in ("v66_s1", "v66_s2", "v66_s3") if n in target_softmax]
+    if len(split_models) >= 2:
+        # Equal weight
+        avg_preds = []
+        for i in range(len(labels_list)):
+            stacked = np.stack([target_softmax[n][i] for n in split_models])
+            avg_preds.append(stacked.mean(0).argmax(-1))
+        preds = np.concatenate(avg_preds)
+        acc = float((preds == flat_labels).mean())
+        print(f"  Equal-weight avg of {split_models}: {acc * 100:.2f}%")
+
+        # Weighted by single accuracy
+        weights = np.array([accs[n] for n in split_models], dtype=np.float32)
+        weights = weights / weights.sum()
+        avg_preds = []
+        for i in range(len(labels_list)):
+            stacked = np.stack([target_softmax[n][i] for n in split_models])
+            w = weights.reshape(-1, 1, 1)
+            avg = (stacked * w).sum(axis=0)
+            avg_preds.append(avg.argmax(-1))
+        preds = np.concatenate(avg_preds)
+        acc = float((preds == flat_labels).mean())
+        print(
+            f"  Weighted by single acc {split_models} weights={weights.tolist()}: "
+            f"{acc * 100:.2f}%"
+        )
+
+        # Heavy weight on best
+        if "v66_s1" in target_softmax:
+            for w_top in [0.7, 0.8, 0.9]:
+                w_other = (1.0 - w_top) / max(len(split_models) - 1, 1)
+                ws = [w_top if n == "v66_s1" else w_other for n in split_models]
+                avg_preds = []
+                for i in range(len(labels_list)):
+                    stacked = np.stack([target_softmax[n][i] for n in split_models])
+                    w = np.array(ws, dtype=np.float32).reshape(-1, 1, 1)
+                    avg = (stacked * w).sum(axis=0)
+                    avg_preds.append(avg.argmax(-1))
+                preds = np.concatenate(avg_preds)
+                acc = float((preds == flat_labels).mean())
+                print(
+                    f"  v66_s1 weight={w_top:.1f} (others={w_other:.3f} each): "
+                    f"{acc * 100:.2f}%"
+                )
 
 
 if __name__ == "__main__":

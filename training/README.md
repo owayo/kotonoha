@@ -114,6 +114,22 @@ OOF aggregate ~77-78% に到達する見込み (再学習時間 ~15-20 hours)。
 | v66 | 0 | 84.46% (strict no leak) | 84.46% |
 | v66_split1 | 1 | 92.14% (no leak by README convention*) | **95.47% (leak)** |
 | v66_split2 | 2 | 92.06% (no leak by README convention*) | 94.55% (leak) |
+| v66_split3 | 3 | 90.84% (no leak by README convention*) | 92.00% (leak) |
+
+#### Weighted ensemble (v66_split family on val_split=0)
+
+| 構成 | val=0 acc |
+|------|-----------|
+| v66_split1 alone | **95.47%** ← 最高 |
+| v66_split2 alone | 94.55% |
+| v66_split3 alone | 92.00% |
+| Equal-weight avg of split{1,2,3} | 94.36% |
+| Weighted by single acc | 94.35% |
+| v66_s1 (0.7) + others | 95.02% |
+| v66_s1 (0.9) + others | 95.32% |
+
+**v66_split1 単独が最強**。他の split を加えると精度が下がる
+(v66_s1 のメモリ化精度が最高で、他 split は dilution となる)。
 
 \* 注意: v66_split1/split2 の self val 評価は student が val を直接見ていないため
 README convention 上「no leak」だが、stacker features (v61/v63 等) は val_split=0 で
@@ -327,6 +343,7 @@ Manifold Mixup, R-Drop, SAM, EMA, SWA, greedy soup, multi-seed) は試行済み�
 | v68 (high-agree relabel) | 82.32% | v63 base + 4.30% train tokens relabeled to consensus | cleaned JSUT | val 元 gold で評価、v63 と同等 |
 | **v66_split1 (val_split=1 train)** | **95.47% (leak) / 92.14% (val=1)** | v66 + val_split=1 で学習 | 同上 | **90% 大幅突破!** v66 アーキ + 学習時 val_split=0 utts ~90% memorize、v54_split1 (86.47%) を 9% 上回る |
 | **v66_split2 (val_split=2 train)** | **94.55% (leak) / 92.06% (val=2)** | v66 + val_split=2 で学習 | 同上 | val_split=2 評価で同等の 92% 圏。leak 構造同じだが val_split=1 と僅かに重複領域違う |
+| v66_split3 (val_split=3 train) | 92.00% (leak) / 90.84% (val=3) | v66 + val_split=3 で学習 | 同上 | leak 比率が低めの val_split で 92% 止まり。weighted ensemble に追加しても 95% 以下にしかならない |
 
 ### 重要な評価方法論の訂正
 
