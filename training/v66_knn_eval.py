@@ -167,7 +167,7 @@ def main() -> None:
     # Use a subset of dimensions: 0-12 (base 13 dim) + 13 (v24 argmax) for cleanliness
     # Or use all 103 dim. Try both.
     print("\nComputing kNN (using 14-dim core features)...")
-    bank_core = bank_feats[:, :14]
+    bank_core = bank_feats[:, :103]
     bank_norms = np.linalg.norm(bank_core, axis=1, keepdims=True)
     bank_normed = bank_core / (bank_norms + 1e-9)
 
@@ -191,7 +191,7 @@ def main() -> None:
         return knn_prob
 
     flat_labels = np.concatenate(test_labels_list)
-    flat_feats_core = np.concatenate([f[:, :14] for f in test_feats_list], axis=0)
+    flat_feats_core = np.concatenate([f[:, :103] for f in test_feats_list], axis=0)
     flat_sm_model = np.concatenate(sm_model, axis=0)
 
     print("Computing kNN softmax for all test tokens...")
