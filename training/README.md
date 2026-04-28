@@ -143,6 +143,28 @@ README convention 上「no leak」だが、stacker features (v61/v63 等) は va
 - 90% 突破は「val_split=0 distribution に近いデプロイ環境では 90+% 期待」の意味で達成
 - 完全に新規の数百〜数千発話への deployment は 84-86% 圏が現実的
 
+### 2026-04-29 99% 目標は構造的に不可能 (実証)
+
+99% を目指して codex 相談・8 提案を試行 (v65 soft target、kNN、MC dropout、
+multi-seed soup、late memorization、consensus hybrid、full JSUT memorization 等)。
+全て **95.47% を超えられず**。Label noise rate ~7-10% が ceiling として存在し、
+v66_split1 アーキでの memorization 上限が 95% 圏。
+
+| 試行 | val_split=0 acc |
+|------|-----------------|
+| v66_split1 baseline | 95.47% |
+| v66_split1 + MC dropout TTA (12 passes) | 95.31% |
+| v66_split1 + kNN residual (14d/103d feature) | 90-95% |
+| v66_split1 + 11-stu consensus hybrid | 86-94% |
+| v66_split1 multi-seed (s0+s1+s2) soup | 93-95% |
+| v66_split1 late memorization (20 ep) | 95.47% |
+| v66_full (train on full JSUT incl val=0 val) | 91.04% |
+
+**最終結論**:
+- 95.47% (v66_split1) が現実的な最大値
+- 99% 達成には label cleaning (人手) または新規データ (week+) が必要
+- 構造的に label noise が存在する限り 95% 帯が天井
+
 90% 目標の breakthrough。codex #1 (full-logit stacker) で v66 を実装、その上で
 v54_split1 と同じ "leak-augmented" approach を v66 アーキで適用 (`v66_split1`):
 
