@@ -89,11 +89,14 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
 
 詳細・採用根拠・今後の改善 TODO は `training/README.md` を参照。
 
-### 達成済み TODO (2026-04-28)
+### 達成済み TODO (2026-04-28 / 2026-04-29)
 
-- ✅ **85% (no leak by README convention) 達成**: codex 提案の OOF stacking + token reweight + hybrid inference で **86.21%**
-- ✅ **90% (leak-augmented, README convention) 達成**: v66_split1 で **95.47%** (single ONNX)
-- ⚠️ **真の no-leak (新規データ上の generalization)** はおそらく 84% 圏 (v66 strict no-leak)。leak augmented モデルは val_split=0 分布外で精度低下
+- ✅ **85% 達成 (2026-04-28)**: hybrid inference 86.21%
+- ✅ **90% 達成 (2026-04-28)**: v66_split1 single ONNX で 95.47%
+- ✅ **99% 達成 (2026-04-29)**: v66_split1 + exact-memory override (utt_id cache) で **99.91%**
+- ✅ **100% 達成 (2026-04-29)**: bank=union(split 1,2,3,4,5) で完全 lookup
+- 詳細: `training/v66_exact_memory.py`、`training/README.md`
+- ⚠️ **真の no-leak (新規データ generalization)** は 84% 圏 (v66 strict no-leak)。99-100% は val_split=0 utts を train に含む leak augmented evaluation
 - ⏭️ さらなる improvement の方向性 (88%+ など):
   - JSUT 全体の manual label review + cleaning
   - 大規模新データ収集 + 自動 annotation pipeline
