@@ -64,13 +64,17 @@ maturin develop  # 開発用ビルド・インストール
 CUDA feature を有効化したビルド (`maturin develop --features cuda`) で v66
 系の 12 ONNX 推論パイプラインが利用可能になる。
 
+**前提**: `ort` クレートを `load-dynamic` でビルドしているため、起動前に
+`ORT_DYLIB_PATH` 環境変数で libonnxruntime.so の絶対パスを指定する必要がある。
+未設定だと `KotonohaEngine` 構築時に分かりやすいエラーメッセージで失敗する。
+
 ```python
 import os
-os.environ["ORT_DYLIB_PATH"] = "/path/to/libonnxruntime.so"  # load-dynamic
+os.environ["ORT_DYLIB_PATH"] = "/path/to/libonnxruntime.so"  # 必須
 import kotonoha
 engine = kotonoha.KotonohaEngine(
     model_bundle="/mnt/c/GitHub/kotonoha-models",   # 12 ONNX を含む dir
-    accent_dict_paths=[                              # 辞書 (任意、複数指定可)
+    accent_dict_paths=[                              # 追加辞書 (任意、後勝ちマージ)
         "/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv",
     ],
     dict_path="/path/to/hasami_dict.hsd",            # 形態素解析辞書 (任意)
@@ -78,8 +82,12 @@ engine = kotonoha.KotonohaEngine(
 predictions = engine.predict_accent_types(tokens)    # list[int]
 ```
 
+`accent_dict_paths` は **bundle 同梱の `accent_dict.csv` の上に後勝ちマージ**
+される (上書きしない)。指定しなくても bundle 同梱辞書は常に使われる。
+
 主要環境変数: `KOTONOHA_MODEL_BUNDLE`, `KOTONOHA_MODEL_VARIANT`,
-`KOTONOHA_MODEL_PATH` (legacy v8)。詳細は `kotonoha/src/nn/v66/`。
+`KOTONOHA_MODEL_PATH` (legacy v8)、`ORT_DYLIB_PATH` (必須)。詳細は
+`kotonoha/src/nn/v66/`。
 
 ## 学習済みモデル
 

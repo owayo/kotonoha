@@ -159,20 +159,59 @@ impl Engine {
     ///
     /// `contextual_predictor` (InputToken+NjdNode) が設定されていればそちらが優先。
     /// 無ければ `accent_predictor` (NjdNode のみ) を使う。両方無ければ何もしない。
+    ///
+    /// **失敗時の挙動**: contextual predictor が `Err` を返した場合、または
+    /// 予測結果の長さが `nodes.len()` と一致しない場合は、ノードのアクセント型を
+    /// **書き換えず**、stderr にエラーを記録する。これにより推論不調 (ORT エラー、
+    /// bundle 不整合) が「平板語が増えた」だけに見えて検知不能になる事態を防ぐ。
     fn apply_predictor(&self, tokens: &[InputToken], nodes: &mut [NjdNode]) {
         if let Some(ref predictor) = self.contextual_predictor {
-            debug_assert_eq!(tokens.len(), nodes.len());
+            if tokens.len() != nodes.len() {
+                eprintln!(
+                    "kotonoha: apply_predictor: tokens.len ({}) != nodes.len ({}); \
+                     skipping contextual predictor",
+                    tokens.len(),
+                    nodes.len(),
+                );
+                return;
+            }
             let ctx: Vec<FeatureMorpheme<'_>> = tokens
                 .iter()
                 .zip(nodes.iter())
                 .map(|(token, node)| FeatureMorpheme { token, node })
                 .collect();
-            let predicted = predictor.predict_with_context(&ctx);
-            for (node, accent) in nodes.iter_mut().zip(predicted) {
-                node.accent_type = accent;
+            match predictor.predict_with_context(&ctx) {
+                Ok(predicted) => {
+                    if predicted.len() != nodes.len() {
+                        eprintln!(
+                            "kotonoha: apply_predictor: predicted.len ({}) != nodes.len ({}); \
+                             keeping existing accent_type",
+                            predicted.len(),
+                            nodes.len(),
+                        );
+                        return;
+                    }
+                    for (node, accent) in nodes.iter_mut().zip(predicted) {
+                        node.accent_type = accent;
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "kotonoha: contextual predictor failed ({e}); keeping existing accent_type"
+                    );
+                }
             }
         } else if let Some(ref predictor) = self.accent_predictor {
             let predicted = predictor.predict(nodes);
+            if predicted.len() != nodes.len() {
+                eprintln!(
+                    "kotonoha: apply_predictor: predicted.len ({}) != nodes.len ({}); \
+                     keeping existing accent_type",
+                    predicted.len(),
+                    nodes.len(),
+                );
+                return;
+            }
             for (node, accent) in nodes.iter_mut().zip(predicted) {
                 node.accent_type = accent;
             }

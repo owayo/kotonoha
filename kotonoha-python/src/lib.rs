@@ -264,8 +264,16 @@ impl KotonohaEngine {
             ::kotonoha::nn::v66::V66Bundle::from_dir(&dir)
         }
         .map_err(|e| {
+            let dylib_hint = if std::env::var("ORT_DYLIB_PATH").is_err() {
+                "\nHint: ORT_DYLIB_PATH 環境変数が未設定です。\
+                 kotonoha は ort を load-dynamic でビルドしているため、libonnxruntime.so の \
+                 絶対パスを ORT_DYLIB_PATH に設定する必要があります \
+                 (例: /path/to/site-packages/onnxruntime/capi/libonnxruntime.so.1.24.3)。"
+            } else {
+                ""
+            };
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to load v66 bundle from {bundle_dir}: {e}"
+                "Failed to load v66 bundle from {bundle_dir}: {e}{dylib_hint}"
             ))
         })?;
         let pipeline = ::kotonoha::nn::v66::V66Pipeline::new(bundle);

@@ -85,10 +85,11 @@ impl V66Bundle {
 
     /// 任意の accent_dict CSV 群を指定してバンドルを構築する
     ///
-    /// - `accent_dict_paths` が空の場合は `models_dir/accent_dict.csv` を使う
-    ///   (存在しなければ空辞書)。
-    /// - 複数指定時は順にマージし、後の path のエントリが先のエントリを上書きする
-    ///   (Python `_load_accent_dicts` と同じ挙動)。
+    /// - `models_dir/accent_dict.csv` があればまずベースとしてロードする
+    /// - その上に `accent_dict_paths` を順にマージし、後の path のエントリが先の
+    ///   エントリを上書きする (Python `_load_accent_dicts` と同じ後勝ち挙動)
+    /// - したがって bundle 同梱の `accent_dict.csv` は常に取り込まれ、追加辞書を
+    ///   渡しても recall が下がらない
     pub fn from_paths(
         models_dir: &Path,
         accent_dict_paths: &[&Path],
@@ -123,29 +124,26 @@ impl V66Bundle {
 }
 
 /// 複数 accent_dict.csv をマージしてロードする (Python `_load_accent_dicts` 互換)
+///
+/// 1. `models_dir/accent_dict.csv` があればまずベースとしてロード
+/// 2. `paths` を順に後勝ちマージ
+///
+/// 後勝ち順は呼び出し側に委ねるが、典型的には `accent_dict_jsut.csv` が bundle
+/// 同梱されている場合、その上に呼び出し側の追加 CSV を渡す形となる。
 fn load_accent_dicts(
     models_dir: &Path,
     paths: &[&Path],
 ) -> Result<AccentDict, BundleError> {
     let mut dict = AccentDict::new();
-    let resolved: Vec<&Path> = if paths.is_empty() {
-        let fallback = models_dir.join("accent_dict.csv");
-        if fallback.exists() {
-            // 一時的な PathBuf を保持できないため、別 path で再 lookup する
-            // 実際には `paths` が空ならここで return できるが、from_csv を即実行する
-            let dict_loaded = AccentDict::from_csv(&fallback)
-                .map_err(|e| BundleError::AccentDict(fallback.clone(), e.to_string()))?;
-            return Ok(dict_loaded);
-        } else {
-            return Ok(dict);
-        }
-    } else {
-        paths.to_vec()
-    };
-    for p in resolved {
+    let bundled = models_dir.join("accent_dict.csv");
+    if bundled.exists() {
+        let base = AccentDict::from_csv(&bundled)
+            .map_err(|e| BundleError::AccentDict(bundled.clone(), e.to_string()))?;
+        merge_accent_dict(&mut dict, &base);
+    }
+    for p in paths {
         let extra = AccentDict::from_csv(p)
             .map_err(|e| BundleError::AccentDict(p.to_path_buf(), e.to_string()))?;
-        // マージ: extra のエントリで上書き
         merge_accent_dict(&mut dict, &extra);
     }
     Ok(dict)

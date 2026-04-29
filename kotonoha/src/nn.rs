@@ -26,12 +26,23 @@ pub struct FeatureMorpheme<'a> {
     pub node: &'a NjdNode,
 }
 
+/// `ContextualAccentPredictor::predict_with_context` のエラー型
+pub type ContextualAccentError = Box<dyn std::error::Error + Send + Sync>;
+
 /// `(InputToken, NjdNode)` ペア列からアクセント型を予測するトレイト
 ///
 /// `AccentPredictor` と異なり、UniDic 文字列を含む `InputToken` も渡される。
+///
+/// 推論失敗 (ORT エラー、bundle 不整合、shape 不正など) は `Err` で返す。
+/// 呼び出し側は失敗を観測し、フォールバックの可否を判断できる。
 pub trait ContextualAccentPredictor: Send + Sync {
     /// FeatureMorpheme列からアクセント型を予測する
-    fn predict_with_context(&self, ctx: &[FeatureMorpheme<'_>]) -> Vec<u8>;
+    ///
+    /// 成功時は `ctx.len()` と同じ長さの `Vec<u8>` を返す。
+    fn predict_with_context(
+        &self,
+        ctx: &[FeatureMorpheme<'_>],
+    ) -> Result<Vec<u8>, ContextualAccentError>;
 }
 
 /// ルールベースのアクセント予測器（既存ロジックへの委譲）

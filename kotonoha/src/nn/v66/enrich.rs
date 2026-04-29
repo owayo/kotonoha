@@ -24,15 +24,7 @@ pub fn resolve_dict_accents(
 ) -> Vec<Option<u8>> {
     tokens
         .iter()
-        .map(|t| {
-            resolve_one(
-                &t.surface,
-                &t.lemma,
-                &t.reading,
-                &t.pronunciation,
-                accent_dict,
-            )
-        })
+        .map(|t| resolve_one(&t.lemma, &t.reading, accent_dict))
         .collect()
 }
 
@@ -49,15 +41,7 @@ pub fn resolve_dict_accents(
 /// JSUT v3 で確定した `(lemma, reading) → dict_accent_type` を集約した
 /// `accent_dict_jsut.csv` を bundle に同梱して使う設計のため。
 /// surface ベースの fallback は false-positive (別語の値拾い) を生むリスクがある。
-///
-/// `surface` / `pronunciation` 引数は API 互換のため残してあるが現状未使用。
-pub fn resolve_one(
-    _surface: &str,
-    lemma: &str,
-    reading: &str,
-    _pronunciation: &str,
-    accent_dict: &AccentDict,
-) -> Option<u8> {
+pub fn resolve_one(lemma: &str, reading: &str, accent_dict: &AccentDict) -> Option<u8> {
     if let Some(acc) = accent_dict.lookup(lemma, Some(reading)) {
         return Some(acc);
     }
@@ -70,6 +54,64 @@ pub fn resolve_one(
         }
     }
     None
+}
+
+/// `dict_accent_type` 解決時の hit/miss 統計
+///
+/// 本番運用で「accent_dict カバレッジが足りているか」を観測するために使う。
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct EnrichStats {
+    /// 形態素総数
+    pub total: usize,
+    /// (lemma, reading) で直接 hit した件数
+    pub hit_lemma: usize,
+    /// dash fallback (`(base_lemma, reading)`) で hit した件数
+    pub hit_dash: usize,
+    /// 一切 hit せず None になった件数
+    pub miss: usize,
+}
+
+impl EnrichStats {
+    /// hit 率 (=`(hit_lemma + hit_dash) / total`)、`total == 0` のときは `0.0`。
+    pub fn hit_rate(&self) -> f64 {
+        if self.total == 0 {
+            return 0.0;
+        }
+        (self.hit_lemma + self.hit_dash) as f64 / self.total as f64
+    }
+}
+
+/// `resolve_dict_accents` と同じ結果を返しつつ、各 token がどの経路で
+/// 解決されたかを `EnrichStats` で集計する観測用ヘルパ。
+pub fn resolve_dict_accents_with_stats(
+    tokens: &[InputToken],
+    accent_dict: &AccentDict,
+) -> (Vec<Option<u8>>, EnrichStats) {
+    let mut stats = EnrichStats {
+        total: tokens.len(),
+        ..EnrichStats::default()
+    };
+    let out = tokens
+        .iter()
+        .map(|t| {
+            if let Some(acc) = accent_dict.lookup(&t.lemma, Some(&t.reading)) {
+                stats.hit_lemma += 1;
+                return Some(acc);
+            }
+            if let Some(dash_pos) = t.lemma.find('-') {
+                let base = &t.lemma[..dash_pos];
+                if !base.is_empty()
+                    && let Some(acc) = accent_dict.lookup(base, Some(&t.reading))
+                {
+                    stats.hit_dash += 1;
+                    return Some(acc);
+                }
+            }
+            stats.miss += 1;
+            None
+        })
+        .collect();
+    (out, stats)
 }
 
 #[cfg(test)]
@@ -126,5 +168,24 @@ mod tests {
         let tokens = vec![make_token("X-Y", "エックスワイ")];
         let out = resolve_dict_accents(&tokens, &dict);
         assert_eq!(out, vec![None]);
+    }
+
+    #[test]
+    fn enrich_stats_counts_each_path() {
+        let mut dict = AccentDict::new();
+        dict.insert("猫", "ネコ", 1);
+        dict.insert("マレーシア", "マレーシア", 2);
+        let tokens = vec![
+            make_token("猫", "ネコ"),                    // hit_lemma
+            make_token("マレーシア-Malaysia", "マレーシア"), // hit_dash
+            make_token("鳥", "トリ"),                    // miss
+        ];
+        let (out, stats) = resolve_dict_accents_with_stats(&tokens, &dict);
+        assert_eq!(out, vec![Some(1), Some(2), None]);
+        assert_eq!(stats.total, 3);
+        assert_eq!(stats.hit_lemma, 1);
+        assert_eq!(stats.hit_dash, 1);
+        assert_eq!(stats.miss, 1);
+        assert!((stats.hit_rate() - 2.0 / 3.0).abs() < 1e-9);
     }
 }
