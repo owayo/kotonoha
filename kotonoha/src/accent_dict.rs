@@ -89,6 +89,31 @@ impl AccentDict {
             });
     }
 
+    /// エントリを設定する (同じ `(lemma, reading)` があれば上書き、無ければ追加)
+    ///
+    /// 複数 CSV のマージで Python `_load_accent_dicts` の「後勝ち」セマンティクスを
+    /// 再現するために使う。
+    pub fn set(&mut self, lemma: &str, reading: &str, accent_type: u8) {
+        let entries = self.entries.entry(lemma.to_string()).or_default();
+        if let Some(existing) = entries.iter_mut().find(|e| e.reading == reading) {
+            existing.accent_type = accent_type;
+        } else {
+            entries.push(AccentDictEntry {
+                reading: reading.to_string(),
+                accent_type,
+            });
+        }
+    }
+
+    /// 全エントリを `(lemma, reading, accent_type)` のタプルで反復する
+    pub fn iter_entries(&self) -> impl Iterator<Item = (&str, &str, u8)> {
+        self.entries.iter().flat_map(|(lemma, entries)| {
+            entries
+                .iter()
+                .map(move |e| (lemma.as_str(), e.reading.as_str(), e.accent_type))
+        })
+    }
+
     /// 辞書のエントリ数を返す
     pub fn len(&self) -> usize {
         self.entries.values().map(|v| v.len()).sum()

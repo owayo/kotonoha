@@ -5,12 +5,33 @@
 
 #[cfg(any(feature = "cuda", test))]
 use crate::njd::Pos;
-use crate::njd::NjdNode;
+use crate::njd::{InputToken, NjdNode};
 
-/// アクセント予測トレイト
+pub mod v66;
+
+/// アクセント予測トレイト（NjdNodeのみ）
 pub trait AccentPredictor {
     /// NjdNode列からアクセント型を予測する
     fn predict(&self, nodes: &[NjdNode]) -> Vec<u8>;
+}
+
+/// 特徴量抽出に必要な、生 InputToken と NjdNode のペア
+///
+/// v66 系 predictor は UniDic 系の生 POS 文字列 (`代名詞` / `接尾辞` / `形状詞` 等)
+/// を必要とするため、`NjdNode` を経由せず元の `InputToken` を保持する必要がある。
+pub struct FeatureMorpheme<'a> {
+    /// 生の入力トークン（UniDic 由来 POS 文字列を保持）
+    pub token: &'a InputToken,
+    /// 派生済み NjdNode（mora_count・pronunciation・accent_type 初期値などを参照）
+    pub node: &'a NjdNode,
+}
+
+/// `(InputToken, NjdNode)` ペア列からアクセント型を予測するトレイト
+///
+/// `AccentPredictor` と異なり、UniDic 文字列を含む `InputToken` も渡される。
+pub trait ContextualAccentPredictor: Send + Sync {
+    /// FeatureMorpheme列からアクセント型を予測する
+    fn predict_with_context(&self, ctx: &[FeatureMorpheme<'_>]) -> Vec<u8>;
 }
 
 /// ルールベースのアクセント予測器（既存ロジックへの委譲）
@@ -252,8 +273,7 @@ impl OnnxPredictor {
             }
         } else {
             // 出力が[node_count]の場合は丸め
-            for i in 0..node_count {
-                let val = output_data[i];
+            for &val in output_data.iter().take(node_count) {
                 accent_types.push(val.round().max(0.0) as u8);
             }
         }

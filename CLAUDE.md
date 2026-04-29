@@ -59,6 +59,28 @@ cargo test
 maturin develop  # 開発用ビルド・インストール
 ```
 
+### v66 系モデルの Python API
+
+CUDA feature を有効化したビルド (`maturin develop --features cuda`) で v66
+系の 12 ONNX 推論パイプラインが利用可能になる。
+
+```python
+import os
+os.environ["ORT_DYLIB_PATH"] = "/path/to/libonnxruntime.so"  # load-dynamic
+import kotonoha
+engine = kotonoha.KotonohaEngine(
+    model_bundle="/mnt/c/GitHub/kotonoha-models",   # 12 ONNX を含む dir
+    accent_dict_paths=[                              # 辞書 (任意、複数指定可)
+        "/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv",
+    ],
+    dict_path="/path/to/hasami_dict.hsd",            # 形態素解析辞書 (任意)
+)
+predictions = engine.predict_accent_types(tokens)    # list[int]
+```
+
+主要環境変数: `KOTONOHA_MODEL_BUNDLE`, `KOTONOHA_MODEL_VARIANT`,
+`KOTONOHA_MODEL_PATH` (legacy v8)。詳細は `kotonoha/src/nn/v66/`。
+
 ## 学習済みモデル
 
 ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
@@ -101,3 +123,22 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
   - JSUT 全体の manual label review + cleaning
   - 大規模新データ収集 + 自動 annotation pipeline
   - 専用日本語 accent 事前学習モデル作成
+
+### Rust ランタイムへの組込み (2026-04-30)
+
+- ✅ **v66_split1 推論パイプラインを Rust 化** (`kotonoha/src/nn/v66/`)
+  - 12 ONNX オーケストレーション (`pipeline.rs`)、特徴抽出 (`features.rs`)、
+    バンドルローダ (`bundle.rs`)、accent_dict enrich (`enrich.rs`)
+  - Python 訓練コード `train_onnx_v60.py` と数値完全一致 (50 utts feat13 比較
+    パス、20 utts pipeline argmax 100% 一致)
+- ✅ **Python API 拡張**: `KotonohaEngine(model_bundle=...)` で v66 系を使用可
+  能。`KOTONOHA_MODEL_BUNDLE` 環境変数対応、`predict_accent_types` 追加
+- ⚠️ **lookup-only 推論精度**: val_split=0 で **92.98%** (Python の 95.47%
+  より 2.5 pt 低い)。差分は per-utterance な UniDic aType / corpus_lookup を
+  集約 dict で完全再現できないため。production の deployment 値として現実的
+- 📦 **`accent_dict_jsut.csv`** (`kotonoha-models/`、11790 entries) を bundle
+  に同梱。JSUT v3 + corpus_converted を `_enrich_utterances` 後に集約した
+  `(lemma, reading) → dict_accent_type` マップ (`build_jsut_accent_dict.py`)
+- ⏭️ **Phase 2 (形態素 key exact-memory) は不採用**: 単独 91.10%、neural
+  92.98% を 1.88 pt 下回るため (`v66_exact_memory.py --bank-val-splits 1..5`)。
+  utt_id key 方式の 99-100% は本番で再現不能 (任意テキストに utt_id が無い)。

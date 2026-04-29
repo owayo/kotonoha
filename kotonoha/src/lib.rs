@@ -16,7 +16,7 @@ use accent::AccentPhrase;
 use accent_dict::AccentDict;
 use accent_rule::AccentRuleTable;
 use njd::{InputToken, NjdNode};
-use nn::AccentPredictor;
+use nn::{AccentPredictor, ContextualAccentPredictor, FeatureMorpheme};
 use prosody::PhoneTone;
 use std::path::Path;
 use std::sync::Mutex;
@@ -27,6 +27,7 @@ pub struct Engine {
     rule_table: AccentRuleTable,
     accent_dict: Option<AccentDict>,
     accent_predictor: Option<Box<dyn AccentPredictor + Send + Sync>>,
+    contextual_predictor: Option<Box<dyn ContextualAccentPredictor>>,
     analyzer: Option<Mutex<hasami::Analyzer>>,
 }
 
@@ -38,6 +39,7 @@ impl Engine {
             rule_table,
             accent_dict: None,
             accent_predictor: None,
+            contextual_predictor: None,
             analyzer: None,
         })
     }
@@ -48,6 +50,7 @@ impl Engine {
             rule_table: AccentRuleTable::default_rules(),
             accent_dict: None,
             accent_predictor: None,
+            contextual_predictor: None,
             analyzer: None,
         }
     }
@@ -81,12 +84,23 @@ impl Engine {
         Ok(())
     }
 
-    /// ニューラルアクセント予測器を設定する
+    /// ニューラルアクセント予測器を設定する（NjdNode のみ）
     pub fn set_accent_predictor(
         &mut self,
         predictor: Box<dyn AccentPredictor + Send + Sync>,
     ) {
         self.accent_predictor = Some(predictor);
+    }
+
+    /// 文脈付きアクセント予測器を設定する（InputToken + NjdNode）
+    ///
+    /// v66 系のように UniDic 由来の生 POS 文字列を要する predictor で使う。
+    /// `set_accent_predictor` よりも優先される。
+    pub fn set_contextual_accent_predictor(
+        &mut self,
+        predictor: Box<dyn ContextualAccentPredictor>,
+    ) {
+        self.contextual_predictor = Some(predictor);
     }
 
     /// トークン列からNjdNode列を構築する
@@ -141,9 +155,23 @@ impl Engine {
         prosody::extract_prosody_symbols(nodes, phrases)
     }
 
-    /// ニューラル予測器が設定されている場合、ノードのアクセント型を上書きする
-    fn apply_predictor(&self, nodes: &mut [NjdNode]) {
-        if let Some(ref predictor) = self.accent_predictor {
+    /// 設定された予測器でノードのアクセント型を上書きする
+    ///
+    /// `contextual_predictor` (InputToken+NjdNode) が設定されていればそちらが優先。
+    /// 無ければ `accent_predictor` (NjdNode のみ) を使う。両方無ければ何もしない。
+    fn apply_predictor(&self, tokens: &[InputToken], nodes: &mut [NjdNode]) {
+        if let Some(ref predictor) = self.contextual_predictor {
+            debug_assert_eq!(tokens.len(), nodes.len());
+            let ctx: Vec<FeatureMorpheme<'_>> = tokens
+                .iter()
+                .zip(nodes.iter())
+                .map(|(token, node)| FeatureMorpheme { token, node })
+                .collect();
+            let predicted = predictor.predict_with_context(&ctx);
+            for (node, accent) in nodes.iter_mut().zip(predicted) {
+                node.accent_type = accent;
+            }
+        } else if let Some(ref predictor) = self.accent_predictor {
             let predicted = predictor.predict(nodes);
             for (node, accent) in nodes.iter_mut().zip(predicted) {
                 node.accent_type = accent;
@@ -156,7 +184,7 @@ impl Engine {
     /// トークン列からHTS Full-Context Labelを生成する
     pub fn tokens_to_labels(&self, tokens: &[InputToken]) -> Vec<String> {
         let mut nodes = self.analyze(tokens);
-        self.apply_predictor(&mut nodes);
+        self.apply_predictor(tokens, &mut nodes);
         let phrases = self.estimate_accent(&mut nodes);
         self.make_label(&nodes, &phrases)
     }
@@ -164,7 +192,7 @@ impl Engine {
     /// トークン列からPhoneTone列を抽出する
     pub fn tokens_to_phone_tones(&self, tokens: &[InputToken]) -> Vec<PhoneTone> {
         let mut nodes = self.analyze(tokens);
-        self.apply_predictor(&mut nodes);
+        self.apply_predictor(tokens, &mut nodes);
         let phrases = self.estimate_accent(&mut nodes);
         self.extract_phone_tones(&nodes, &phrases)
     }
@@ -172,7 +200,7 @@ impl Engine {
     /// トークン列からPhoneTone列を抽出する（句読点を保持）
     pub fn tokens_to_phone_tones_with_punct(&self, tokens: &[InputToken]) -> Vec<PhoneTone> {
         let mut nodes = self.analyze(tokens);
-        self.apply_predictor(&mut nodes);
+        self.apply_predictor(tokens, &mut nodes);
         let phrases = self.estimate_accent(&mut nodes);
         self.extract_phone_tones_with_punct(&nodes, &phrases)
     }
@@ -180,9 +208,19 @@ impl Engine {
     /// トークン列から韻律記号列を抽出する
     pub fn tokens_to_prosody_symbols(&self, tokens: &[InputToken]) -> Vec<String> {
         let mut nodes = self.analyze(tokens);
-        self.apply_predictor(&mut nodes);
+        self.apply_predictor(tokens, &mut nodes);
         let phrases = self.estimate_accent(&mut nodes);
         self.extract_prosody_symbols(&nodes, &phrases)
+    }
+
+    /// トークン列に対し、設定された predictor によるアクセント型予測値を返す
+    ///
+    /// `analyze` で初期 accent_type をセットしたのち、`apply_predictor` で
+    /// neural predictor (contextual or legacy) があれば上書きしてから値を取り出す。
+    pub fn predict_accent_types(&self, tokens: &[InputToken]) -> Vec<u8> {
+        let mut nodes = self.analyze(tokens);
+        self.apply_predictor(tokens, &mut nodes);
+        nodes.into_iter().map(|n| n.accent_type).collect()
     }
 
     // === テキスト直接解析メソッド（形態素解析含む） ===
