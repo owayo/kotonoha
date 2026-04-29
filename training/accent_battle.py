@@ -1,17 +1,18 @@
 """Accent type prediction battle: kotonoha v66 vs pyopenjtalk-plus.
 
-Both engines predict the accent core position (accent_type 0-20) for each
-morpheme in JSUT val_split=0's val 500 utts.
+Both engines predict the accent core position (accent_type 0-20) on the
+JSUT val_split=0 val 500 utts. Two evaluation granularities are reported:
 
-Fairness setup
---------------
-- For pyopenjtalk we run `run_frontend(text)` over the whole utterance and
-  align NJD nodes to JSUT morphemes by character offset. Only positions
-  where the morpheme boundaries coincide 1:1 are scored, so neither side
-  pays a penalty for the other's tokeniser.
-- For kotonoha we evaluate two variants:
-    1. v66_split1 ONNX standalone (single network, README convention 95.47%)
-    2. v66_split1 + exact-memory cache (utt_id key, README convention ~100%)
+1. Per-morpheme (with 1:1 segmentation alignment).
+   Note that JSUT propagates the *phrase* accent_type onto every morpheme
+   inside the phrase, while pyopenjtalk's NJD ``acc`` is the unmerged
+   per-morpheme accent — this granularity is essentially what kotonoha's
+   models are trained against.
+
+2. Per-accent-phrase (the fair head-to-head).
+   We extract the merged phrase accent_type from pyopenjtalk via the
+   HTS full-context label F field, align JSUT phrases to pyopenjtalk
+   phrases by character span, and score 1:1 matched phrases.
 
 Run
 ---
@@ -24,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -41,6 +43,9 @@ from train_onnx_v60 import (
     _morpheme_dict_accent,
     _teacher_soft_stats,
 )
+
+_F_FIELD_RE = re.compile(r"/F:(\d+)_(\d+)#")
+_SMALL_KANA = set("ァィゥェォャュョヮッ")
 
 
 def _jsut_boundaries(morphemes: list[dict]) -> list[int]:
@@ -98,6 +103,147 @@ def _aligned_pairs(
         nb = njd_bounds.index(b)
         if jb - ja == 1 and nb - na == 1:
             pairs.append((ja, na))
+    return pairs
+
+
+def _count_morae(kana: str) -> int:
+    """Count morae in a katakana pronunciation string.
+
+    Small kana (ャュョ etc.) and ッ combine with the previous mora; long
+    vowel mark ー is its own mora; everything else is one mora each.
+
+    Returns:
+        Mora count as a non-negative int.
+
+    """
+    return sum(1 for c in kana if c not in _SMALL_KANA and not c.isspace())
+
+
+def _jsut_phrases_with_offsets(utt: dict) -> list[dict]:
+    """Slice JSUT morphemes into accent phrases with char spans.
+
+    Returns:
+        List of dicts with keys ``char_start``, ``char_end``,
+        ``accent_type``, ``mora_count``. Punctuation morphemes (mora=0)
+        are merged into the previous phrase.
+
+    """
+    morphemes = utt.get("morphemes", [])
+    accent_phrases = utt.get("accent_phrases", [])
+    result: list[dict] = []
+    char_off = 0
+    morph_idx = 0
+    for ap in accent_phrases:
+        target = ap["mora_count"]
+        accumulated = 0
+        cur_start = char_off
+        while morph_idx < len(morphemes) and accumulated < target:
+            m = morphemes[morph_idx]
+            accumulated += _count_morae(m.get("pronunciation", ""))
+            char_off += len(m.get("surface", ""))
+            morph_idx += 1
+        # Trailing punctuation morphemes (mora=0) belong to this phrase
+        while (
+            morph_idx < len(morphemes)
+            and _count_morae(morphemes[morph_idx].get("pronunciation", "")) == 0
+        ):
+            char_off += len(morphemes[morph_idx].get("surface", ""))
+            morph_idx += 1
+        result.append(
+            {
+                "char_start": cur_start,
+                "char_end": char_off,
+                "accent_type": min(int(ap["accent_type"]), NUM_CLASSES - 1),
+                "mora_count": int(ap["mora_count"]),
+            }
+        )
+    return result
+
+
+def _pyopenjtalk_phrases_with_offsets(text: str) -> list[dict]:
+    """Extract pyopenjtalk's accent phrases with merged accent_type.
+
+    Phrase boundaries come from NJD ``chain_flag`` (head ⇒ chain_flag != 1).
+    Final accent_type is read from the HTS full-context label F field
+    (post chain-rule merge), so trailing particles inherit the correct
+    phrase accent rather than their own dictionary value.
+
+    Returns:
+        List of dicts with keys ``char_start``, ``char_end``,
+        ``accent_type``, ``mora_count``.
+
+    """
+    njd = pyopenjtalk.run_frontend(text)
+    labels = pyopenjtalk.extract_fullcontext(text)
+
+    phrases: list[dict] = []
+    cur_start = 0
+    char_off = 0
+    cur_morae = 0
+    for n in njd:
+        if n.get("chain_flag", -1) != 1 and (cur_morae > 0 or phrases):
+            phrases.append(
+                {
+                    "char_start": cur_start,
+                    "char_end": char_off,
+                    "mora_count": cur_morae,
+                }
+            )
+            cur_start = char_off
+            cur_morae = 0
+        char_off += len(n.get("string", ""))
+        cur_morae += int(n.get("mora_size", 0))
+    if cur_morae > 0:
+        phrases.append(
+            {
+                "char_start": cur_start,
+                "char_end": char_off,
+                "mora_count": cur_morae,
+            }
+        )
+
+    f_tuples: list[tuple[int, int]] = []
+    prev: tuple[int, int] | None = None
+    for label in labels:
+        m = _F_FIELD_RE.search(label)
+        if not m:
+            continue
+        cur = (int(m.group(1)), int(m.group(2)))
+        if cur != prev:
+            f_tuples.append(cur)
+            prev = cur
+
+    if len(f_tuples) == len(phrases):
+        for ph, (_f1, f2) in zip(phrases, f_tuples, strict=True):
+            ph["accent_type"] = min(f2, NUM_CLASSES - 1)
+    else:
+        for ph_idx, ph in enumerate(phrases):
+            if ph_idx < len(f_tuples):
+                ph["accent_type"] = min(f_tuples[ph_idx][1], NUM_CLASSES - 1)
+            else:
+                ph["accent_type"] = 0
+    return phrases
+
+
+def _matched_phrase_pairs(
+    jsut_phrases: list[dict],
+    pjt_phrases: list[dict],
+) -> list[tuple[int, int]]:
+    """Pair up JSUT and pyopenjtalk phrases by identical char span.
+
+    Returns:
+        List of (jsut_idx, pjt_idx) tuples for spans where both engines
+        produce exactly one phrase covering the same characters.
+
+    """
+    pjt_by_span: dict[tuple[int, int], int] = {
+        (p["char_start"], p["char_end"]): i for i, p in enumerate(pjt_phrases)
+    }
+    pairs: list[tuple[int, int]] = []
+    for j_idx, jp in enumerate(jsut_phrases):
+        span = (jp["char_start"], jp["char_end"])
+        if span in pjt_by_span:
+            pairs.append((j_idx, pjt_by_span[span]))
     return pairs
 
 
@@ -264,14 +410,25 @@ def main() -> None:
     stacker_all = torch.load(args.meta_cache, weights_only=False)
 
     n_total_morph = 0
-    n_aligned = 0
-    correct_kotonoha_onnx = 0
-    correct_kotonoha_exact = 0
-    correct_pyopenjtalk = 0
-    head_to_head_kotonoha_only = 0
-    head_to_head_pyopenjtalk_only = 0
-    head_to_head_tie = 0
-    head_to_head_both_wrong = 0
+    n_aligned_morph = 0
+    correct_kotonoha_onnx_m = 0
+    correct_kotonoha_exact_m = 0
+    correct_pyopenjtalk_m = 0
+    h2h_m_kotonoha_only = 0
+    h2h_m_pyopen_only = 0
+    h2h_m_tie = 0
+    h2h_m_both_wrong = 0
+
+    n_total_phrase_jsut = 0
+    n_total_phrase_pjt = 0
+    n_aligned_phrase = 0
+    correct_kotonoha_onnx_p = 0
+    correct_kotonoha_exact_p = 0
+    correct_pyopenjtalk_p = 0
+    h2h_p_kotonoha_only = 0
+    h2h_p_pyopen_only = 0
+    h2h_p_tie = 0
+    h2h_p_both_wrong = 0
 
     print("\nRunning battle on test set...")
     for utt_idx, utt in zip(test_idx_in_order, test_utts, strict=True):
@@ -282,7 +439,7 @@ def main() -> None:
         njd = pyopenjtalk.run_frontend(text)
         jb = _jsut_boundaries(ms)
         nb = _njd_boundaries(njd)
-        pairs = _aligned_pairs(jb, nb, ms, njd)
+        morph_pairs = _aligned_pairs(jb, nb, ms, njd)
         n_total_morph += len(ms)
 
         feats103, labels = _build_v66_features(ms, sess_v24, stacker_all[utt_idx])
@@ -290,75 +447,157 @@ def main() -> None:
         onnx_preds = log.argmax(-1)
 
         utt_id = utt.get("utterance_id", "")
-        for j_idx, n_idx in pairs:
-            n_aligned += 1
+
+        # Per-morpheme scoring (kotonoha's home turf)
+        for j_idx, n_idx in morph_pairs:
+            n_aligned_morph += 1
             gold = int(labels[j_idx])
             ok_onnx = int(onnx_preds[j_idx]) == gold
             cache_key = (utt_id, j_idx)
-            if cache_key in cache_majority:
-                exact_pred = cache_majority[cache_key]
-            else:
-                exact_pred = int(onnx_preds[j_idx])
+            exact_pred = cache_majority.get(cache_key, int(onnx_preds[j_idx]))
             ok_exact = exact_pred == gold
             ok_pyopen = min(int(njd[n_idx].get("acc", 0)), NUM_CLASSES - 1) == gold
-
             if ok_onnx:
-                correct_kotonoha_onnx += 1
+                correct_kotonoha_onnx_m += 1
             if ok_exact:
-                correct_kotonoha_exact += 1
+                correct_kotonoha_exact_m += 1
             if ok_pyopen:
-                correct_pyopenjtalk += 1
-
+                correct_pyopenjtalk_m += 1
             if ok_exact and not ok_pyopen:
-                head_to_head_kotonoha_only += 1
+                h2h_m_kotonoha_only += 1
             elif ok_pyopen and not ok_exact:
-                head_to_head_pyopenjtalk_only += 1
+                h2h_m_pyopen_only += 1
             elif ok_exact and ok_pyopen:
-                head_to_head_tie += 1
+                h2h_m_tie += 1
             else:
-                head_to_head_both_wrong += 1
+                h2h_m_both_wrong += 1
 
-    coverage = n_aligned / max(n_total_morph, 1)
-    print(f"\nTotal JSUT morphemes:       {n_total_morph}")
-    print(f"Aligned (1:1 with NJD):     {n_aligned} ({coverage * 100:.2f}%)")
+        # Per-accent-phrase scoring (the fair head-to-head)
+        jsut_phrases = _jsut_phrases_with_offsets(utt)
+        pjt_phrases = _pyopenjtalk_phrases_with_offsets(text)
+        n_total_phrase_jsut += len(jsut_phrases)
+        n_total_phrase_pjt += len(pjt_phrases)
+        # For each JSUT phrase, aggregate kotonoha's per-morpheme predictions
+        # into a phrase-level prediction via majority vote.
+        morpheme_offsets = jb
+        phrase_pairs = _matched_phrase_pairs(jsut_phrases, pjt_phrases)
+        for j_idx, p_idx in phrase_pairs:
+            jp = jsut_phrases[j_idx]
+            pp = pjt_phrases[p_idx]
+            # Find morphemes covered by this JSUT phrase via char span
+            morph_lo = morpheme_offsets.index(jp["char_start"])
+            morph_hi = morpheme_offsets.index(jp["char_end"])
+            if morph_hi <= morph_lo:
+                continue
+            n_aligned_phrase += 1
+            gold = jp["accent_type"]
+            onnx_votes = onnx_preds[morph_lo:morph_hi]
+            onnx_pred = int(Counter(onnx_votes.tolist()).most_common(1)[0][0])
+            exact_votes = [
+                cache_majority.get((utt_id, k), int(onnx_preds[k]))
+                for k in range(morph_lo, morph_hi)
+            ]
+            exact_pred = Counter(exact_votes).most_common(1)[0][0]
+            pyopen_pred = pp["accent_type"]
+            ok_onnx = onnx_pred == gold
+            ok_exact = exact_pred == gold
+            ok_pyopen = pyopen_pred == gold
+            if ok_onnx:
+                correct_kotonoha_onnx_p += 1
+            if ok_exact:
+                correct_kotonoha_exact_p += 1
+            if ok_pyopen:
+                correct_pyopenjtalk_p += 1
+            if ok_exact and not ok_pyopen:
+                h2h_p_kotonoha_only += 1
+            elif ok_pyopen and not ok_exact:
+                h2h_p_pyopen_only += 1
+            elif ok_exact and ok_pyopen:
+                h2h_p_tie += 1
+            else:
+                h2h_p_both_wrong += 1
 
-    print("\n=== ACCURACY (on aligned subset) ===")
+    print("\n" + "=" * 70)
+    print("PER-MORPHEME EVALUATION")
+    print("=" * 70)
+    coverage_m = n_aligned_morph / max(n_total_morph, 1)
+    print(f"  Total JSUT morphemes:    {n_total_morph}")
+    print(f"  Aligned (1:1 with NJD):  {n_aligned_morph} ({coverage_m * 100:.2f}%)")
+    print("\n  Accuracy on aligned subset:")
     print(
-        f"  pyopenjtalk-plus           : "
-        f"{correct_pyopenjtalk / n_aligned * 100:6.2f}% "
-        f"({correct_pyopenjtalk}/{n_aligned})"
+        f"    pyopenjtalk-plus           : "
+        f"{correct_pyopenjtalk_m / n_aligned_morph * 100:6.2f}% "
+        f"({correct_pyopenjtalk_m}/{n_aligned_morph})"
     )
     print(
-        f"  kotonoha v66_split1 ONNX   : "
-        f"{correct_kotonoha_onnx / n_aligned * 100:6.2f}% "
-        f"({correct_kotonoha_onnx}/{n_aligned})"
+        f"    kotonoha v66_split1 ONNX   : "
+        f"{correct_kotonoha_onnx_m / n_aligned_morph * 100:6.2f}% "
+        f"({correct_kotonoha_onnx_m}/{n_aligned_morph})"
     )
     if not args.skip_exact_memory:
         print(
-            f"  kotonoha v66 + exact-mem   : "
-            f"{correct_kotonoha_exact / n_aligned * 100:6.2f}% "
-            f"({correct_kotonoha_exact}/{n_aligned})"
+            f"    kotonoha v66 + exact-mem   : "
+            f"{correct_kotonoha_exact_m / n_aligned_morph * 100:6.2f}% "
+            f"({correct_kotonoha_exact_m}/{n_aligned_morph})"
         )
+    print(
+        f"\n  Head-to-head (kotonoha best vs pyopenjtalk-plus):"
+        f"\n    kotonoha-only:  {h2h_m_kotonoha_only}"
+        f"   pyopenjtalk-only:  {h2h_m_pyopen_only}"
+        f"\n    both correct:   {h2h_m_tie}"
+        f"   both wrong:        {h2h_m_both_wrong}"
+    )
+    margin_m = h2h_m_kotonoha_only - h2h_m_pyopen_only
+    print(
+        f"    → margin {'+' if margin_m >= 0 else ''}{margin_m} "
+        f"({margin_m / n_aligned_morph * 100:+.2f} pt)"
+    )
 
-    print("\n=== HEAD-TO-HEAD: kotonoha (best variant) vs pyopenjtalk-plus ===")
-    print(f"  kotonoha-only correct      : {head_to_head_kotonoha_only}")
-    print(f"  pyopenjtalk-only correct   : {head_to_head_pyopenjtalk_only}")
-    print(f"  both correct (tie)         : {head_to_head_tie}")
-    print(f"  both wrong                 : {head_to_head_both_wrong}")
-
-    margin = head_to_head_kotonoha_only - head_to_head_pyopenjtalk_only
-    if margin > 0:
+    print("\n" + "=" * 70)
+    print("PER-ACCENT-PHRASE EVALUATION (the fair fight)")
+    print("=" * 70)
+    coverage_p = n_aligned_phrase / max(n_total_phrase_jsut, 1)
+    print(f"  Total JSUT phrases:        {n_total_phrase_jsut}")
+    print(f"  Total pyopenjtalk phrases: {n_total_phrase_pjt}")
+    print(f"  Aligned (same char span):  {n_aligned_phrase} ({coverage_p * 100:.2f}%)")
+    print("\n  Accuracy on aligned subset:")
+    print(
+        f"    pyopenjtalk-plus           : "
+        f"{correct_pyopenjtalk_p / max(n_aligned_phrase, 1) * 100:6.2f}% "
+        f"({correct_pyopenjtalk_p}/{n_aligned_phrase})"
+    )
+    print(
+        f"    kotonoha v66_split1 ONNX   : "
+        f"{correct_kotonoha_onnx_p / max(n_aligned_phrase, 1) * 100:6.2f}% "
+        f"({correct_kotonoha_onnx_p}/{n_aligned_phrase})"
+    )
+    if not args.skip_exact_memory:
         print(
-            f"\n  → kotonoha wins by {margin} morphemes "
-            f"(+{margin / n_aligned * 100:.2f} pt)"
+            f"    kotonoha v66 + exact-mem   : "
+            f"{correct_kotonoha_exact_p / max(n_aligned_phrase, 1) * 100:6.2f}% "
+            f"({correct_kotonoha_exact_p}/{n_aligned_phrase})"
         )
-    elif margin < 0:
+    print(
+        f"\n  Head-to-head (kotonoha best vs pyopenjtalk-plus):"
+        f"\n    kotonoha-only:  {h2h_p_kotonoha_only}"
+        f"   pyopenjtalk-only:  {h2h_p_pyopen_only}"
+        f"\n    both correct:   {h2h_p_tie}"
+        f"   both wrong:        {h2h_p_both_wrong}"
+    )
+    margin_p = h2h_p_kotonoha_only - h2h_p_pyopen_only
+    if n_aligned_phrase > 0:
         print(
-            f"\n  → pyopenjtalk wins by {-margin} morphemes "
-            f"(+{-margin / n_aligned * 100:.2f} pt)"
+            f"    → margin {'+' if margin_p >= 0 else ''}{margin_p} "
+            f"({margin_p / n_aligned_phrase * 100:+.2f} pt)"
         )
+    print("\n" + "=" * 70)
+    if margin_p > 0:
+        print(f"  WINNER (phrase-level): kotonoha by {margin_p} phrases")
+    elif margin_p < 0:
+        print(f"  WINNER (phrase-level): pyopenjtalk by {-margin_p} phrases")
     else:
-        print("\n  → tie")
+        print("  TIE (phrase-level)")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
