@@ -6,9 +6,9 @@ use crate::phoneme;
 /// モーラ情報
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mora {
-    pub text: String,        // カタカナ表記（例: "キャ"）
+    pub text: String,              // カタカナ表記（例: "キャ"）
     pub consonant: Option<String>, // 子音（例: "ky"）
-    pub vowel: String,       // 母音（例: "a"）
+    pub vowel: String,             // 母音（例: "a"）
 }
 
 /// カタカナ読みからモーラ数を計算する
@@ -20,12 +20,15 @@ pub fn count_mora(reading: &str) -> u8 {
 
     while i < chars.len() {
         let ch = chars[i];
-        let next = if i + 1 < chars.len() { Some(chars[i + 1]) } else { None };
+        let next = if i + 1 < chars.len() {
+            Some(chars[i + 1])
+        } else {
+            None
+        };
 
         // 小文字カナ（拗音記号）は直前の文字とセットで1モーラ
-        let is_small_next = next.is_some_and(|c| {
-            matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ')
-        });
+        let is_small_next = next
+            .is_some_and(|c| matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ'));
 
         if is_katakana(ch) || ch == 'ー' {
             count += 1;
@@ -46,11 +49,14 @@ pub fn parse_mora(reading: &str) -> Vec<Mora> {
 
     while i < chars.len() {
         let ch = chars[i];
-        let next = if i + 1 < chars.len() { Some(chars[i + 1]) } else { None };
+        let next = if i + 1 < chars.len() {
+            Some(chars[i + 1])
+        } else {
+            None
+        };
 
-        let is_small_next = next.is_some_and(|c| {
-            matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ')
-        });
+        let is_small_next = next
+            .is_some_and(|c| matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ'));
 
         if !is_katakana(ch) && ch != 'ー' {
             i += 1;
@@ -94,7 +100,14 @@ fn split_cv(phonemes: &[String]) -> (Option<String>, String) {
             let last = &phonemes[phonemes.len() - 1];
             if phoneme::is_vowel(last) {
                 let consonant = phonemes[..phonemes.len() - 1].join("");
-                (if consonant.is_empty() { None } else { Some(consonant) }, last.clone())
+                (
+                    if consonant.is_empty() {
+                        None
+                    } else {
+                        Some(consonant)
+                    },
+                    last.clone(),
+                )
             } else {
                 (None, phonemes.join(""))
             }
@@ -109,7 +122,10 @@ fn is_katakana(c: char) -> bool {
 
 /// 小文字カタカナかどうか判定
 fn is_small_kana(c: char) -> bool {
-    matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ' | 'ッ')
+    matches!(
+        c,
+        'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ' | 'ッ'
+    )
 }
 
 #[cfg(test)]

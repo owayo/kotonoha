@@ -54,10 +54,7 @@ impl V66Pipeline {
     }
 
     /// 推論を実行する (失敗時は `V66PredictError`)
-    pub fn predict(
-        &self,
-        ctx: &[FeatureMorpheme<'_>],
-    ) -> Result<Vec<u8>, V66PredictError> {
+    pub fn predict(&self, ctx: &[FeatureMorpheme<'_>]) -> Result<Vec<u8>, V66PredictError> {
         let dict_accents: Vec<Option<u8>> = ctx
             .iter()
             .map(|m| resolve_one(&m.token.lemma, &m.token.reading, &self.bundle.accent_dict))
@@ -282,7 +279,8 @@ impl ContextualAccentPredictor for V66Pipeline {
         &self,
         ctx: &[FeatureMorpheme<'_>],
     ) -> Result<Vec<u8>, crate::nn::ContextualAccentError> {
-        self.predict(ctx).map_err(|e| Box::new(e) as crate::nn::ContextualAccentError)
+        self.predict(ctx)
+            .map_err(|e| Box::new(e) as crate::nn::ContextualAccentError)
     }
 }
 
@@ -350,4 +348,3 @@ pub enum V66PredictError {
     #[error("output tensor extraction failed: {0}")]
     Extract(String),
 }
-

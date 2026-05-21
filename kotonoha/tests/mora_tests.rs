@@ -509,8 +509,14 @@ fn test_parse_mora_long_vowel() {
 fn test_parse_mora_count_consistency() {
     // count_mora and parse_mora should agree on length
     let words = vec![
-        "ア", "ネコ", "サクラ", "ガッコウ", "コンニチワ",
-        "トーキョー", "コーヒー", "シミュレーション",
+        "ア",
+        "ネコ",
+        "サクラ",
+        "ガッコウ",
+        "コンニチワ",
+        "トーキョー",
+        "コーヒー",
+        "シミュレーション",
     ];
     for word in words {
         let count = count_mora(word);

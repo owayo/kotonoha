@@ -9,9 +9,9 @@
 
 use std::path::{Path, PathBuf};
 
+use kotonoha::njd::{InputToken, build_njd_nodes};
 use kotonoha::nn::FeatureMorpheme;
 use kotonoha::nn::v66::{V66Bundle, V66Pipeline};
-use kotonoha::njd::{InputToken, build_njd_nodes};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -138,7 +138,10 @@ fn pipeline_argmax_matches_python() {
             utt.utterance_id
         );
         let mut utt_match = true;
-        for (i, (&got, &expected)) in pred.iter().zip(utt.predicted_accent_types.iter()).enumerate()
+        for (i, (&got, &expected)) in pred
+            .iter()
+            .zip(utt.predicted_accent_types.iter())
+            .enumerate()
         {
             total += 1;
             if got == expected {

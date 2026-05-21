@@ -146,7 +146,13 @@ fn main() {
             accent_dict,
             format,
             tokens: show_tokens,
-        } => cmd_analyze(&text, dict.as_deref(), accent_dict.as_deref(), &format, show_tokens),
+        } => cmd_analyze(
+            &text,
+            dict.as_deref(),
+            accent_dict.as_deref(),
+            &format,
+            show_tokens,
+        ),
         Commands::Tokenize { text, dict, format } => cmd_tokenize(&text, &dict, &format),
         Commands::Label {
             tokens_json,
@@ -244,7 +250,9 @@ fn cmd_analyze(
         }
     } else {
         eprintln!("Warning: No dictionary specified. Use --dict to specify a .hsd dictionary.");
-        eprintln!("Without a dictionary, use the 'label' subcommand with pre-tokenized JSON input.");
+        eprintln!(
+            "Without a dictionary, use the 'label' subcommand with pre-tokenized JSON input."
+        );
         std::process::exit(1);
     }
 }
@@ -275,8 +283,7 @@ fn cmd_tokenize(text: &str, dict_path: &std::path::Path, format: &TokenizeFormat
             println!("{}", surfaces.join(" "));
         }
         TokenizeFormat::Json => {
-            let input_tokens: Vec<InputToken> =
-                tokens.into_iter().map(InputToken::from).collect();
+            let input_tokens: Vec<InputToken> = tokens.into_iter().map(InputToken::from).collect();
             let json = serde_json::to_string_pretty(&input_tokens).unwrap();
             println!("{json}");
         }
@@ -361,7 +368,13 @@ fn cmd_bench() {
     );
 
     // Benchmark: phoneme conversion
-    let kana_words = ["カキクケコ", "シャシン", "コンニチワ", "トーキョー", "ガッコー"];
+    let kana_words = [
+        "カキクケコ",
+        "シャシン",
+        "コンニチワ",
+        "トーキョー",
+        "ガッコー",
+    ];
     let start = Instant::now();
     for _ in 0..iterations {
         for word in &kana_words {
@@ -506,9 +519,7 @@ fn cmd_build_dict(
         std::process::exit(1);
     }
 
-    let file_size = std::fs::metadata(output_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let file_size = std::fs::metadata(output_path).map(|m| m.len()).unwrap_or(0);
     let total_elapsed = total_start.elapsed();
 
     eprintln!();
@@ -638,9 +649,7 @@ fn cmd_train_crf(
         std::process::exit(1);
     }
 
-    let file_size = std::fs::metadata(output_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let file_size = std::fs::metadata(output_path).map(|m| m.len()).unwrap_or(0);
     let total_elapsed = total_start.elapsed();
 
     // Quick evaluation on training data

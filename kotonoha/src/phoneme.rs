@@ -17,36 +17,67 @@ pub struct Phoneme {
 }
 
 // 母音
-pub const A: Phoneme = Phoneme { symbol: "a", phoneme_type: PhonemeType::Vowel };
-pub const I: Phoneme = Phoneme { symbol: "i", phoneme_type: PhonemeType::Vowel };
-pub const U: Phoneme = Phoneme { symbol: "u", phoneme_type: PhonemeType::Vowel };
-pub const E: Phoneme = Phoneme { symbol: "e", phoneme_type: PhonemeType::Vowel };
-pub const O: Phoneme = Phoneme { symbol: "o", phoneme_type: PhonemeType::Vowel };
+pub const A: Phoneme = Phoneme {
+    symbol: "a",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const I: Phoneme = Phoneme {
+    symbol: "i",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const U: Phoneme = Phoneme {
+    symbol: "u",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const E: Phoneme = Phoneme {
+    symbol: "e",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const O: Phoneme = Phoneme {
+    symbol: "o",
+    phoneme_type: PhonemeType::Vowel,
+};
 
 // 無声母音
-pub const VOICELESS_A: Phoneme = Phoneme { symbol: "A", phoneme_type: PhonemeType::Vowel };
-pub const VOICELESS_I: Phoneme = Phoneme { symbol: "I", phoneme_type: PhonemeType::Vowel };
-pub const VOICELESS_U: Phoneme = Phoneme { symbol: "U", phoneme_type: PhonemeType::Vowel };
-pub const VOICELESS_E: Phoneme = Phoneme { symbol: "E", phoneme_type: PhonemeType::Vowel };
-pub const VOICELESS_O: Phoneme = Phoneme { symbol: "O", phoneme_type: PhonemeType::Vowel };
+pub const VOICELESS_A: Phoneme = Phoneme {
+    symbol: "A",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const VOICELESS_I: Phoneme = Phoneme {
+    symbol: "I",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const VOICELESS_U: Phoneme = Phoneme {
+    symbol: "U",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const VOICELESS_E: Phoneme = Phoneme {
+    symbol: "E",
+    phoneme_type: PhonemeType::Vowel,
+};
+pub const VOICELESS_O: Phoneme = Phoneme {
+    symbol: "O",
+    phoneme_type: PhonemeType::Vowel,
+};
 
 // 特殊記号
-pub const SIL: Phoneme = Phoneme { symbol: "sil", phoneme_type: PhonemeType::Special };
-pub const PAU: Phoneme = Phoneme { symbol: "pau", phoneme_type: PhonemeType::Special };
-pub const CL: Phoneme = Phoneme { symbol: "cl", phoneme_type: PhonemeType::Special };  // 促音
+pub const SIL: Phoneme = Phoneme {
+    symbol: "sil",
+    phoneme_type: PhonemeType::Special,
+};
+pub const PAU: Phoneme = Phoneme {
+    symbol: "pau",
+    phoneme_type: PhonemeType::Special,
+};
+pub const CL: Phoneme = Phoneme {
+    symbol: "cl",
+    phoneme_type: PhonemeType::Special,
+}; // 促音
 
 // 子音
 pub const CONSONANTS: &[&str] = &[
-    "k", "ky", "g", "gy",
-    "s", "sh", "z", "j",
-    "t", "ts", "ch", "d", "dy",
-    "n", "ny",
-    "h", "hy", "f",
-    "b", "by", "p", "py",
-    "m", "my",
-    "r", "ry",
-    "w", "y",
-    "v",
+    "k", "ky", "g", "gy", "s", "sh", "z", "j", "t", "ts", "ch", "d", "dy", "n", "ny", "h", "hy",
+    "f", "b", "by", "p", "py", "m", "my", "r", "ry", "w", "y", "v",
 ];
 
 pub const VOWELS: &[&str] = &["a", "i", "u", "e", "o", "A", "I", "U", "E", "O"];
@@ -55,24 +86,17 @@ pub const SPECIAL_SYMBOLS: &[&str] = &["sil", "pau", "cl", "N"];
 
 /// 全音素リスト
 pub const ALL_PHONEMES: &[&str] = &[
-    "a", "i", "u", "e", "o",
-    "A", "I", "U", "E", "O",
-    "N", "cl", "pau", "sil",
-    "k", "ky", "g", "gy",
-    "s", "sh", "z", "j",
-    "t", "ts", "ch", "d", "dy",
-    "n", "ny",
-    "h", "hy", "f",
-    "b", "by", "p", "py",
-    "m", "my",
-    "r", "ry",
-    "w", "y",
-    "v",
+    "a", "i", "u", "e", "o", "A", "I", "U", "E", "O", "N", "cl", "pau", "sil", "k", "ky", "g",
+    "gy", "s", "sh", "z", "j", "t", "ts", "ch", "d", "dy", "n", "ny", "h", "hy", "f", "b", "by",
+    "p", "py", "m", "my", "r", "ry", "w", "y", "v",
 ];
 
 /// 音素が母音かどうか判定
 pub fn is_vowel(symbol: &str) -> bool {
-    matches!(symbol, "a" | "i" | "u" | "e" | "o" | "A" | "I" | "U" | "E" | "O")
+    matches!(
+        symbol,
+        "a" | "i" | "u" | "e" | "o" | "A" | "I" | "U" | "E" | "O"
+    )
 }
 
 /// 音素が無声母音かどうか判定
@@ -100,8 +124,13 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
     while i < chars.len() {
         let ch = chars[i];
         // 次の文字が小文字（拗音）かチェック
-        let next = if i + 1 < chars.len() { Some(chars[i + 1]) } else { None };
-        let is_small_next = next.is_some_and(|c| matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ'));
+        let next = if i + 1 < chars.len() {
+            Some(chars[i + 1])
+        } else {
+            None
+        };
+        let is_small_next = next
+            .is_some_and(|c| matches!(c, 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ'));
 
         match ch {
             'ア' => phonemes.push("a".to_string()),
@@ -109,9 +138,18 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ウ' => {
                 if is_small_next {
                     match next.unwrap() {
-                        'ィ' => { phonemes.extend(["w".to_string(), "i".to_string()]); i += 1; }
-                        'ェ' => { phonemes.extend(["w".to_string(), "e".to_string()]); i += 1; }
-                        'ォ' => { phonemes.extend(["w".to_string(), "o".to_string()]); i += 1; }
+                        'ィ' => {
+                            phonemes.extend(["w".to_string(), "i".to_string()]);
+                            i += 1;
+                        }
+                        'ェ' => {
+                            phonemes.extend(["w".to_string(), "e".to_string()]);
+                            i += 1;
+                        }
+                        'ォ' => {
+                            phonemes.extend(["w".to_string(), "o".to_string()]);
+                            i += 1;
+                        }
                         _ => phonemes.push("u".to_string()),
                     }
                 } else {
@@ -123,13 +161,17 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'カ' => phonemes.extend(["k".to_string(), "a".to_string()]),
             'キ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["ky".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["ky".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["ky".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["ky".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["ky".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["ky".to_string(), "o".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ェ') {
-                    phonemes.extend(["ky".to_string(), "e".to_string()]); i += 1;
+                    phonemes.extend(["ky".to_string(), "e".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["k".to_string(), "i".to_string()]);
                 }
@@ -140,13 +182,17 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'サ' => phonemes.extend(["s".to_string(), "a".to_string()]),
             'シ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["sh".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["sh".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["sh".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["sh".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["sh".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["sh".to_string(), "o".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ェ') {
-                    phonemes.extend(["sh".to_string(), "e".to_string()]); i += 1;
+                    phonemes.extend(["sh".to_string(), "e".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["sh".to_string(), "i".to_string()]);
                 }
@@ -157,35 +203,45 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'タ' => phonemes.extend(["t".to_string(), "a".to_string()]),
             'チ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["ch".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["ch".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["ch".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["ch".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["ch".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["ch".to_string(), "o".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ェ') {
-                    phonemes.extend(["ch".to_string(), "e".to_string()]); i += 1;
+                    phonemes.extend(["ch".to_string(), "e".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["ch".to_string(), "i".to_string()]);
                 }
             }
             'ツ' => {
                 if is_small_next && next == Some('ァ') {
-                    phonemes.extend(["ts".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["ts".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ィ') {
-                    phonemes.extend(["ts".to_string(), "i".to_string()]); i += 1;
+                    phonemes.extend(["ts".to_string(), "i".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ェ') {
-                    phonemes.extend(["ts".to_string(), "e".to_string()]); i += 1;
+                    phonemes.extend(["ts".to_string(), "e".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ォ') {
-                    phonemes.extend(["ts".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["ts".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["ts".to_string(), "u".to_string()]);
                 }
             }
             'テ' => {
                 if is_small_next && next == Some('ィ') {
-                    phonemes.extend(["t".to_string(), "i".to_string()]); i += 1;
+                    phonemes.extend(["t".to_string(), "i".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["ty".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["ty".to_string(), "u".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["t".to_string(), "e".to_string()]);
                 }
@@ -194,11 +250,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ナ' => phonemes.extend(["n".to_string(), "a".to_string()]),
             'ニ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["ny".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["ny".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["ny".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["ny".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["ny".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["ny".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["n".to_string(), "i".to_string()]);
                 }
@@ -209,24 +268,31 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ハ' => phonemes.extend(["h".to_string(), "a".to_string()]),
             'ヒ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["hy".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["hy".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["hy".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["hy".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["hy".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["hy".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["h".to_string(), "i".to_string()]);
                 }
             }
             'フ' => {
                 if is_small_next && next == Some('ァ') {
-                    phonemes.extend(["f".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["f".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ィ') {
-                    phonemes.extend(["f".to_string(), "i".to_string()]); i += 1;
+                    phonemes.extend(["f".to_string(), "i".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ェ') {
-                    phonemes.extend(["f".to_string(), "e".to_string()]); i += 1;
+                    phonemes.extend(["f".to_string(), "e".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ォ') {
-                    phonemes.extend(["f".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["f".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["f".to_string(), "u".to_string()]);
                 }
@@ -236,11 +302,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'マ' => phonemes.extend(["m".to_string(), "a".to_string()]),
             'ミ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["my".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["my".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["my".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["my".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["my".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["my".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["m".to_string(), "i".to_string()]);
                 }
@@ -254,11 +323,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ラ' => phonemes.extend(["r".to_string(), "a".to_string()]),
             'リ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["ry".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["ry".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["ry".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["ry".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["ry".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["ry".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["r".to_string(), "i".to_string()]);
                 }
@@ -272,11 +344,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ガ' => phonemes.extend(["g".to_string(), "a".to_string()]),
             'ギ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["gy".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["gy".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["gy".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["gy".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["gy".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["gy".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["g".to_string(), "i".to_string()]);
                 }
@@ -287,11 +362,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ザ' => phonemes.extend(["z".to_string(), "a".to_string()]),
             'ジ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["j".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["j".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["j".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["j".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["j".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["j".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["j".to_string(), "i".to_string()]);
                 }
@@ -304,16 +382,19 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ヅ' => phonemes.extend(["z".to_string(), "u".to_string()]),
             'デ' => {
                 if is_small_next && next == Some('ィ') {
-                    phonemes.extend(["dy".to_string(), "i".to_string()]); i += 1;
+                    phonemes.extend(["dy".to_string(), "i".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["dy".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["dy".to_string(), "u".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["d".to_string(), "e".to_string()]);
                 }
             }
             'ド' => {
                 if is_small_next && next == Some('ゥ') {
-                    phonemes.extend(["d".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["d".to_string(), "u".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["d".to_string(), "o".to_string()]);
                 }
@@ -321,11 +402,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'バ' => phonemes.extend(["b".to_string(), "a".to_string()]),
             'ビ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["by".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["by".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["by".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["by".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["by".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["by".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["b".to_string(), "i".to_string()]);
                 }
@@ -336,11 +420,14 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'パ' => phonemes.extend(["p".to_string(), "a".to_string()]),
             'ピ' => {
                 if is_small_next && next == Some('ャ') {
-                    phonemes.extend(["py".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["py".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ュ') {
-                    phonemes.extend(["py".to_string(), "u".to_string()]); i += 1;
+                    phonemes.extend(["py".to_string(), "u".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ョ') {
-                    phonemes.extend(["py".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["py".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["p".to_string(), "i".to_string()]);
                 }
@@ -350,13 +437,17 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
             'ポ' => phonemes.extend(["p".to_string(), "o".to_string()]),
             'ヴ' => {
                 if is_small_next && next == Some('ァ') {
-                    phonemes.extend(["v".to_string(), "a".to_string()]); i += 1;
+                    phonemes.extend(["v".to_string(), "a".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ィ') {
-                    phonemes.extend(["v".to_string(), "i".to_string()]); i += 1;
+                    phonemes.extend(["v".to_string(), "i".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ェ') {
-                    phonemes.extend(["v".to_string(), "e".to_string()]); i += 1;
+                    phonemes.extend(["v".to_string(), "e".to_string()]);
+                    i += 1;
                 } else if is_small_next && next == Some('ォ') {
-                    phonemes.extend(["v".to_string(), "o".to_string()]); i += 1;
+                    phonemes.extend(["v".to_string(), "o".to_string()]);
+                    i += 1;
                 } else {
                     phonemes.extend(["v".to_string(), "u".to_string()]);
                 }

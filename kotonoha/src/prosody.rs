@@ -15,12 +15,12 @@ pub struct PhoneTone {
 
 /// 韻律記号の定義
 pub const SYMBOL_PHRASE_START: &str = "^"; // 文頭
-pub const SYMBOL_PHRASE_END: &str = "$";   // 文末
-pub const SYMBOL_QUESTION: &str = "?";      // 疑問
-pub const SYMBOL_PAUSE: &str = "_";         // ポーズ（アクセント句境界）
-pub const SYMBOL_BREATH: &str = "#";        // 呼気段落境界
-pub const SYMBOL_ACCENT_UP: &str = "[";     // アクセント上昇
-pub const SYMBOL_ACCENT_DOWN: &str = "]";   // アクセント下降
+pub const SYMBOL_PHRASE_END: &str = "$"; // 文末
+pub const SYMBOL_QUESTION: &str = "?"; // 疑問
+pub const SYMBOL_PAUSE: &str = "_"; // ポーズ（アクセント句境界）
+pub const SYMBOL_BREATH: &str = "#"; // 呼気段落境界
+pub const SYMBOL_ACCENT_UP: &str = "["; // アクセント上昇
+pub const SYMBOL_ACCENT_DOWN: &str = "]"; // アクセント下降
 
 /// NjdNodeとアクセント句からPhoneTone列を抽出する
 pub fn extract_phone_tones(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> Vec<PhoneTone> {
@@ -101,12 +101,11 @@ pub fn extract_phone_tones_with_punct(
                 for ch in node.surface.chars() {
                     if ch == 'ー' {
                         // 長音記号: 直前の母音を繰り返す
-                        let prev_vowel = result.iter().rev().find_map(|pt| {
-                            match pt.phone.as_str() {
+                        let prev_vowel =
+                            result.iter().rev().find_map(|pt| match pt.phone.as_str() {
                                 "a" | "i" | "u" | "e" | "o" => Some(pt.phone.clone()),
                                 _ => None,
-                            }
-                        });
+                            });
                         if let Some(vowel) = prev_vowel {
                             let tone = result.last().map_or(0, |pt| pt.tone);
                             result.push(PhoneTone { phone: vowel, tone });
@@ -269,7 +268,7 @@ mod tests {
     fn test_extract_phone_tones() {
         use crate::njd::InputToken;
 
-        let tokens = vec![InputToken::new("猫", "名詞", "ネコ", "ネコ")];
+        let tokens = [InputToken::new("猫", "名詞", "ネコ", "ネコ")];
         let nodes: Vec<NjdNode> = tokens.iter().map(NjdNode::from_token).collect();
         let phrases = vec![AccentPhrase {
             nodes: vec![0],
@@ -296,7 +295,7 @@ mod tests {
     fn test_extract_prosody_symbols() {
         use crate::njd::InputToken;
 
-        let tokens = vec![InputToken::new("猫", "名詞", "ネコ", "ネコ")];
+        let tokens = [InputToken::new("猫", "名詞", "ネコ", "ネコ")];
         let nodes: Vec<NjdNode> = tokens.iter().map(NjdNode::from_token).collect();
         let phrases = vec![AccentPhrase {
             nodes: vec![0],
@@ -306,10 +305,10 @@ mod tests {
         }];
 
         let symbols = extract_prosody_symbols(&nodes, &phrases);
-        assert_eq!(symbols[0], "^");  // 文頭
+        assert_eq!(symbols[0], "^"); // 文頭
         assert_eq!(symbols[1], "ネ"); // 高（頭高の1モーラ目）
-        assert_eq!(symbols[2], "]");  // 下降
+        assert_eq!(symbols[2], "]"); // 下降
         assert_eq!(symbols[3], "コ"); // 低
-        assert_eq!(symbols[4], "$");  // 文末
+        assert_eq!(symbols[4], "$"); // 文末
     }
 }

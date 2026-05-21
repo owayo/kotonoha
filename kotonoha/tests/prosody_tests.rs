@@ -1,10 +1,10 @@
 //! 韻律テスト
 //! トーンパターン、韻律記号、PhoneTone抽出の網羅的テスト
 
+use kotonoha::Engine;
 use kotonoha::accent::AccentPhrase;
 use kotonoha::njd::{InputToken, NjdNode};
 use kotonoha::prosody::PhoneTone;
-use kotonoha::Engine;
 
 // ============================================================
 // helpers
@@ -42,9 +42,34 @@ fn mora_tones(pts: &[PhoneTone]) -> Vec<u8> {
 fn is_consonant_phone(p: &str) -> bool {
     matches!(
         p,
-        "k" | "ky" | "g" | "gy" | "s" | "sh" | "z" | "j" | "t" | "ts" | "ch" | "d" | "dy"
-            | "n" | "ny" | "h" | "hy" | "f" | "b" | "by" | "p" | "py" | "m" | "my" | "r"
-            | "ry" | "w" | "y" | "v"
+        "k" | "ky"
+            | "g"
+            | "gy"
+            | "s"
+            | "sh"
+            | "z"
+            | "j"
+            | "t"
+            | "ts"
+            | "ch"
+            | "d"
+            | "dy"
+            | "n"
+            | "ny"
+            | "h"
+            | "hy"
+            | "f"
+            | "b"
+            | "by"
+            | "p"
+            | "py"
+            | "m"
+            | "my"
+            | "r"
+            | "ry"
+            | "w"
+            | "y"
+            | "v"
     )
 }
 
@@ -358,7 +383,11 @@ fn test_prosody_symbols_accent_rise_flat() {
     let nodes = engine.analyze(&tokens);
     let phrases = make_phrases(&nodes, 0);
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
-    assert!(syms.contains(&"[".to_string()), "Flat should have accent rise: {:?}", syms);
+    assert!(
+        syms.contains(&"[".to_string()),
+        "Flat should have accent rise: {:?}",
+        syms
+    );
 }
 
 #[test]
@@ -368,7 +397,11 @@ fn test_prosody_symbols_accent_fall_atamadaka() {
     let nodes = engine.analyze(&tokens);
     let phrases = make_phrases(&nodes, 1);
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
-    assert!(syms.contains(&"]".to_string()), "Atamadaka should have accent fall: {:?}", syms);
+    assert!(
+        syms.contains(&"]".to_string()),
+        "Atamadaka should have accent fall: {:?}",
+        syms
+    );
 }
 
 #[test]
@@ -378,8 +411,16 @@ fn test_prosody_symbols_nakadaka_has_rise_and_fall() {
     let nodes = engine.analyze(&tokens);
     let phrases = make_phrases(&nodes, 2);
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
-    assert!(syms.contains(&"[".to_string()), "Nakadaka should have rise: {:?}", syms);
-    assert!(syms.contains(&"]".to_string()), "Nakadaka should have fall: {:?}", syms);
+    assert!(
+        syms.contains(&"[".to_string()),
+        "Nakadaka should have rise: {:?}",
+        syms
+    );
+    assert!(
+        syms.contains(&"]".to_string()),
+        "Nakadaka should have fall: {:?}",
+        syms
+    );
 }
 
 // ============================================================
@@ -392,8 +433,18 @@ fn test_prosody_two_phrases_one_pause() {
     let tokens = vec![tok("猫", "名詞", "ネコ"), tok("犬", "名詞", "イヌ")];
     let nodes = engine.analyze(&tokens);
     let phrases = vec![
-        AccentPhrase { nodes: vec![0], accent_type: 1, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![1], accent_type: 0, mora_count: 2, is_interrogative: false },
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
     ];
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
     let pause_count = syms.iter().filter(|s| s.as_str() == "_").count();
@@ -410,9 +461,24 @@ fn test_prosody_three_phrases_two_pauses() {
     ];
     let nodes = engine.analyze(&tokens);
     let phrases = vec![
-        AccentPhrase { nodes: vec![0], accent_type: 1, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![1], accent_type: 0, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![2], accent_type: 0, mora_count: 2, is_interrogative: false },
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![2],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
     ];
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
     let pause_count = syms.iter().filter(|s| s.as_str() == "_").count();
@@ -430,10 +496,30 @@ fn test_prosody_four_phrases_three_pauses() {
     ];
     let nodes = engine.analyze(&tokens);
     let phrases = vec![
-        AccentPhrase { nodes: vec![0], accent_type: 1, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![1], accent_type: 1, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![2], accent_type: 0, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![3], accent_type: 1, mora_count: 2, is_interrogative: false },
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![2],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![3],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
     ];
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
     let pause_count = syms.iter().filter(|s| s.as_str() == "_").count();
@@ -452,11 +538,36 @@ fn test_prosody_five_phrases_four_pauses() {
     ];
     let nodes = engine.analyze(&tokens);
     let phrases = vec![
-        AccentPhrase { nodes: vec![0], accent_type: 0, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![1], accent_type: 0, mora_count: 1, is_interrogative: false },
-        AccentPhrase { nodes: vec![2], accent_type: 0, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![3], accent_type: 0, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![4], accent_type: 0, mora_count: 2, is_interrogative: false },
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 0,
+            mora_count: 1,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![2],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![3],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![4],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
     ];
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
     let pause_count = syms.iter().filter(|s| s.as_str() == "_").count();
@@ -525,7 +636,12 @@ fn test_phone_tone_long_vowel_repeats() {
     // sil, k, a, (long vowel), sil
     // The long vowel ー becomes a separate mora; reading-based parsing
     assert!(ph.contains(&"a"), "Should contain 'a' phoneme: {:?}", ph);
-    assert_eq!(pts.len(), 5, "Should have 5 entries (sil+k+a+long+sil): {:?}", ph);
+    assert_eq!(
+        pts.len(),
+        5,
+        "Should have 5 entries (sil+k+a+long+sil): {:?}",
+        ph
+    );
 }
 
 // ============================================================
@@ -603,21 +719,36 @@ fn test_phone_tones_sil_has_tone_zero() {
 
 #[test]
 fn test_phone_tone_eq() {
-    let a = PhoneTone { phone: "a".to_string(), tone: 1 };
-    let b = PhoneTone { phone: "a".to_string(), tone: 1 };
+    let a = PhoneTone {
+        phone: "a".to_string(),
+        tone: 1,
+    };
+    let b = PhoneTone {
+        phone: "a".to_string(),
+        tone: 1,
+    };
     assert_eq!(a, b);
 }
 
 #[test]
 fn test_phone_tone_ne() {
-    let a = PhoneTone { phone: "a".to_string(), tone: 1 };
-    let b = PhoneTone { phone: "a".to_string(), tone: 0 };
+    let a = PhoneTone {
+        phone: "a".to_string(),
+        tone: 1,
+    };
+    let b = PhoneTone {
+        phone: "a".to_string(),
+        tone: 0,
+    };
     assert_ne!(a, b);
 }
 
 #[test]
 fn test_phone_tone_clone() {
-    let a = PhoneTone { phone: "k".to_string(), tone: 1 };
+    let a = PhoneTone {
+        phone: "k".to_string(),
+        tone: 1,
+    };
     let b = a.clone();
     assert_eq!(a, b);
 }
@@ -649,8 +780,16 @@ fn test_prosody_flat_has_terminal_fall() {
     // Flat type: last mora is high, and next_tone (beyond phrase) = 0,
     // so there's a terminal fall marker ] at the end
     // ^ サ [ ク ラ ] $
-    assert!(syms.contains(&"]".to_string()), "Flat should have terminal fall: {:?}", syms);
-    assert!(syms.contains(&"[".to_string()), "Flat should have rise: {:?}", syms);
+    assert!(
+        syms.contains(&"]".to_string()),
+        "Flat should have terminal fall: {:?}",
+        syms
+    );
+    assert!(
+        syms.contains(&"[".to_string()),
+        "Flat should have rise: {:?}",
+        syms
+    );
 }
 
 // ============================================================
@@ -665,7 +804,11 @@ fn test_prosody_atamadaka_1mora_fall() {
     let phrases = make_phrases(&nodes, 1);
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
     // 1-mora atamadaka: ^ キ ] $ (fall after the only mora)
-    assert!(syms.contains(&"]".to_string()), "Should have fall: {:?}", syms);
+    assert!(
+        syms.contains(&"]".to_string()),
+        "Should have fall: {:?}",
+        syms
+    );
 }
 
 // ============================================================
@@ -678,8 +821,18 @@ fn test_prosody_symbol_ordering_two_phrases() {
     let tokens = vec![tok("猫", "名詞", "ネコ"), tok("犬", "名詞", "イヌ")];
     let nodes = engine.analyze(&tokens);
     let phrases = vec![
-        AccentPhrase { nodes: vec![0], accent_type: 1, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![1], accent_type: 0, mora_count: 2, is_interrogative: false },
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
     ];
     let syms = engine.extract_prosody_symbols(&nodes, &phrases);
     // ^ ... _ ... $

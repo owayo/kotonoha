@@ -43,9 +43,9 @@ impl Pos {
             s if s.starts_with("記号") => Pos::Kigou,
             s if s.starts_with("フィラー") => Pos::Filler,
             // UniDic固有の品詞をIPAdic相当にマッピング
-            s if s.starts_with("接尾辞") => Pos::Meishi,   // 接尾辞 → 名詞（接尾として扱う）
-            s if s.starts_with("代名詞") => Pos::Meishi,   // 代名詞 → 名詞
-            s if s.starts_with("形状詞") => Pos::Meishi,   // 形状詞 → 名詞（形容動詞語幹として扱う）
+            s if s.starts_with("接尾辞") => Pos::Meishi, // 接尾辞 → 名詞（接尾として扱う）
+            s if s.starts_with("代名詞") => Pos::Meishi, // 代名詞 → 名詞
+            s if s.starts_with("形状詞") => Pos::Meishi, // 形状詞 → 名詞（形容動詞語幹として扱う）
             _ => Pos::Sonota,
         }
     }
@@ -106,12 +106,7 @@ pub struct InputToken {
 
 impl InputToken {
     /// 簡易コンストラクタ
-    pub fn new(
-        surface: &str,
-        pos: &str,
-        reading: &str,
-        pronunciation: &str,
-    ) -> Self {
+    pub fn new(surface: &str, pos: &str, reading: &str, pronunciation: &str) -> Self {
         Self {
             surface: surface.to_string(),
             pos: pos.to_string(),
@@ -228,22 +223,18 @@ fn map_unidic_detail(pos_str: &str, detail1: &str) -> String {
                 _ => detail1.to_string(),
             }
         }
-        s if s.starts_with("形容詞") => {
-            match detail1 {
-                "非自立可能" => "非自立".to_string(),
-                "一般" => "自立".to_string(),
-                _ => detail1.to_string(),
-            }
-        }
+        s if s.starts_with("形容詞") => match detail1 {
+            "非自立可能" => "非自立".to_string(),
+            "一般" => "自立".to_string(),
+            _ => detail1.to_string(),
+        },
         _ => detail1.to_string(),
     }
 }
 
 /// 文字列がカタカナ（長音記号ー含む）のみで構成されているかを判定する
 fn is_katakana_str(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .all(|c| ('\u{30A0}'..='\u{30FF}').contains(&c))
+    !s.is_empty() && s.chars().all(|c| ('\u{30A0}'..='\u{30FF}').contains(&c))
 }
 
 /// カタカナの長音記号をモーラ展開する
@@ -271,16 +262,16 @@ pub fn expand_long_vowels(pron: &str) -> String {
 fn last_vowel_of_kana(c: char) -> Option<char> {
     // ア段=ア, イ段=イ, ウ段=ウ, エ段=エ, オ段=オ
     match c {
-        'ア' | 'カ' | 'サ' | 'タ' | 'ナ' | 'ハ' | 'マ' | 'ヤ' | 'ラ' | 'ワ'
-        | 'ガ' | 'ザ' | 'ダ' | 'バ' | 'パ' | 'ァ' | 'ャ' => Some('ア'),
-        'イ' | 'キ' | 'シ' | 'チ' | 'ニ' | 'ヒ' | 'ミ' | 'リ'
-        | 'ギ' | 'ジ' | 'ヂ' | 'ビ' | 'ピ' | 'ィ' => Some('イ'),
-        'ウ' | 'ク' | 'ス' | 'ツ' | 'ヌ' | 'フ' | 'ム' | 'ユ' | 'ル'
-        | 'グ' | 'ズ' | 'ヅ' | 'ブ' | 'プ' | 'ヴ' | 'ゥ' | 'ュ' => Some('ウ'),
-        'エ' | 'ケ' | 'セ' | 'テ' | 'ネ' | 'ヘ' | 'メ' | 'レ'
-        | 'ゲ' | 'ゼ' | 'デ' | 'ベ' | 'ペ' | 'ェ' => Some('エ'),
-        'オ' | 'コ' | 'ソ' | 'ト' | 'ノ' | 'ホ' | 'モ' | 'ヨ' | 'ロ' | 'ヲ'
-        | 'ゴ' | 'ゾ' | 'ド' | 'ボ' | 'ポ' | 'ォ' | 'ョ' => Some('オ'),
+        'ア' | 'カ' | 'サ' | 'タ' | 'ナ' | 'ハ' | 'マ' | 'ヤ' | 'ラ' | 'ワ' | 'ガ' | 'ザ'
+        | 'ダ' | 'バ' | 'パ' | 'ァ' | 'ャ' => Some('ア'),
+        'イ' | 'キ' | 'シ' | 'チ' | 'ニ' | 'ヒ' | 'ミ' | 'リ' | 'ギ' | 'ジ' | 'ヂ' | 'ビ'
+        | 'ピ' | 'ィ' => Some('イ'),
+        'ウ' | 'ク' | 'ス' | 'ツ' | 'ヌ' | 'フ' | 'ム' | 'ユ' | 'ル' | 'グ' | 'ズ' | 'ヅ'
+        | 'ブ' | 'プ' | 'ヴ' | 'ゥ' | 'ュ' => Some('ウ'),
+        'エ' | 'ケ' | 'セ' | 'テ' | 'ネ' | 'ヘ' | 'メ' | 'レ' | 'ゲ' | 'ゼ' | 'デ' | 'ベ'
+        | 'ペ' | 'ェ' => Some('エ'),
+        'オ' | 'コ' | 'ソ' | 'ト' | 'ノ' | 'ホ' | 'モ' | 'ヨ' | 'ロ' | 'ヲ' | 'ゴ' | 'ゾ'
+        | 'ド' | 'ボ' | 'ポ' | 'ォ' | 'ョ' => Some('オ'),
         _ => None,
     }
 }

@@ -56,10 +56,7 @@ impl Engine {
     }
 
     /// 形態素解析辞書（.hsd）を読み込む
-    pub fn load_dictionary(
-        &mut self,
-        path: &Path,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_dictionary(&mut self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let analyzer = hasami::Analyzer::load(path)?;
         self.analyzer = Some(Mutex::new(analyzer));
         Ok(())
@@ -85,10 +82,7 @@ impl Engine {
     }
 
     /// ニューラルアクセント予測器を設定する（NjdNode のみ）
-    pub fn set_accent_predictor(
-        &mut self,
-        predictor: Box<dyn AccentPredictor + Send + Sync>,
-    ) {
+    pub fn set_accent_predictor(&mut self, predictor: Box<dyn AccentPredictor + Send + Sync>) {
         self.accent_predictor = Some(predictor);
     }
 
@@ -265,10 +259,7 @@ impl Engine {
     // === テキスト直接解析メソッド（形態素解析含む） ===
 
     /// テキストを形態素解析してInputTokenに変換する
-    fn tokenize_text(
-        &self,
-        text: &str,
-    ) -> Result<Vec<InputToken>, Box<dyn std::error::Error>> {
+    fn tokenize_text(&self, text: &str) -> Result<Vec<InputToken>, Box<dyn std::error::Error>> {
         let analyzer = self.analyzer.as_ref().ok_or(
             "辞書が読み込まれていません。Engine::load_dictionary()で辞書を設定してください",
         )?;
@@ -280,10 +271,7 @@ impl Engine {
     }
 
     /// テキストを直接解析してHTS Labelを生成する（形態素解析含む）
-    pub fn text_to_labels(
-        &self,
-        text: &str,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    pub fn text_to_labels(&self, text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let tokens = self.tokenize_text(text)?;
         Ok(self.tokens_to_labels(&tokens))
     }
@@ -307,10 +295,7 @@ impl Engine {
     }
 
     /// テキストを直接解析してNjdNode列を返す（形態素解析含む）
-    pub fn text_to_analyze(
-        &self,
-        text: &str,
-    ) -> Result<Vec<NjdNode>, Box<dyn std::error::Error>> {
+    pub fn text_to_analyze(&self, text: &str) -> Result<Vec<NjdNode>, Box<dyn std::error::Error>> {
         let tokens = self.tokenize_text(text)?;
         Ok(self.analyze(&tokens))
     }
@@ -364,9 +349,7 @@ mod tests {
     #[test]
     fn test_engine_single_word() {
         let engine = Engine::default();
-        let tokens = vec![
-            InputToken::new("猫", "名詞", "ネコ", "ネコ"),
-        ];
+        let tokens = vec![InputToken::new("猫", "名詞", "ネコ", "ネコ")];
 
         let mut nodes = engine.analyze(&tokens);
         assert_eq!(nodes.len(), 1);

@@ -1,10 +1,10 @@
 //! kotonoha 統合テスト
 //! Engine API全体を通して、日本語韻律処理の正確性を検証する
 
+use kotonoha::Engine;
 use kotonoha::accent::AccentPhrase;
 use kotonoha::njd::{InputToken, Pos};
 use kotonoha::prosody::PhoneTone;
-use kotonoha::Engine;
 
 // ============================================================
 // ヘルパー関数
@@ -35,10 +35,7 @@ fn phones(pts: &[PhoneTone]) -> Vec<&str> {
 /// 各モーラの先頭音素のトーンを取得（sil除く）
 /// 子音がある場合はその子音のトーンを返す（母音と同じはず）
 fn mora_tones(pts: &[PhoneTone]) -> Vec<u8> {
-    let inner: Vec<_> = pts
-        .iter()
-        .filter(|p| p.phone != "sil")
-        .collect();
+    let inner: Vec<_> = pts.iter().filter(|p| p.phone != "sil").collect();
     // モーラごとのトーンを取得: 母音のトーンを集める
     let mut result = Vec::new();
     let mut i = 0;
@@ -61,9 +58,34 @@ fn mora_tones(pts: &[PhoneTone]) -> Vec<u8> {
 fn is_consonant_phone(p: &str) -> bool {
     matches!(
         p,
-        "k" | "ky" | "g" | "gy" | "s" | "sh" | "z" | "j" | "t" | "ts" | "ch" | "d" | "dy"
-            | "n" | "ny" | "h" | "hy" | "f" | "b" | "by" | "p" | "py" | "m" | "my" | "r"
-            | "ry" | "w" | "y" | "v"
+        "k" | "ky"
+            | "g"
+            | "gy"
+            | "s"
+            | "sh"
+            | "z"
+            | "j"
+            | "t"
+            | "ts"
+            | "ch"
+            | "d"
+            | "dy"
+            | "n"
+            | "ny"
+            | "h"
+            | "hy"
+            | "f"
+            | "b"
+            | "by"
+            | "p"
+            | "py"
+            | "m"
+            | "my"
+            | "r"
+            | "ry"
+            | "w"
+            | "y"
+            | "v"
     )
 }
 
@@ -118,7 +140,10 @@ fn test_basic_sentence_tokyo_tower_ni_ikimashita() {
     assert_eq!(nodes[1].mora_count, 3);
 
     let phrases = engine.estimate_accent(&mut nodes);
-    assert!(!phrases.is_empty(), "Should produce at least one accent phrase");
+    assert!(
+        !phrases.is_empty(),
+        "Should produce at least one accent phrase"
+    );
 
     let labels = engine.make_label(&nodes, &phrases);
     assert!(labels.first().unwrap().contains("sil"));
@@ -160,10 +185,7 @@ fn test_basic_sentence_neko_ga_hashiru() {
 #[test]
 fn test_accent_boundary_content_plus_particle_same_phrase() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("東京", "名詞", "トウキョウ"),
-        tok("に", "助詞", "ニ"),
-    ];
+    let tokens = vec![tok("東京", "名詞", "トウキョウ"), tok("に", "助詞", "ニ")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
@@ -176,10 +198,7 @@ fn test_accent_boundary_content_plus_particle_same_phrase() {
 #[test]
 fn test_accent_boundary_content_plus_content_separate_phrases() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("走る", "動詞", "ハシル"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("走る", "動詞", "ハシル")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
@@ -191,10 +210,7 @@ fn test_accent_boundary_content_plus_content_separate_phrases() {
 #[test]
 fn test_accent_boundary_prefix_plus_noun_same_phrase() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("お", "接頭詞", "オ"),
-        tok("茶", "名詞", "チャ"),
-    ];
+    let tokens = vec![tok("お", "接頭詞", "オ"), tok("茶", "名詞", "チャ")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
@@ -207,10 +223,7 @@ fn test_accent_boundary_prefix_plus_noun_same_phrase() {
 #[test]
 fn test_accent_boundary_noun_plus_suffix_same_phrase() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("東京", "名詞", "トウキョウ"),
-        tok_suffix("駅", "エキ"),
-    ];
+    let tokens = vec![tok("東京", "名詞", "トウキョウ"), tok_suffix("駅", "エキ")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
@@ -223,10 +236,7 @@ fn test_accent_boundary_noun_plus_suffix_same_phrase() {
 #[test]
 fn test_accent_boundary_content_plus_jodoushi_same_phrase() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("食べ", "動詞", "タベ"),
-        tok("ます", "助動詞", "マス"),
-    ];
+    let tokens = vec![tok("食べ", "動詞", "タベ"), tok("ます", "助動詞", "マス")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
@@ -477,10 +487,7 @@ fn test_prosody_symbols_accent_rise() {
 #[test]
 fn test_prosody_symbols_pause_between_phrases() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("走る", "動詞", "ハシル"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("走る", "動詞", "ハシル")];
     let nodes = engine.analyze(&tokens);
 
     let phrases = vec![
@@ -534,10 +541,7 @@ fn test_prosody_symbols_interrogative() {
 #[test]
 fn test_prosody_interrogative_detection_via_engine() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("か", "助詞", "カ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("か", "助詞", "カ")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
@@ -556,10 +560,7 @@ fn test_prosody_interrogative_detection_via_engine() {
 #[test]
 fn test_hts_label_starts_and_ends_with_sil() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("が", "助詞", "ガ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("が", "助詞", "ガ")];
 
     let labels = engine.tokens_to_labels(&tokens);
 
@@ -580,16 +581,43 @@ fn test_hts_label_contains_required_fields() {
     let labels = engine.tokens_to_labels(&tokens);
 
     // 中間ラベル(非sil)を確認
-    let mid_labels: Vec<_> = labels.iter().filter(|l| !l.starts_with("xx^xx-sil")).collect();
+    let mid_labels: Vec<_> = labels
+        .iter()
+        .filter(|l| !l.starts_with("xx^xx-sil"))
+        .collect();
     assert!(!mid_labels.is_empty(), "Should have non-sil labels");
 
     for label in &mid_labels {
-        assert!(label.contains("/A:"), "Label should contain /A: field: {}", label);
-        assert!(label.contains("/B:"), "Label should contain /B: field: {}", label);
-        assert!(label.contains("/C:"), "Label should contain /C: field: {}", label);
-        assert!(label.contains("/D:"), "Label should contain /D: field: {}", label);
-        assert!(label.contains("/E:"), "Label should contain /E: field: {}", label);
-        assert!(label.contains("/K:"), "Label should contain /K: field: {}", label);
+        assert!(
+            label.contains("/A:"),
+            "Label should contain /A: field: {}",
+            label
+        );
+        assert!(
+            label.contains("/B:"),
+            "Label should contain /B: field: {}",
+            label
+        );
+        assert!(
+            label.contains("/C:"),
+            "Label should contain /C: field: {}",
+            label
+        );
+        assert!(
+            label.contains("/D:"),
+            "Label should contain /D: field: {}",
+            label
+        );
+        assert!(
+            label.contains("/E:"),
+            "Label should contain /E: field: {}",
+            label
+        );
+        assert!(
+            label.contains("/K:"),
+            "Label should contain /K: field: {}",
+            label
+        );
     }
 }
 
@@ -857,10 +885,7 @@ fn test_word_with_youon_kyou() {
 fn test_only_particles() {
     // 助詞のみ（特殊ケース）
     let engine = Engine::default();
-    let tokens = vec![
-        tok("は", "助詞", "ワ"),
-        tok("が", "助詞", "ガ"),
-    ];
+    let tokens = vec![tok("は", "助詞", "ワ"), tok("が", "助詞", "ガ")];
 
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);

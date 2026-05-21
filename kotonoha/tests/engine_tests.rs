@@ -1,8 +1,8 @@
 //! Engine API テスト
 //! Engine構築、便利メソッド、一貫性、スレッドセーフティの網羅的テスト
 
-use kotonoha::njd::{InputToken, Pos};
 use kotonoha::Engine;
+use kotonoha::njd::{InputToken, Pos};
 use std::sync::Arc;
 use std::thread;
 
@@ -409,10 +409,7 @@ fn test_pos_adverb_verb() {
 #[test]
 fn test_pos_rentaishi_noun() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("この", "連体詞", "コノ"),
-        tok("本", "名詞", "ホン"),
-    ];
+    let tokens = vec![tok("この", "連体詞", "コノ"), tok("本", "名詞", "ホン")];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     // 連体詞 is content word, so it starts a new phrase,
@@ -423,10 +420,7 @@ fn test_pos_rentaishi_noun() {
 #[test]
 fn test_pos_prefix_noun_suffix() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("お", "接頭詞", "オ"),
-        tok("名前", "名詞", "ナマエ"),
-    ];
+    let tokens = vec![tok("お", "接頭詞", "オ"), tok("名前", "名詞", "ナマエ")];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     assert_eq!(phrases.len(), 1);
@@ -452,10 +446,7 @@ fn test_determinism_labels() {
 #[test]
 fn test_determinism_phone_tones() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("が", "助詞", "ガ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("が", "助詞", "ガ")];
     let pt1 = engine.tokens_to_phone_tones(&tokens);
     let pt2 = engine.tokens_to_phone_tones(&tokens);
     assert_eq!(pt1, pt2);
@@ -565,7 +556,11 @@ fn test_thread_safety_same_input_deterministic() {
         .collect();
 
     for i in 1..results.len() {
-        assert_eq!(results[0], results[i], "Thread {} produced different result", i);
+        assert_eq!(
+            results[0], results[i],
+            "Thread {} produced different result",
+            i
+        );
     }
 }
 

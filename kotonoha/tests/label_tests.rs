@@ -1,9 +1,9 @@
 //! HTS Label生成テスト
 //! ラベルフォーマット、フィールド値、無声母音の網羅的テスト
 
+use kotonoha::Engine;
 use kotonoha::accent::AccentPhrase;
 use kotonoha::njd::{InputToken, NjdNode};
-use kotonoha::Engine;
 
 // ============================================================
 // helpers
@@ -28,7 +28,10 @@ fn make_phrases(nodes: &[NjdNode], accent_type: u8) -> Vec<AccentPhrase> {
 }
 
 fn non_sil_labels(labels: &[String]) -> Vec<&String> {
-    labels.iter().filter(|l| !l.starts_with("xx^xx-sil")).collect()
+    labels
+        .iter()
+        .filter(|l| !l.starts_with("xx^xx-sil"))
+        .collect()
 }
 
 // ============================================================
@@ -160,7 +163,13 @@ fn test_label_a_field_present() {
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     for label in &mid {
-        let a_part = label.split("/A:").nth(1).unwrap().split("/B:").next().unwrap();
+        let a_part = label
+            .split("/A:")
+            .nth(1)
+            .unwrap()
+            .split("/B:")
+            .next()
+            .unwrap();
         // A field has format: a1+a2+a3
         let parts: Vec<&str> = a_part.split('+').collect();
         assert_eq!(parts.len(), 3, "A field should have 3 parts: {}", a_part);
@@ -182,18 +191,25 @@ fn test_label_b_field_xx_for_first_phrase() {
     let mid = non_sil_labels(&labels);
     // First phrase has no prev phrase -> B field should have xx
     for label in &mid {
-        let b_part = label.split("/B:").nth(1).unwrap().split("/C:").next().unwrap();
-        assert!(b_part.starts_with("xx"), "B field should start with xx for first phrase: {}", b_part);
+        let b_part = label
+            .split("/B:")
+            .nth(1)
+            .unwrap()
+            .split("/C:")
+            .next()
+            .unwrap();
+        assert!(
+            b_part.starts_with("xx"),
+            "B field should start with xx for first phrase: {}",
+            b_part
+        );
     }
 }
 
 #[test]
 fn test_label_b_field_has_values_for_second_phrase() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("犬", "名詞", "イヌ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("犬", "名詞", "イヌ")];
     let mut nodes = engine.analyze(&tokens);
     nodes[0].accent_type = 1;
     nodes[1].accent_type = 0;
@@ -216,8 +232,18 @@ fn test_label_b_field_has_values_for_second_phrase() {
     // It should have B field with actual values (from first phrase)
     let mid = non_sil_labels(&labels);
     let second_phrase_label = mid.last().unwrap();
-    let b_part = second_phrase_label.split("/B:").nth(1).unwrap().split("/C:").next().unwrap();
-    assert!(!b_part.starts_with("xx"), "B field of second phrase should have values: {}", b_part);
+    let b_part = second_phrase_label
+        .split("/B:")
+        .nth(1)
+        .unwrap()
+        .split("/C:")
+        .next()
+        .unwrap();
+    assert!(
+        !b_part.starts_with("xx"),
+        "B field of second phrase should have values: {}",
+        b_part
+    );
 }
 
 // ============================================================
@@ -234,9 +260,19 @@ fn test_label_c_field_mora_count() {
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     for label in &mid {
-        let c_part = label.split("/C:").nth(1).unwrap().split("/D:").next().unwrap();
+        let c_part = label
+            .split("/C:")
+            .nth(1)
+            .unwrap()
+            .split("/D:")
+            .next()
+            .unwrap();
         // C: mora_count_accent_type+interrogative
-        assert!(c_part.starts_with("2_"), "C field should start with mora_count 2: {}", c_part);
+        assert!(
+            c_part.starts_with("2_"),
+            "C field should start with mora_count 2: {}",
+            c_part
+        );
     }
 }
 
@@ -250,9 +286,19 @@ fn test_label_c_field_accent_type() {
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     let label = mid[0];
-    let c_part = label.split("/C:").nth(1).unwrap().split("/D:").next().unwrap();
+    let c_part = label
+        .split("/C:")
+        .nth(1)
+        .unwrap()
+        .split("/D:")
+        .next()
+        .unwrap();
     // Should contain accent_type=1
-    assert!(c_part.contains("1+"), "C field should contain accent_type 1: {}", c_part);
+    assert!(
+        c_part.contains("1+"),
+        "C field should contain accent_type 1: {}",
+        c_part
+    );
 }
 
 // ============================================================
@@ -269,18 +315,25 @@ fn test_label_d_field_xx_for_single_phrase() {
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     for label in &mid {
-        let d_part = label.split("/D:").nth(1).unwrap().split("/E:").next().unwrap();
-        assert!(d_part.starts_with("xx"), "D field should be xx for single phrase: {}", d_part);
+        let d_part = label
+            .split("/D:")
+            .nth(1)
+            .unwrap()
+            .split("/E:")
+            .next()
+            .unwrap();
+        assert!(
+            d_part.starts_with("xx"),
+            "D field should be xx for single phrase: {}",
+            d_part
+        );
     }
 }
 
 #[test]
 fn test_label_d_field_has_values_for_first_of_two_phrases() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("犬", "名詞", "イヌ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("犬", "名詞", "イヌ")];
     let mut nodes = engine.analyze(&tokens);
     nodes[0].accent_type = 1;
     nodes[1].accent_type = 0;
@@ -302,8 +355,18 @@ fn test_label_d_field_has_values_for_first_of_two_phrases() {
     // First phrase labels should have D field with second phrase info
     let mid = non_sil_labels(&labels);
     let first_phrase_label = mid[0];
-    let d_part = first_phrase_label.split("/D:").nth(1).unwrap().split("/E:").next().unwrap();
-    assert!(!d_part.starts_with("xx"), "D field of first phrase should have values: {}", d_part);
+    let d_part = first_phrase_label
+        .split("/D:")
+        .nth(1)
+        .unwrap()
+        .split("/E:")
+        .next()
+        .unwrap();
+    assert!(
+        !d_part.starts_with("xx"),
+        "D field of first phrase should have values: {}",
+        d_part
+    );
 }
 
 // ============================================================
@@ -321,28 +384,43 @@ fn test_label_k_field_total_phrases() {
     let mid = non_sil_labels(&labels);
     for label in &mid {
         let k_part = label.split("/K:").nth(1).unwrap();
-        assert!(k_part.starts_with("1+"), "K field should start with 1 for single phrase: {}", k_part);
+        assert!(
+            k_part.starts_with("1+"),
+            "K field should start with 1 for single phrase: {}",
+            k_part
+        );
     }
 }
 
 #[test]
 fn test_label_k_field_two_phrases() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("犬", "名詞", "イヌ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("犬", "名詞", "イヌ")];
     let nodes = engine.analyze(&tokens);
     let phrases = vec![
-        AccentPhrase { nodes: vec![0], accent_type: 1, mora_count: 2, is_interrogative: false },
-        AccentPhrase { nodes: vec![1], accent_type: 0, mora_count: 2, is_interrogative: false },
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 1,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
     ];
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     for label in &mid {
         let k_part = label.split("/K:").nth(1).unwrap();
         // K: k1+k2-k3 = breath_group_count+accent_phrase_count-mora_count
-        assert_eq!(k_part, "1+2-4", "K field should be 1+2-4 (1 breath group, 2 phrases, 4 moras): {}", k_part);
+        assert_eq!(
+            k_part, "1+2-4",
+            "K field should be 1+2-4 (1 breath group, 2 phrases, 4 moras): {}",
+            k_part
+        );
     }
 }
 
@@ -540,10 +618,7 @@ fn test_label_three_mora_word() {
 #[test]
 fn test_label_two_phrases() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("犬", "名詞", "イヌ"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("犬", "名詞", "イヌ")];
     let labels = engine.tokens_to_labels(&tokens);
     assert!(labels.len() >= 6); // sil + ne + ko + i + nu + sil
 }
@@ -605,9 +680,19 @@ fn test_label_interrogative_c_field() {
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     for label in &mid {
-        let c_part = label.split("/C:").nth(1).unwrap().split("/D:").next().unwrap();
+        let c_part = label
+            .split("/C:")
+            .nth(1)
+            .unwrap()
+            .split("/D:")
+            .next()
+            .unwrap();
         // C field last element should be 1 for interrogative
-        assert!(c_part.ends_with("+1"), "C field should end with +1 for interrogative: {}", c_part);
+        assert!(
+            c_part.ends_with("+1"),
+            "C field should end with +1 for interrogative: {}",
+            c_part
+        );
     }
 }
 
@@ -621,8 +706,18 @@ fn test_label_non_interrogative_c_field() {
     let labels = engine.make_label(&nodes, &phrases);
     let mid = non_sil_labels(&labels);
     for label in &mid {
-        let c_part = label.split("/C:").nth(1).unwrap().split("/D:").next().unwrap();
-        assert!(c_part.ends_with("+0"), "C field should end with +0 for declarative: {}", c_part);
+        let c_part = label
+            .split("/C:")
+            .nth(1)
+            .unwrap()
+            .split("/D:")
+            .next()
+            .unwrap();
+        assert!(
+            c_part.ends_with("+0"),
+            "C field should end with +0 for declarative: {}",
+            c_part
+        );
     }
 }
 
@@ -744,10 +839,7 @@ fn test_voiceless_kusuri_ku_devoices() {
 fn test_voiceless_desu_su_devoices() {
     // です: de-su → su should devoice at utterance end
     let engine = Engine::default();
-    let tokens = vec![
-        tok("猫", "名詞", "ネコ"),
-        tok("です", "助動詞", "デス"),
-    ];
+    let tokens = vec![tok("猫", "名詞", "ネコ"), tok("です", "助動詞", "デス")];
     let mut nodes = engine.analyze(&tokens);
     nodes[0].accent_type = 1;
     nodes[1].accent_type = 1;
@@ -771,10 +863,7 @@ fn test_voiceless_desu_su_devoices() {
 fn test_voiceless_masu_su_devoices() {
     // ます: ma-su → su should devoice at utterance end
     let engine = Engine::default();
-    let tokens = vec![
-        tok("走り", "動詞", "ハシリ"),
-        tok("ます", "助動詞", "マス"),
-    ];
+    let tokens = vec![tok("走り", "動詞", "ハシリ"), tok("ます", "助動詞", "マス")];
     let mut nodes = engine.analyze(&tokens);
     nodes[0].accent_type = 0;
     nodes[1].accent_type = 1;
@@ -810,7 +899,10 @@ fn test_voiceless_hashi_no_devoice() {
     let all = labels.join(" ");
     // No uppercase vowels expected
     assert!(
-        !all.contains("-I+") && !all.contains("-U+") && !all.contains("-I=") && !all.contains("-U="),
+        !all.contains("-I+")
+            && !all.contains("-U+")
+            && !all.contains("-I=")
+            && !all.contains("-U="),
         "hashi: no vowel should devoice: {}",
         all
     );

@@ -2,8 +2,8 @@
 //! katakana_to_phonemes および音素分類関数の網羅的テスト
 
 use kotonoha::phoneme::{
-    is_consonant, is_special, is_voiceless_vowel, is_vowel, katakana_to_phonemes, ALL_PHONEMES,
-    CONSONANTS, SPECIAL_SYMBOLS, VOWELS,
+    ALL_PHONEMES, CONSONANTS, SPECIAL_SYMBOLS, VOWELS, is_consonant, is_special,
+    is_voiceless_vowel, is_vowel, katakana_to_phonemes,
 };
 
 // ============================================================
@@ -820,50 +820,32 @@ fn test_phoneme_geminate_in_bikkuri() {
 
 #[test]
 fn test_phoneme_n_before_ka() {
-    assert_eq!(
-        katakana_to_phonemes("アンカ"),
-        vec!["a", "N", "k", "a"]
-    );
+    assert_eq!(katakana_to_phonemes("アンカ"), vec!["a", "N", "k", "a"]);
 }
 
 #[test]
 fn test_phoneme_n_before_sa() {
-    assert_eq!(
-        katakana_to_phonemes("アンサ"),
-        vec!["a", "N", "s", "a"]
-    );
+    assert_eq!(katakana_to_phonemes("アンサ"), vec!["a", "N", "s", "a"]);
 }
 
 #[test]
 fn test_phoneme_n_before_ta() {
-    assert_eq!(
-        katakana_to_phonemes("アンタ"),
-        vec!["a", "N", "t", "a"]
-    );
+    assert_eq!(katakana_to_phonemes("アンタ"), vec!["a", "N", "t", "a"]);
 }
 
 #[test]
 fn test_phoneme_n_before_na() {
-    assert_eq!(
-        katakana_to_phonemes("アンナ"),
-        vec!["a", "N", "n", "a"]
-    );
+    assert_eq!(katakana_to_phonemes("アンナ"), vec!["a", "N", "n", "a"]);
 }
 
 #[test]
 fn test_phoneme_n_before_pa() {
-    assert_eq!(
-        katakana_to_phonemes("アンパ"),
-        vec!["a", "N", "p", "a"]
-    );
+    assert_eq!(katakana_to_phonemes("アンパ"), vec!["a", "N", "p", "a"]);
 }
 
 #[test]
 fn test_phoneme_n_at_end() {
-    assert_eq!(
-        katakana_to_phonemes("カン"),
-        vec!["k", "a", "N"]
-    );
+    assert_eq!(katakana_to_phonemes("カン"), vec!["k", "a", "N"]);
 }
 
 // ============================================================

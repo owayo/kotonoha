@@ -145,7 +145,12 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
 
     // 5. POS + detail1 + detail2 conjunction
     if node.pos_detail2 != "*" && !node.pos_detail2.is_empty() {
-        let pos_d12_combo = format!("{}_{}_{}", node.pos.to_label_str(), node.pos_detail1, node.pos_detail2);
+        let pos_d12_combo = format!(
+            "{}_{}_{}",
+            node.pos.to_label_str(),
+            node.pos_detail1,
+            node.pos_detail2
+        );
         features.push((feature_hash("pos_pd12", &pos_d12_combo), 1.0));
     }
 
@@ -247,7 +252,10 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
     }
 
     // 20. Pronunciation differs from reading (long vowel expansion marker)
-    if node.pronunciation != node.reading && !node.pronunciation.is_empty() && node.pronunciation != "*" {
+    if node.pronunciation != node.reading
+        && !node.pronunciation.is_empty()
+        && node.pronunciation != "*"
+    {
         features.push((feature_hash("pron_diff", "yes"), 1.0));
     }
 
@@ -523,8 +531,11 @@ impl CrfTrainer {
             let mut epoch_total = 0usize;
 
             for (ex_idx, example) in data.iter().enumerate() {
-                let gold_labels: Vec<usize> =
-                    example.labels.iter().map(|&l| (l as usize).min(num_labels - 1)).collect();
+                let gold_labels: Vec<usize> = example
+                    .labels
+                    .iter()
+                    .map(|&l| (l as usize).min(num_labels - 1))
+                    .collect();
 
                 let all_feats = &all_example_feats[ex_idx];
 
@@ -557,7 +568,9 @@ impl CrfTrainer {
                                 let mut best_score = f32::NEG_INFINITY;
                                 let mut best_prev = 0;
                                 for p in 0..num_labels {
-                                    let s = viterbi_scores[t - 1][p] + transition[p][l] + emissions[t][l];
+                                    let s = viterbi_scores[t - 1][p]
+                                        + transition[p][l]
+                                        + emissions[t][l];
                                     if s > best_score {
                                         best_score = s;
                                         best_prev = p;
@@ -825,9 +838,9 @@ mod tests {
         // With uniform weights, viterbi should still produce a valid path.
         // Use explicit emissions for testing.
         let emissions = vec![
-            vec![1.0, 0.5, 0.2],  // label 0 is best
-            vec![0.1, 2.0, 0.3],  // label 1 is best
-            vec![0.0, 0.1, 3.0],  // label 2 is best
+            vec![1.0, 0.5, 0.2], // label 0 is best
+            vec![0.1, 2.0, 0.3], // label 1 is best
+            vec![0.0, 0.1, 3.0], // label 2 is best
         ];
 
         let path = predictor.viterbi_decode(&emissions);
@@ -857,11 +870,7 @@ mod tests {
 
         // Emissions strongly favor label 0 at start, slightly favor label 1 later
         // With strong self-transitions, path should stay on label 0
-        let emissions = vec![
-            vec![100.0, 0.0],
-            vec![0.5, 1.0],
-            vec![0.5, 1.0],
-        ];
+        let emissions = vec![vec![100.0, 0.0], vec![0.5, 1.0], vec![0.5, 1.0]];
 
         let path = predictor.viterbi_decode(&emissions);
         assert_eq!(path.len(), 3);
@@ -888,8 +897,8 @@ mod tests {
         let num_labels = 2;
         let mut weights = vec![0.0f32; num_labels * FEATURE_DIM];
         // Set a known weight
-        weights[0 * FEATURE_DIM + 42] = 1.5; // label=0, feature=42
-        weights[1 * FEATURE_DIM + 42] = -0.5; // label=1, feature=42
+        weights[42] = 1.5; // label=0, feature=42
+        weights[FEATURE_DIM + 42] = -0.5; // label=1, feature=42
 
         let mut transition = vec![vec![0.0f32; num_labels]; num_labels];
         transition[0][1] = 2.0;
@@ -900,10 +909,7 @@ mod tests {
             num_labels,
         };
 
-        let features = vec![
-            vec![(42, 1.0f32)],
-            vec![(42, 1.0f32)],
-        ];
+        let features = vec![vec![(42, 1.0f32)], vec![(42, 1.0f32)]];
 
         // Score for labels [0, 1]: emission(0,42)*1.0 + emission(1,42)*1.0 + transition[0][1]
         // = 1.5 + (-0.5) + 2.0 = 3.0
@@ -945,9 +951,9 @@ mod tests {
         for (a, b) in loaded.weights.iter().zip(weights.iter()) {
             assert!((a - b).abs() < 1e-7);
         }
-        for i in 0..num_labels {
-            for j in 0..num_labels {
-                assert!((loaded.transition[i][j] - transition[i][j]).abs() < 1e-7);
+        for (loaded_row, expected_row) in loaded.transition.iter().zip(transition.iter()) {
+            for (&loaded_value, &expected_value) in loaded_row.iter().zip(expected_row.iter()) {
+                assert!((loaded_value - expected_value).abs() < 1e-7);
             }
         }
 

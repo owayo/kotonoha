@@ -10,9 +10,9 @@ use crate::njd::{NjdNode, Pos};
 /// アクセント句
 #[derive(Debug, Clone)]
 pub struct AccentPhrase {
-    pub nodes: Vec<usize>, // NjdNodeのインデックス
-    pub accent_type: u8,   // アクセント型 (0=平板)
-    pub mora_count: u8,    // 総モーラ数
+    pub nodes: Vec<usize>,      // NjdNodeのインデックス
+    pub accent_type: u8,        // アクセント型 (0=平板)
+    pub mora_count: u8,         // 総モーラ数
     pub is_interrogative: bool, // 疑問文末か
 }
 
@@ -53,12 +53,11 @@ fn set_chain_flags(nodes: &mut [NjdNode]) {
         let curr_pos = nodes[i].pos.clone();
         let curr_detail1 = nodes[i].pos_detail1.clone();
 
-        nodes[i].chain_flag =
-            if should_chain(&prev_pos, &prev_detail1, &curr_pos, &curr_detail1) {
-                1
-            } else {
-                0
-            };
+        nodes[i].chain_flag = if should_chain(&prev_pos, &prev_detail1, &curr_pos, &curr_detail1) {
+            1
+        } else {
+            0
+        };
     }
 }
 
@@ -275,9 +274,7 @@ fn apply_accent_rule(
         }
         AccentRuleType::Fixed(n) => *n,
         AccentRuleType::LeftMoraCount => left_mora,
-        AccentRuleType::LeftMoraCountPlus(offset) => {
-            (left_mora as i8 + offset).max(0) as u8
-        }
+        AccentRuleType::LeftMoraCountPlus(offset) => (left_mora as i8 + offset).max(0) as u8,
         AccentRuleType::RightMoraCount => {
             // 後部のモーラ数がアクセント位置（前部モーラ数を加算）
             left_mora.saturating_add(right_mora)
@@ -330,12 +327,7 @@ mod tests {
         InputToken::new(surface, pos, reading, reading)
     }
 
-    fn make_detailed_token(
-        surface: &str,
-        pos: &str,
-        detail1: &str,
-        reading: &str,
-    ) -> InputToken {
+    fn make_detailed_token(surface: &str, pos: &str, detail1: &str, reading: &str) -> InputToken {
         let mut token = InputToken::new(surface, pos, reading, reading);
         token.pos_detail1 = detail1.to_string();
         token
@@ -343,7 +335,7 @@ mod tests {
 
     #[test]
     fn test_basic_accent_phrase() {
-        let tokens = vec![
+        let tokens = [
             make_token("東京", "名詞", "トウキョウ"),
             make_token("に", "助詞", "ニ"),
         ];
@@ -358,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_content_word_boundary() {
-        let tokens = vec![
+        let tokens = [
             make_token("猫", "名詞", "ネコ"),
             make_token("が", "助詞", "ガ"),
             make_token("走る", "動詞", "ハシル"),
@@ -373,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_compound_verb_chains() {
-        let tokens = vec![
+        let tokens = [
             make_token("食べ", "動詞", "タベ"),
             make_token("始める", "動詞", "ハジメル"),
         ];
@@ -388,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_numeral_counter_chains() {
-        let tokens = vec![
+        let tokens = [
             make_detailed_token("三", "名詞", "数", "サン"),
             make_detailed_token("個", "名詞", "接尾,助数詞", "コ"),
         ];
@@ -403,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_keiyoudoushi_chains() {
-        let tokens = vec![
+        let tokens = [
             make_detailed_token("静か", "名詞", "形容動詞語幹", "シズカ"),
             make_token("だ", "助動詞", "ダ"),
         ];
@@ -418,7 +410,7 @@ mod tests {
 
     #[test]
     fn test_rentaishi_noun_separate() {
-        let tokens = vec![
+        let tokens = [
             make_token("この", "連体詞", "コノ"),
             make_token("本", "名詞", "ホン"),
         ];
@@ -432,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_suffix_chains() {
-        let tokens = vec![
+        let tokens = [
             make_token("田中", "名詞", "タナカ"),
             make_detailed_token("さん", "名詞", "接尾", "サン"),
         ];
@@ -447,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_prefix_chains() {
-        let tokens = vec![
+        let tokens = [
             make_token("お", "接頭詞", "オ"),
             make_token("茶", "名詞", "チャ"),
         ];
@@ -487,7 +479,7 @@ mod tests {
     #[test]
     fn test_non_independent_verb_chains() {
         // 動詞 + 助詞,接続助詞(て) + 動詞,非自立(いる) → 1アクセント句
-        let tokens = vec![
+        let tokens = [
             make_token("食べ", "動詞", "タベ"),
             make_detailed_token("て", "助詞", "接続助詞", "テ"),
             make_detailed_token("いる", "動詞", "非自立", "イル"),
@@ -504,7 +496,7 @@ mod tests {
     #[test]
     fn test_verb_auxiliary_chains() {
         // 動詞 + 助動詞（「食べました」）
-        let tokens = vec![
+        let tokens = [
             make_token("食べ", "動詞", "タベ"),
             make_token("まし", "助動詞", "マシ"),
             make_token("た", "助動詞", "タ"),
@@ -521,7 +513,7 @@ mod tests {
     #[test]
     fn test_adjective_auxiliary_chains() {
         // 形容詞 + 助動詞（「美しいです」）
-        let tokens = vec![
+        let tokens = [
             make_token("美しい", "形容詞", "ウツクシイ"),
             make_token("です", "助動詞", "デス"),
         ];
@@ -537,7 +529,7 @@ mod tests {
     #[test]
     fn test_noun_particle_chains() {
         // 名詞 + 助詞（「東京に」）は1アクセント句
-        let tokens = vec![
+        let tokens = [
             make_token("東京", "名詞", "トウキョウ"),
             make_token("に", "助詞", "ニ"),
         ];

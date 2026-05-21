@@ -2,8 +2,9 @@
 //!
 //! モーラ計算、音素変換、アクセント推定、ラベル生成、韻律抽出の性能を測定する。
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use kotonoha::njd::InputToken;
+use std::hint::black_box;
 
 /// ベンチマーク用の5トークン文を生成する
 fn sample_tokens() -> Vec<InputToken> {
@@ -29,7 +30,13 @@ fn bench_mora_count(c: &mut Criterion) {
 }
 
 fn bench_katakana_to_phonemes(c: &mut Criterion) {
-    let words = ["カキクケコ", "シャシン", "コンニチワ", "トーキョー", "ガッコー"];
+    let words = [
+        "カキクケコ",
+        "シャシン",
+        "コンニチワ",
+        "トーキョー",
+        "ガッコー",
+    ];
 
     c.bench_function("phoneme/katakana_to_phonemes", |b| {
         b.iter(|| {
@@ -98,15 +105,9 @@ fn bench_prosody_extraction(c: &mut Criterion) {
     });
 }
 
-criterion_group!(
-    mora_benches,
-    bench_mora_count,
-);
+criterion_group!(mora_benches, bench_mora_count,);
 
-criterion_group!(
-    phoneme_benches,
-    bench_katakana_to_phonemes,
-);
+criterion_group!(phoneme_benches, bench_katakana_to_phonemes,);
 
 criterion_group!(
     engine_benches,

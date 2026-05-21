@@ -246,7 +246,11 @@ fn parse_csv_fields(fields: &[&str]) -> (String, String, String) {
             let f4 = pos_fields[4].trim();
 
             if is_known_pos(f2) {
-                (format!("{},{}", f0, f1), format!("{},{},{}", f2, f3, f4), rule_str)
+                (
+                    format!("{},{}", f0, f1),
+                    format!("{},{},{}", f2, f3, f4),
+                    rule_str,
+                )
             } else if is_known_pos(f3) {
                 (
                     format!("{},{},{}", f0, f1, f2),
@@ -254,7 +258,11 @@ fn parse_csv_fields(fields: &[&str]) -> (String, String, String) {
                     rule_str,
                 )
             } else {
-                (format!("{},{}", f0, f1), format!("{},{},{}", f2, f3, f4), rule_str)
+                (
+                    format!("{},{}", f0, f1),
+                    format!("{},{},{}", f2, f3, f4),
+                    rule_str,
+                )
             }
         }
         _ => {
@@ -683,7 +691,10 @@ mod tests {
 
     #[test]
     fn test_parse_rule_type_right_mora() {
-        assert_eq!(parse_rule_type("right_mora"), AccentRuleType::RightMoraCount);
+        assert_eq!(
+            parse_rule_type("right_mora"),
+            AccentRuleType::RightMoraCount
+        );
     }
 
     #[test]

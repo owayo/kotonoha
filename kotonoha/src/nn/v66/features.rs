@@ -9,7 +9,9 @@
 //! 入力は `MorphemeView`。`InputToken` の生 UniDic POS 文字列を保持し、
 //! `dict_accent_type` は `accent_dict` enrich 後に注入されることを前提とする。
 
-use super::vocab::{conj_form_group, conj_type_group, pos_detail1_to_id, pos_detail2_to_id, pos_to_id};
+use super::vocab::{
+    conj_form_group, conj_type_group, pos_detail1_to_id, pos_detail2_to_id, pos_to_id,
+};
 
 /// v66 base 特徴量の次元数
 pub const FEATURE13_DIM: usize = 13;
@@ -127,8 +129,18 @@ pub fn extract_feat13(morpheme: &MorphemeView<'_>, position: f32) -> [f32; FEATU
     let mora_count = count_mora(morpheme.reading) as f32 / 10.0;
     let r_hash = reading_hash(morpheme.reading);
 
-    let first_ch_hash = morpheme.surface.chars().next().map(char_hash).unwrap_or(0.0);
-    let last_ch_hash = morpheme.surface.chars().last().map(char_hash).unwrap_or(0.0);
+    let first_ch_hash = morpheme
+        .surface
+        .chars()
+        .next()
+        .map(char_hash)
+        .unwrap_or(0.0);
+    let last_ch_hash = morpheme
+        .surface
+        .chars()
+        .last()
+        .map(char_hash)
+        .unwrap_or(0.0);
 
     // v33: head/tail 2 文字 (char 単位) の hash
     let reading_chars: Vec<char> = morpheme.reading.chars().collect();
@@ -142,8 +154,16 @@ pub fn extract_feat13(morpheme: &MorphemeView<'_>, position: f32) -> [f32; FEATU
     } else {
         morpheme.reading.to_string()
     };
-    let r_head2_hash = if head2.is_empty() { 0.0 } else { reading_hash(&head2) };
-    let r_tail2_hash = if tail2.is_empty() { 0.0 } else { reading_hash(&tail2) };
+    let r_head2_hash = if head2.is_empty() {
+        0.0
+    } else {
+        reading_hash(&head2)
+    };
+    let r_tail2_hash = if tail2.is_empty() {
+        0.0
+    } else {
+        reading_hash(&tail2)
+    };
 
     let dict_acc = parse_dict_accent(morpheme.dict_accent_type);
 

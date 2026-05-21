@@ -18,10 +18,7 @@ use crate::njd::InputToken;
 /// は読み一致を優先し、無ければ最初のエントリを返す。これは Python 側
 /// `accent_dict[(lemma, reading)]` (タプル key) とは厳密には異なるが、JSUT 由来の
 /// `accent_dict.csv` は `(lemma, reading)` ペアが unique であるため実質一致する。
-pub fn resolve_dict_accents(
-    tokens: &[InputToken],
-    accent_dict: &AccentDict,
-) -> Vec<Option<u8>> {
+pub fn resolve_dict_accents(tokens: &[InputToken], accent_dict: &AccentDict) -> Vec<Option<u8>> {
     tokens
         .iter()
         .map(|t| resolve_one(&t.lemma, &t.reading, accent_dict))
@@ -176,9 +173,9 @@ mod tests {
         dict.insert("猫", "ネコ", 1);
         dict.insert("マレーシア", "マレーシア", 2);
         let tokens = vec![
-            make_token("猫", "ネコ"),                    // hit_lemma
+            make_token("猫", "ネコ"),                        // hit_lemma
             make_token("マレーシア-Malaysia", "マレーシア"), // hit_dash
-            make_token("鳥", "トリ"),                    // miss
+            make_token("鳥", "トリ"),                        // miss
         ];
         let (out, stats) = resolve_dict_accents_with_stats(&tokens, &dict);
         assert_eq!(out, vec![Some(1), Some(2), None]);

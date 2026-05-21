@@ -571,7 +571,7 @@ mod tests {
 
     #[test]
     fn test_basic_label_generation() {
-        let tokens = vec![InputToken::new("猫", "名詞", "ネコ", "ネコ")];
+        let tokens = [InputToken::new("猫", "名詞", "ネコ", "ネコ")];
         let mut nodes: Vec<NjdNode> = tokens.iter().map(NjdNode::from_token).collect();
         nodes[0].accent_type = 1;
 
@@ -605,7 +605,7 @@ mod tests {
 
     #[test]
     fn test_multi_phrase_ef_fields() {
-        let tokens = vec![
+        let tokens = [
             InputToken::new("猫", "名詞", "ネコ", "ネコ"),
             InputToken::new("犬", "名詞", "イヌ", "イヌ"),
         ];

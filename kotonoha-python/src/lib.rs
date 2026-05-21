@@ -1,7 +1,7 @@
 //! kotonoha Python バインディング（PyO3）
 
-use ::kotonoha::njd::{InputToken, NjdNode};
 use ::kotonoha::Engine;
+use ::kotonoha::njd::{InputToken, NjdNode};
 use pyo3::prelude::*;
 use std::path::PathBuf;
 
@@ -52,10 +52,8 @@ impl KotonohaEngine {
 
         // 優先順位: model_bundle 引数 → KOTONOHA_MODEL_BUNDLE 環境変数 →
         //          model_path 引数 → KOTONOHA_MODEL_PATH 環境変数
-        let resolved_bundle =
-            model_bundle.or_else(|| std::env::var("KOTONOHA_MODEL_BUNDLE").ok());
-        let resolved_model_path =
-            model_path.or_else(|| std::env::var("KOTONOHA_MODEL_PATH").ok());
+        let resolved_bundle = model_bundle.or_else(|| std::env::var("KOTONOHA_MODEL_BUNDLE").ok());
+        let resolved_model_path = model_path.or_else(|| std::env::var("KOTONOHA_MODEL_PATH").ok());
         let variant = model_variant
             .or_else(|| std::env::var("KOTONOHA_MODEL_VARIANT").ok())
             .unwrap_or_else(|| {
@@ -147,9 +145,9 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[str]: HTS Full-Context Label strings
     fn text_to_labels(&self, text: &str) -> PyResult<Vec<String>> {
-        self.inner.text_to_labels(text).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-        })
+        self.inner
+            .text_to_labels(text)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     /// テキストを直接解析してPhoneToneペアを生成する
@@ -188,9 +186,9 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[str]: Prosody symbols
     fn text_to_prosody_symbols(&self, text: &str) -> PyResult<Vec<String>> {
-        self.inner.text_to_prosody_symbols(text).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string())
-        })
+        self.inner
+            .text_to_prosody_symbols(text)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     /// 個別ステップ: トークンからNjdNodeを構築する
@@ -257,8 +255,7 @@ impl KotonohaEngine {
         let dir = PathBuf::from(bundle_dir);
         let bundle = if let Some(paths) = accent_dict_paths {
             let path_bufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
-            let path_refs: Vec<&std::path::Path> =
-                path_bufs.iter().map(PathBuf::as_path).collect();
+            let path_refs: Vec<&std::path::Path> = path_bufs.iter().map(PathBuf::as_path).collect();
             ::kotonoha::nn::v66::V66Bundle::from_paths(&dir, &path_refs)
         } else {
             ::kotonoha::nn::v66::V66Bundle::from_dir(&dir)
@@ -356,10 +353,7 @@ fn convert_tokens(tokens: &[PyToken]) -> Vec<InputToken> {
             cform: t.cform.clone().unwrap_or_else(|| "*".to_string()),
             lemma: t.lemma.clone().unwrap_or_else(|| t.surface.clone()),
             reading: t.reading.clone(),
-            pronunciation: t
-                .pronunciation
-                .clone()
-                .unwrap_or_else(|| t.reading.clone()),
+            pronunciation: t.pronunciation.clone().unwrap_or_else(|| t.reading.clone()),
         })
         .collect()
 }

@@ -1,10 +1,10 @@
 //! アクセント推定テスト
 //! アクセント句境界、アクセント型、結合規則の網羅的テスト
 
+use kotonoha::Engine;
 use kotonoha::accent::AccentPhrase;
 use kotonoha::accent_rule::{AccentRuleTable, AccentRuleType};
 use kotonoha::njd::{InputToken, NjdNode, Pos};
-use kotonoha::Engine;
 
 // ============================================================
 // helpers
@@ -131,17 +131,23 @@ fn test_non_content_words() {
         Pos::Sonota,
     ];
     for pos in &non_content {
-        assert!(!pos.is_content_word(), "{:?} should not be content word", pos);
+        assert!(
+            !pos.is_content_word(),
+            "{:?} should not be content word",
+            pos
+        );
     }
 }
 
 #[test]
 fn test_non_function_words() {
-    let non_func = [
-        Pos::Meishi, Pos::Doushi, Pos::Keiyoushi, Pos::Kigou,
-    ];
+    let non_func = [Pos::Meishi, Pos::Doushi, Pos::Keiyoushi, Pos::Kigou];
     for pos in &non_func {
-        assert!(!pos.is_function_word(), "{:?} should not be function word", pos);
+        assert!(
+            !pos.is_function_word(),
+            "{:?} should not be function word",
+            pos
+        );
     }
 }
 
@@ -212,7 +218,10 @@ fn test_boundary_doushi_jodoushi() {
 #[test]
 fn test_boundary_keiyoushi_joshi() {
     let engine = Engine::default();
-    let tokens = vec![tok("美しい", "形容詞", "ウツクシイ"), tok("の", "助詞", "ノ")];
+    let tokens = vec![
+        tok("美しい", "形容詞", "ウツクシイ"),
+        tok("の", "助詞", "ノ"),
+    ];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     assert_eq!(phrases.len(), 1);
@@ -221,7 +230,10 @@ fn test_boundary_keiyoushi_joshi() {
 #[test]
 fn test_boundary_keiyoushi_jodoushi() {
     let engine = Engine::default();
-    let tokens = vec![tok("美しい", "形容詞", "ウツクシイ"), tok("です", "助動詞", "デス")];
+    let tokens = vec![
+        tok("美しい", "形容詞", "ウツクシイ"),
+        tok("です", "助動詞", "デス"),
+    ];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     assert_eq!(phrases.len(), 1);
@@ -261,7 +273,10 @@ fn test_boundary_doushi_meishi() {
 #[test]
 fn test_boundary_doushi_doushi() {
     let engine = Engine::default();
-    let tokens = vec![tok("走る", "動詞", "ハシル"), tok("食べる", "動詞", "タベル")];
+    let tokens = vec![
+        tok("走る", "動詞", "ハシル"),
+        tok("食べる", "動詞", "タベル"),
+    ];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     // 複合動詞は1つのアクセント句に接続する
@@ -280,7 +295,10 @@ fn test_boundary_keiyoushi_meishi() {
 #[test]
 fn test_boundary_fukushi_doushi() {
     let engine = Engine::default();
-    let tokens = vec![tok("とても", "副詞", "トテモ"), tok("走る", "動詞", "ハシル")];
+    let tokens = vec![
+        tok("とても", "副詞", "トテモ"),
+        tok("走る", "動詞", "ハシル"),
+    ];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     assert_eq!(phrases.len(), 2);
@@ -367,10 +385,7 @@ fn test_boundary_kigou_breaks() {
 #[test]
 fn test_boundary_filler_separate() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("えー", "フィラー", "エー"),
-        tok("猫", "名詞", "ネコ"),
-    ];
+    let tokens = vec![tok("えー", "フィラー", "エー"), tok("猫", "名詞", "ネコ")];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     assert_eq!(phrases.len(), 2);
@@ -393,10 +408,7 @@ fn test_filler_always_flat() {
 #[test]
 fn test_boundary_setsuzokushi_separate() {
     let engine = Engine::default();
-    let tokens = vec![
-        tok("しかし", "接続詞", "シカシ"),
-        tok("猫", "名詞", "ネコ"),
-    ];
+    let tokens = vec![tok("しかし", "接続詞", "シカシ"), tok("猫", "名詞", "ネコ")];
     let mut nodes = engine.analyze(&tokens);
     let phrases = engine.estimate_accent(&mut nodes);
     assert_eq!(phrases.len(), 2);
@@ -634,10 +646,10 @@ fn test_accent_type5_6mora() {
     let pts = engine.extract_phone_tones(&nodes, &phrases);
     let inner: Vec<_> = pts.iter().filter(|p| p.phone != "sil").collect();
     // mora0(0) mora1(1) mora2(1) mora3(1) mora4(1) mora5(0)
-    assert_eq!(inner[0].tone, 0);  // k (mora0)
-    assert_eq!(inner[1].tone, 0);  // a
-    assert_eq!(inner[2].tone, 1);  // k (mora1)
-    assert_eq!(inner[3].tone, 1);  // i
+    assert_eq!(inner[0].tone, 0); // k (mora0)
+    assert_eq!(inner[1].tone, 0); // a
+    assert_eq!(inner[2].tone, 1); // k (mora1)
+    assert_eq!(inner[3].tone, 1); // i
     assert_eq!(inner[10].tone, 0); // s (mora5)
     assert_eq!(inner[11].tone, 0); // a
 }
@@ -876,7 +888,10 @@ fn test_expand_long_vowels_koohii() {
 
 #[test]
 fn test_expand_long_vowels_tookyoo() {
-    assert_eq!(kotonoha::njd::expand_long_vowels("トーキョー"), "トオキョオ");
+    assert_eq!(
+        kotonoha::njd::expand_long_vowels("トーキョー"),
+        "トオキョオ"
+    );
 }
 
 #[test]

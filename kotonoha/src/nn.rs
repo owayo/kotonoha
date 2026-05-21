@@ -76,8 +76,8 @@ fn pos_to_id(pos: &Pos) -> u32 {
         Pos::Setsuzokushi => 12,
         Pos::Kandoushi => 13,
         Pos::Kigou => 14,
-        Pos::Filler => 0,  // <unk>
-        Pos::Sonota => 0,  // <unk>
+        Pos::Filler => 0, // <unk>
+        Pos::Sonota => 0, // <unk>
     }
 }
 
@@ -133,14 +133,30 @@ fn conj_type_to_id(ctype: &str) -> u32 {
     if ctype == "*" {
         return 0;
     }
-    if ctype.starts_with("五段") { return 1; }
-    if ctype.starts_with("上一段") { return 2; }
-    if ctype.starts_with("下一段") { return 3; }
-    if ctype.starts_with("カ行変格") { return 4; }
-    if ctype.starts_with("サ行変格") { return 5; }
-    if ctype.starts_with("形容詞") { return 6; }
-    if ctype.starts_with("助動詞") { return 7; }
-    if ctype.starts_with("文語") { return 8; }
+    if ctype.starts_with("五段") {
+        return 1;
+    }
+    if ctype.starts_with("上一段") {
+        return 2;
+    }
+    if ctype.starts_with("下一段") {
+        return 3;
+    }
+    if ctype.starts_with("カ行変格") {
+        return 4;
+    }
+    if ctype.starts_with("サ行変格") {
+        return 5;
+    }
+    if ctype.starts_with("形容詞") {
+        return 6;
+    }
+    if ctype.starts_with("助動詞") {
+        return 7;
+    }
+    if ctype.starts_with("文語") {
+        return 8;
+    }
     0 // unknown
 }
 
@@ -150,15 +166,33 @@ fn conj_form_to_id(cform: &str) -> u32 {
     if cform == "*" {
         return 0;
     }
-    if cform.starts_with("未然形") { return 1; }
-    if cform.starts_with("連用形") { return 2; }
-    if cform.starts_with("終止形") { return 3; }
-    if cform.starts_with("連体形") { return 4; }
-    if cform.starts_with("仮定形") { return 5; }
-    if cform.starts_with("命令形") { return 6; }
-    if cform.starts_with("已然形") { return 7; }
-    if cform.starts_with("意志推量形") { return 8; }
-    if cform.starts_with("語幹") { return 9; }
+    if cform.starts_with("未然形") {
+        return 1;
+    }
+    if cform.starts_with("連用形") {
+        return 2;
+    }
+    if cform.starts_with("終止形") {
+        return 3;
+    }
+    if cform.starts_with("連体形") {
+        return 4;
+    }
+    if cform.starts_with("仮定形") {
+        return 5;
+    }
+    if cform.starts_with("命令形") {
+        return 6;
+    }
+    if cform.starts_with("已然形") {
+        return 7;
+    }
+    if cform.starts_with("意志推量形") {
+        return 8;
+    }
+    if cform.starts_with("語幹") {
+        return 9;
+    }
     0 // unknown
 }
 
@@ -205,7 +239,11 @@ fn extract_features_v2(node: &NjdNode, position: f32) -> [f32; FEATURE_DIM] {
         first_ch,
         last_ch,
         position,
-        if node.accent_type > 0 { (node.accent_type as f32 + 1.0) / 8.0 } else { 0.0 },
+        if node.accent_type > 0 {
+            (node.accent_type as f32 + 1.0) / 8.0
+        } else {
+            0.0
+        },
     ]
 }
 
@@ -224,7 +262,7 @@ impl OnnxPredictor {
     pub fn new(model_path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
         let session = ort::session::Session::builder()?
             .with_execution_providers([
-                ort::execution_providers::CUDAExecutionProvider::default().build(),
+                ort::execution_providers::CUDAExecutionProvider::default().build()
             ])?
             .commit_from_file(model_path)?;
 
@@ -341,7 +379,7 @@ mod tests {
         assert_eq!(h1, h2);
         assert_ne!(h1, h3);
         // Should be normalized to [0, 1)
-        assert!(h1 >= 0.0 && h1 < 1.0);
+        assert!((0.0..1.0).contains(&h1));
     }
 
     #[test]

@@ -90,10 +90,7 @@ impl V66Bundle {
     ///   エントリを上書きする (Python `_load_accent_dicts` と同じ後勝ち挙動)
     /// - したがって bundle 同梱の `accent_dict.csv` は常に取り込まれ、追加辞書を
     ///   渡しても recall が下がらない
-    pub fn from_paths(
-        models_dir: &Path,
-        accent_dict_paths: &[&Path],
-    ) -> Result<Self, BundleError> {
+    pub fn from_paths(models_dir: &Path, accent_dict_paths: &[&Path]) -> Result<Self, BundleError> {
         if !models_dir.is_dir() {
             return Err(BundleError::NotADirectory(models_dir.to_path_buf()));
         }
@@ -130,10 +127,7 @@ impl V66Bundle {
 ///
 /// 後勝ち順は呼び出し側に委ねるが、典型的には `accent_dict_jsut.csv` が bundle
 /// 同梱されている場合、その上に呼び出し側の追加 CSV を渡す形となる。
-fn load_accent_dicts(
-    models_dir: &Path,
-    paths: &[&Path],
-) -> Result<AccentDict, BundleError> {
+fn load_accent_dicts(models_dir: &Path, paths: &[&Path]) -> Result<AccentDict, BundleError> {
     let mut dict = AccentDict::new();
     let bundled = models_dir.join("accent_dict.csv");
     if bundled.exists() {
