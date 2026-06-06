@@ -1,0 +1,20 @@
+■ 2つ理由があります
+   norm: 二つ理由があります
+   kata: ['フタツ', 'リユウ', 'ガ', 'アリ', 'マス']
+   phon: _ f u t a ts u r i y u u g a a r i m a s u _
+■ 次の3点
+   norm: 次の三点
+   kata: ['ツギ', 'ノ', 'サン', 'テン']
+   phon: _ ts u g i n o s a N t e N _
+■ 基礎から学びたい人
+   norm: 基礎から学びたい人
+   kata: ['キソ', 'カラ', 'マナビ', 'タ', 'イジン']
+   phon: _ k i s o k a r a m a n a b i t a i j i N _
+■ NASAのIT予算は3つ
+   norm: NASAのIT予算は三つ
+   kata: ['ナサ', 'ノ', 'アイティイ', 'ヨサン', 'ワ', 'ミッツ']
+   phon: _ n a s a n o a i t i i y o s a N w a m i q ts u _
+■ 3つのIT人材
+   norm: 三つのIT人材
+   kata: ['ミッツ', 'ノ', 'アイティイ', 'ジンザイ']
+   phon: _ m i q ts u n o a i t i i j i N z a i _
