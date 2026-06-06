@@ -1,5 +1,0 @@
-norm: 二つ理由があります
-sep_text: ['二つ', '理由', 'が', 'あり', 'ます']
-sep_kata: ['フタツ', 'リユウ', 'ガ', 'アリ', 'マス']
-phones: _ f u t a ts u r i y u u g a a r i m a s u _
-tones : 0 0 0 1 1 1 1 0 0 1 1 1 0 0 0 1 1 1 1 1 1 0

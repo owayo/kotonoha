@@ -27,3 +27,6 @@ target
 
 __pycache__/
 .claude/scheduled_tasks.lock
+
+# 検証用一時ファイル(エージェント作業中の grep 出力等)
+/tmp_*.txt
