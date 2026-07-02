@@ -547,6 +547,42 @@ fn test_label_count_matches_phone_tones_long_vowel() {
     assert_eq!(labels.len(), pts.len());
 }
 
+/// ラベルの音素列が PhoneTone の音素列と完全一致すること
+/// (reading と pronunciation が異なる語でも両者は pronunciation 基準で揃う)
+#[test]
+fn test_label_phonemes_match_phone_tones_pronunciation() {
+    let engine = Engine::default();
+    let cases = vec![
+        // reading=トウキョウ / pron=トーキョー → 音素は o o (u ではない)
+        vec![
+            tok_pron("東京", "名詞", "トウキョウ", "トーキョー"),
+            tok("に", "助詞", "ニ"),
+        ],
+        // reading に長音記号ーを含む語 → 空母音にならない
+        vec![tok("コーヒー", "名詞", "コーヒー")],
+    ];
+    for tokens in cases {
+        let mut nodes = engine.analyze(&tokens);
+        let phrases = engine.estimate_accent(&mut nodes);
+        let labels = engine.make_label(&nodes, &phrases);
+        let pts = engine.extract_phone_tones(&nodes, &phrases);
+        let label_phonemes: Vec<&str> = labels
+            .iter()
+            .map(|l| {
+                let ctx = l.split("/A:").next().unwrap();
+                ctx.split('-').nth(1).unwrap().split('+').next().unwrap()
+            })
+            .collect();
+        let pt_phonemes: Vec<&str> = pts.iter().map(|p| p.phone.as_str()).collect();
+        assert_eq!(label_phonemes, pt_phonemes);
+        assert!(
+            label_phonemes.iter().all(|p| !p.is_empty()),
+            "Empty phoneme in labels: {:?}",
+            label_phonemes
+        );
+    }
+}
+
 #[test]
 fn test_label_count_matches_phone_tones_geminate() {
     let engine = Engine::default();

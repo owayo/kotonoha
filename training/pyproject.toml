@@ -4,10 +4,10 @@ version = "0.1.0"
 description = "CRF/ONNX accent model training for kotonoha"
 requires-python = ">=3.12"
 dependencies = [
-    "torch>=2.12.0",
-    "onnx>=1.21.0",
-    "onnxruntime-gpu>=1.26.0",
-    "transformers>=5.9.0",
+    "torch>=2.12.1",
+    "onnx>=1.22.0",
+    "onnxruntime-gpu>=1.27.0",
+    "transformers>=5.12.1",
     "fugashi>=1.5.2",
     "unidic-lite>=1.0.8",
     "pyopenjtalk-plus>=0.4.1.post8",
@@ -25,7 +25,7 @@ torch = { index = "pytorch-cu126" }
 [dependency-groups]
 dev = [
     "fugashi>=1.5.2",
-    "maturin>=1.13.3",
+    "maturin>=1.14.1",
     "pytorch-crf>=0.7.2",
     "unidic-lite>=1.0.8",
 ]

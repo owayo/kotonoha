@@ -13,11 +13,9 @@ use crate::njd::InputToken;
 /// `tokens.len()` と同じ長さの `Vec<Option<u8>>` を返す。各要素は `None` (辞書ヒット
 /// 無し) または `Some(accent_type)` (0..21 の範囲)。
 ///
-/// # 注意
-/// `AccentDict` は単一の見出し語に複数読みエントリを持つ場合があるが、`lookup`
-/// は読み一致を優先し、無ければ最初のエントリを返す。これは Python 側
-/// `accent_dict[(lemma, reading)]` (タプル key) とは厳密には異なるが、JSUT 由来の
-/// `accent_dict.csv` は `(lemma, reading)` ペアが unique であるため実質一致する。
+/// ルックアップは `lookup_exact` による `(lemma, reading)` 完全一致のみで、Python 側
+/// `accent_dict[(lemma, reading)]` (タプル key) と同一セマンティクス。読み不一致時に
+/// 同一 lemma の別読みエントリへフォールバックすることはない。
 pub fn resolve_dict_accents(tokens: &[InputToken], accent_dict: &AccentDict) -> Vec<Option<u8>> {
     tokens
         .iter()
@@ -39,13 +37,13 @@ pub fn resolve_dict_accents(tokens: &[InputToken], accent_dict: &AccentDict) -> 
 /// `accent_dict_jsut.csv` を bundle に同梱して使う設計のため。
 /// surface ベースの fallback は false-positive (別語の値拾い) を生むリスクがある。
 pub fn resolve_one(lemma: &str, reading: &str, accent_dict: &AccentDict) -> Option<u8> {
-    if let Some(acc) = accent_dict.lookup(lemma, Some(reading)) {
+    if let Some(acc) = accent_dict.lookup_exact(lemma, reading) {
         return Some(acc);
     }
     if let Some(dash_pos) = lemma.find('-') {
         let base = &lemma[..dash_pos];
         if !base.is_empty()
-            && let Some(acc) = accent_dict.lookup(base, Some(reading))
+            && let Some(acc) = accent_dict.lookup_exact(base, reading)
         {
             return Some(acc);
         }
@@ -91,14 +89,14 @@ pub fn resolve_dict_accents_with_stats(
     let out = tokens
         .iter()
         .map(|t| {
-            if let Some(acc) = accent_dict.lookup(&t.lemma, Some(&t.reading)) {
+            if let Some(acc) = accent_dict.lookup_exact(&t.lemma, &t.reading) {
                 stats.hit_lemma += 1;
                 return Some(acc);
             }
             if let Some(dash_pos) = t.lemma.find('-') {
                 let base = &t.lemma[..dash_pos];
                 if !base.is_empty()
-                    && let Some(acc) = accent_dict.lookup(base, Some(&t.reading))
+                    && let Some(acc) = accent_dict.lookup_exact(base, &t.reading)
                 {
                     stats.hit_dash += 1;
                     return Some(acc);
@@ -157,6 +155,17 @@ mod tests {
         let tokens = vec![make_token("マレーシア-Malaysia", "マレーシア")];
         let out = resolve_dict_accents(&tokens, &dict);
         assert_eq!(out, vec![Some(2)]);
+    }
+
+    #[test]
+    fn resolve_reading_mismatch_misses() {
+        // Python `accent_dict[(lemma, reading)]` と同じく、lemma が存在しても
+        // 読みが一致しなければ None (別読みエントリへのフォールバック禁止)。
+        let mut dict = AccentDict::new();
+        dict.insert("本", "ホン", 1);
+        let tokens = vec![make_token("本", "モト")];
+        let out = resolve_dict_accents(&tokens, &dict);
+        assert_eq!(out, vec![None]);
     }
 
     #[test]

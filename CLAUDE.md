@@ -17,6 +17,7 @@ cargo clippy -- -D warnings  # lint（全警告をエラーとして扱う）
 Cargoワークスペース構成（resolver v2）:
 
 - `kotonoha/` — コアライブラリ
+- `kotonoha-cli/` — CLIツール（`kotonoha` コマンド）
 - `kotonoha-python/` — PyO3によるPythonバインディング
 
 ## 主要モジュール（`kotonoha/src/`）
@@ -24,14 +25,19 @@ Cargoワークスペース構成（resolver v2）:
 | モジュール | 役割 |
 |---|---|
 | `accent` | アクセント句の表現・操作 |
+| `accent_dict` | アクセント辞書（lemma/reading → アクセント型） |
 | `accent_rule` | アクセント結合規則テーブル |
+| `crf` | CRFアクセント予測器（学習・推論） |
 | `label` | HTS Full-Context Label生成 |
 | `mora` | モーラ処理 |
 | `njd` | NJD（Normalized Japanese Dictionary）ノード処理 |
+| `nn` | ニューラルアクセント予測器（ONNX、`nn/v66/` に v66 パイプライン） |
 | `phoneme` | 音素定義・操作 |
 | `prosody` | PhoneTone（韻律情報）生成 |
 
-エントリポイントは `Engine` 構造体（`lib.rs`）。スレッドセーフで内部状態を持たない。
+エントリポイントは `Engine` 構造体（`lib.rs`）。共有参照（`&self`）で並行利用できる
+スレッドセーフ設計。アクセント辞書・予測器・形態素解析器（`Mutex` 保護）を
+オプションで保持する。
 
 ## コーディング規約
 
@@ -49,7 +55,7 @@ Cargoワークスペース構成（resolver v2）:
 cargo test
 ```
 
-ユニットテストは各モジュール内に配置。アサーションには `pretty_assertions` を使用。
+ユニットテストは各モジュール内、結合テストは `kotonoha/tests/` に配置。
 
 ## Pythonバインディング
 
@@ -62,7 +68,8 @@ maturin develop  # 開発用ビルド・インストール
 ### v66 系モデルの Python API
 
 CUDA feature を有効化したビルド (`maturin develop --features cuda`) で v66
-系の 12 ONNX 推論パイプラインが利用可能になる。
+系の 13 ONNX 推論パイプライン (12 students/teachers + v66_split1 stacker) が
+利用可能になる。
 
 **前提**: `ort` クレートを `load-dynamic` でビルドしているため、起動前に
 `ORT_DYLIB_PATH` 環境変数で libonnxruntime.so の絶対パスを指定する必要がある。
@@ -73,7 +80,7 @@ import os
 os.environ["ORT_DYLIB_PATH"] = "/path/to/libonnxruntime.so"  # 必須
 import kotonoha
 engine = kotonoha.KotonohaEngine(
-    model_bundle="/mnt/c/GitHub/kotonoha-models",   # 12 ONNX を含む dir
+    model_bundle="/mnt/c/GitHub/kotonoha-models",   # 13 ONNX を含む dir
     accent_dict_paths=[                              # 追加辞書 (任意、後勝ちマージ)
         "/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv",
     ],

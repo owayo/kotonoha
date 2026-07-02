@@ -91,9 +91,11 @@ impl KotonohaEngine {
     /// トークン列からHTS Full-Context Labelを生成する
     ///
     /// Args:
-    ///     tokens: list of dict with keys:
-    ///         surface, pos, pos_detail1, pos_detail2, pos_detail3,
-    ///         ctype, cform, lemma, reading, pronunciation
+    ///     tokens: 属性アクセス可能なオブジェクトのリスト
+    ///         (dict は不可。`types.SimpleNamespace` やdataclass等を使う)。
+    ///         必要な属性: surface, pos, reading (必須)、
+    ///         pos_detail1, pos_detail2, pos_detail3, ctype, cform,
+    ///         lemma, pronunciation (省略可、None でもよい)
     ///
     /// Returns:
     ///     list[str]: HTS Full-Context Label strings
@@ -292,20 +294,29 @@ impl KotonohaEngine {
 }
 
 /// Python用トークン入力
+///
+/// `FromPyObject` derive は属性アクセス (`getattr`) で各フィールドを抽出する。
+/// dict は受け付けない (`types.SimpleNamespace` やdataclass等を渡すこと)。
+/// `Option<String>` のフィールドは `#[pyo3(default)]` により属性自体が無くてもよく、
+/// `None` も許容される。
 #[derive(FromPyObject)]
 struct PyToken {
     surface: String,
     pos: String,
-    #[pyo3(attribute("pos_detail1"))]
+    #[pyo3(attribute("pos_detail1"), default)]
     pos_detail1: Option<String>,
-    #[pyo3(attribute("pos_detail2"))]
+    #[pyo3(attribute("pos_detail2"), default)]
     pos_detail2: Option<String>,
-    #[pyo3(attribute("pos_detail3"))]
+    #[pyo3(attribute("pos_detail3"), default)]
     pos_detail3: Option<String>,
+    #[pyo3(default)]
     ctype: Option<String>,
+    #[pyo3(default)]
     cform: Option<String>,
+    #[pyo3(default)]
     lemma: Option<String>,
     reading: String,
+    #[pyo3(default)]
     pronunciation: Option<String>,
 }
 

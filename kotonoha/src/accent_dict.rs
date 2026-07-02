@@ -63,19 +63,30 @@ impl AccentDict {
 
     /// 見出し語からアクセント型を検索する
     ///
-    /// 読みが一致するエントリを優先する。読みが指定されない場合は最初のエントリを返す。
+    /// 読みが一致するエントリを優先する。読みが指定されない場合、または読みが
+    /// 一致しない場合は最初のエントリを返す（フォールバックあり）。
+    /// フォールバックを許容しない場合は [`lookup_exact`](Self::lookup_exact) を使う。
     pub fn lookup(&self, lemma: &str, reading: Option<&str>) -> Option<u8> {
-        let entries = self.entries.get(lemma)?;
-
-        if let Some(reading) = reading {
-            // 読みが一致するエントリを優先
-            if let Some(entry) = entries.iter().find(|e| e.reading == reading) {
-                return Some(entry.accent_type);
-            }
+        if let Some(reading) = reading
+            && let Some(accent) = self.lookup_exact(lemma, reading)
+        {
+            return Some(accent);
         }
 
         // 読みが一致しない場合、最初のエントリを返す
-        entries.first().map(|e| e.accent_type)
+        self.entries.get(lemma)?.first().map(|e| e.accent_type)
+    }
+
+    /// `(lemma, reading)` の完全一致でアクセント型を検索する（フォールバックなし）
+    ///
+    /// Python 訓練コードの `accent_dict[(lemma, reading)]`（タプル key の dict 参照）
+    /// と同じセマンティクス。読みが一致するエントリが無ければ `None` を返す。
+    pub fn lookup_exact(&self, lemma: &str, reading: &str) -> Option<u8> {
+        self.entries
+            .get(lemma)?
+            .iter()
+            .find(|e| e.reading == reading)
+            .map(|e| e.accent_type)
     }
 
     /// エントリを追加する
@@ -165,6 +176,19 @@ mod tests {
         assert_eq!(dict.lookup("本", Some("ホン")), Some(1));
         // 読みなしは最初のエントリ
         assert_eq!(dict.lookup("本", None), Some(1));
+    }
+
+    #[test]
+    fn test_lookup_exact() {
+        let mut dict = AccentDict::new();
+        dict.insert("本", "ホン", 1);
+        dict.insert("本", "モト", 2);
+
+        assert_eq!(dict.lookup_exact("本", "ホン"), Some(1));
+        assert_eq!(dict.lookup_exact("本", "モト"), Some(2));
+        // 読み不一致はフォールバックせず None
+        assert_eq!(dict.lookup_exact("本", "ブック"), None);
+        assert_eq!(dict.lookup_exact("鳥", "トリ"), None);
     }
 
     #[test]

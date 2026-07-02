@@ -198,7 +198,10 @@ fn build_label_context(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> LabelCont
         let mut node_mora_counts: Vec<u8> = Vec::new();
         for &node_idx in &phrase.nodes {
             let node = &nodes[node_idx];
-            let moras = mora::parse_mora(&node.reading);
+            // 音素は PhoneTone (prosody.rs) と同じく長音展開済みの pronunciation から生成する。
+            // reading を使うと「トウキョウ vs トオキョオ」の音素差や、reading 中の
+            // 長音記号「ー」が単独モーラで空母音になる問題が起きる。
+            let moras = mora::parse_mora(&node.pronunciation);
             node_mora_counts.push(moras.len() as u8);
             phrase_moras.extend(moras);
         }
