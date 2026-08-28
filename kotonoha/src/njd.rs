@@ -203,14 +203,19 @@ fn select_pronunciation_source<'a>(token: &'a InputToken, pos: &Pos) -> &'a str 
 ///
 /// 誤爆を避けるため、次の語は対象外とする:
 /// - 名詞・副詞・感動詞以外 (カタカナ表記の助詞「ハ」→「ワ」等を巻き込まないため)
-/// - 固有名詞 (「キヤノン」→「キャノン」のような意図的な表記があるため)
+/// - 人名・組織・地域の固有名詞 (「キヤノン」→「キャノン」、「グローヴ」→「グローブ」の
+///   ような意図的な表記や原音に基づく読みがあるため)
 /// - 1 文字の語 (品詞判定をすり抜けた助詞への二重防御)
 /// - 音素化できない文字を含む語
+///
+/// 「固有名詞,一般」は除外しない。NEologd が「ダイバーシティ」「ティール」
+/// 「インタラクション」のような普通名詞をこの品詞で大量に登録しており、除外すると
+/// 辞書の発音が使われて「ティール」が「チュール」になる。
 fn should_use_surface_pronunciation(token: &InputToken, pos: &Pos) -> bool {
     if !matches!(pos, Pos::Meishi | Pos::Fukushi | Pos::Kandoushi) {
         return false;
     }
-    if token.pos_detail1.contains("固有名詞") {
+    if token.pos_detail1.contains("固有名詞") && token.pos_detail2 != "一般" {
         return false;
     }
     if token.surface.chars().count() < 2 {
@@ -424,7 +429,35 @@ mod tests {
         // 「キヤノン」→「キャノン」のような意図的な表記は辞書を尊重する
         let mut token = InputToken::new("キヤノン", "名詞", "キヤノン", "キャノン");
         token.pos_detail1 = "固有名詞".to_string();
+        token.pos_detail2 = "組織".to_string();
         assert_eq!(NjdNode::from_token(&token).pronunciation, "キャノン");
+
+        // 人名の読みも原音に基づくので辞書を尊重する
+        let mut token = InputToken::new("グローヴ", "名詞", "グローヴ", "グローブ");
+        token.pos_detail1 = "固有名詞".to_string();
+        token.pos_detail2 = "人名".to_string();
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "グロオブ");
+    }
+
+    #[test]
+    fn test_general_proper_noun_uses_surface() {
+        // NEologd は普通名詞も「固有名詞,一般」で登録している。ここまで辞書に
+        // 委ねると「ティール」が「チュール」、「ダイバーシティ」が
+        // 「ダイバーシティー」になるので、表記通りに読む
+        let mut token = InputToken::new("ティール", "名詞", "ティール", "チュール");
+        token.pos_detail1 = "固有名詞".to_string();
+        token.pos_detail2 = "一般".to_string();
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "ティイル");
+
+        let mut token = InputToken::new(
+            "ダイバーシティ",
+            "名詞",
+            "ダイバーシティ",
+            "ダイバーシティー",
+        );
+        token.pos_detail1 = "固有名詞".to_string();
+        token.pos_detail2 = "一般".to_string();
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "ダイバアシティ");
     }
 
     #[test]
