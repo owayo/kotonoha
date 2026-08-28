@@ -54,7 +54,8 @@ fn test_mora_count_single_youon_kya() {
 
 #[test]
 fn test_mora_count_single_long_vowel() {
-    assert_eq!(count_mora("ー"), 1);
+    // 長音記号だけでは伸ばす母音が無く音にならないので 0 モーラ
+    assert_eq!(count_mora("ー"), 0);
 }
 
 // ============================================================
@@ -171,7 +172,7 @@ fn test_mora_count_empty() {
 
 #[test]
 fn test_mora_count_only_long_vowel() {
-    assert_eq!(count_mora("ー"), 1);
+    assert_eq!(count_mora("ー"), 0);
 }
 
 #[test]
@@ -530,4 +531,28 @@ fn test_parse_mora_count_consistency() {
             parsed.len()
         );
     }
+}
+
+#[test]
+fn test_nakaguro_is_not_a_mora() {
+    // 辞書の発音フィールドには「ヒューレット・パッカード」のように中黒が入ることがある。
+    // 中黒は音を持たないのでモーラにせず、音素列にも残さない
+    // ヒュ|ー|レ|ッ|ト|パ|ッ|カ|ー|ド の 10 モーラ（中黒は数えない）
+    assert_eq!(count_mora("ヒューレット・パッカード"), 10);
+    let moras = parse_mora("ア・イ");
+    assert_eq!(moras.len(), 2);
+    assert_eq!(moras[0].vowel, "a");
+    assert_eq!(moras[1].vowel, "i");
+    assert!(moras.iter().all(|m| !m.vowel.is_empty()));
+}
+
+#[test]
+fn test_leading_long_vowel_is_not_a_mora() {
+    // 誤植などで語頭に長音記号だけが来ることがある（「リーター」が
+    // 「リータ」+「ー」に分かれる等）。伸ばす母音が無いので音にならない
+    assert_eq!(count_mora("ー"), 0);
+    assert!(parse_mora("ー").is_empty());
+    // 語中の長音記号はこれまでどおり 1 モーラ
+    assert_eq!(count_mora("カー"), 2);
+    assert_eq!(parse_mora("カー").len(), 2);
 }

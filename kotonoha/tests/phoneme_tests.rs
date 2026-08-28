@@ -644,8 +644,10 @@ fn test_phoneme_ti_special() {
 
 #[test]
 fn test_phoneme_di_special() {
-    // ディ
-    assert_eq!(katakana_to_phonemes("ディ"), vec!["dy", "i"]);
+    // 「ディ」は d + i。dy は「デャ」「デュ」「デョ」に使う音素で、
+    // Style-Bert-VITS2 のモーラ表（pyopenjtalk 準拠）も d + i を割り当てている
+    assert_eq!(katakana_to_phonemes("ディ"), vec!["d", "i"]);
+    assert_eq!(katakana_to_phonemes("デュ"), vec!["dy", "u"]);
 }
 
 #[test]

@@ -150,14 +150,10 @@ impl NjdNode {
     /// - 形状詞 → 名詞 + 形容動詞語幹（detail1に"形容動詞語幹"を設定）
     pub fn from_token(token: &InputToken) -> Self {
         let pos = Pos::parse(&token.pos);
-        // pronunciationがカタカナでない場合（辞書の不備）はreadingにフォールバック
-        let raw_pron = if is_katakana_str(&token.pronunciation) {
-            &token.pronunciation
-        } else {
-            &token.reading
-        };
-        let pron = expand_long_vowels(raw_pron);
-        let mora_count = mora::count_mora(&token.reading);
+        let pron = expand_long_vowels(select_pronunciation_source(token, &pos));
+        // 発音とモーラ数がずれるとアクセント句の構築が崩れるので、
+        // reading ではなく実際に採用した発音から数える
+        let mora_count = mora::count_mora(&pron);
 
         // UniDic品詞をIPAdic互換のpos_detail1にマッピング
         let pos_detail1 = map_unidic_detail(&token.pos, &token.pos_detail1);
@@ -179,6 +175,66 @@ impl NjdNode {
             chain_flag: -1,
         }
     }
+}
+
+/// 発音として採用する文字列を選ぶ。
+///
+/// 優先順位:
+/// 1. 表層形をそのまま読むべきカタカナ語なら表層形
+/// 2. 辞書の発音 (カタカナとして妥当な場合)
+/// 3. 辞書の読み
+fn select_pronunciation_source<'a>(token: &'a InputToken, pos: &Pos) -> &'a str {
+    if should_use_surface_pronunciation(token, pos) {
+        return &token.surface;
+    }
+    // pronunciationがカタカナでない場合（辞書の不備）はreadingにフォールバック
+    if is_katakana_str(&token.pronunciation) {
+        &token.pronunciation
+    } else {
+        &token.reading
+    }
+}
+
+/// 表層形をそのまま発音として使うべきカタカナ語かどうかを判定する。
+///
+/// カタカナ表記は表音的なので、書かれた通りに読むのが原則。しかし辞書の発音
+/// フィールドには「マネジメント→マネージメント」「チャネル→チャンネル」のような
+/// 表記と食い違う値が多数入っており、そのまま使うと表記と違う音声になる。
+///
+/// 誤爆を避けるため、次の語は対象外とする:
+/// - 名詞・副詞・感動詞以外 (カタカナ表記の助詞「ハ」→「ワ」等を巻き込まないため)
+/// - 固有名詞 (「キヤノン」→「キャノン」のような意図的な表記があるため)
+/// - 1 文字の語 (品詞判定をすり抜けた助詞への二重防御)
+/// - 音素化できない文字を含む語
+fn should_use_surface_pronunciation(token: &InputToken, pos: &Pos) -> bool {
+    if !matches!(pos, Pos::Meishi | Pos::Fukushi | Pos::Kandoushi) {
+        return false;
+    }
+    if token.pos_detail1.contains("固有名詞") {
+        return false;
+    }
+    if token.surface.chars().count() < 2 {
+        return false;
+    }
+    is_phonemizable_katakana(&token.surface)
+}
+
+/// 全ての文字が音素に変換できるカタカナかどうかを判定する。
+///
+/// 「・」「ヽ」「ヰ」「ヱ」「ヵ」「ヶ」など音素化できない文字を含む語や、
+/// 長音・小書き仮名・促音で始まる語は false を返す。
+fn is_phonemizable_katakana(s: &str) -> bool {
+    let Some(first) = s.chars().next() else {
+        return false;
+    };
+    if matches!(
+        first,
+        'ー' | 'ァ' | 'ィ' | 'ゥ' | 'ェ' | 'ォ' | 'ャ' | 'ュ' | 'ョ' | 'ッ'
+    ) {
+        return false;
+    }
+    s.chars()
+        .all(|c| matches!(c, 'ン' | 'ッ' | 'ー') || last_vowel_of_kana(c).is_some())
 }
 
 /// UniDic品詞をIPAdic互換のpos_detail1にマッピングする
@@ -333,6 +389,64 @@ mod tests {
         assert_eq!(node.pos, Pos::Meishi);
         assert_eq!(node.pronunciation, "トオキョオ");
         assert_eq!(node.mora_count, 4); // ト・ウ・キョ・ウ
+    }
+
+    #[test]
+    fn test_surface_katakana_overrides_dictionary_pronunciation() {
+        // 辞書の発音が表記と食い違うカタカナ語は、表記通りに読む
+        let token = InputToken::new("マネジメント", "名詞", "マネジメント", "マネージメント");
+        let node = NjdNode::from_token(&token);
+        assert_eq!(node.pronunciation, "マネジメント");
+        assert_eq!(node.mora_count, 6);
+
+        let token = InputToken::new("チャネル", "名詞", "チャネル", "チャンネル");
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "チャネル");
+    }
+
+    #[test]
+    fn test_surface_katakana_long_vowel_is_expanded() {
+        // 表記を採用する場合も長音は展開する
+        let token = InputToken::new("ユーザ", "名詞", "ユーザ", "ユーザー");
+        let node = NjdNode::from_token(&token);
+        assert_eq!(node.pronunciation, "ユウザ");
+        assert_eq!(node.mora_count, 3);
+    }
+
+    #[test]
+    fn test_katakana_particle_keeps_dictionary_pronunciation() {
+        // カタカナ表記の助詞は表記通りに読むと誤る
+        let token = InputToken::new("ハ", "助詞", "ワ", "ワ");
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "ワ");
+    }
+
+    #[test]
+    fn test_proper_noun_keeps_dictionary_pronunciation() {
+        // 「キヤノン」→「キャノン」のような意図的な表記は辞書を尊重する
+        let mut token = InputToken::new("キヤノン", "名詞", "キヤノン", "キャノン");
+        token.pos_detail1 = "固有名詞".to_string();
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "キャノン");
+    }
+
+    #[test]
+    fn test_non_katakana_surface_keeps_dictionary_pronunciation() {
+        // 漢字表記は表層をそのまま読めないので辞書の発音を使う
+        let token = InputToken::new("東京", "名詞", "トウキョウ", "トーキョー");
+        assert_eq!(NjdNode::from_token(&token).pronunciation, "トオキョオ");
+    }
+
+    #[test]
+    fn test_unphonemizable_katakana_keeps_dictionary_pronunciation() {
+        // 中黒を含む語は音素化できないので辞書の発音を使う
+        let token = InputToken::new(
+            "ジョン・カバット・ジン",
+            "名詞",
+            "ジョンカバットジン",
+            "ジョンカバットジン",
+        );
+        assert_eq!(
+            NjdNode::from_token(&token).pronunciation,
+            "ジョンカバットジン"
+        );
     }
 
     #[test]
