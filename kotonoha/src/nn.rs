@@ -262,7 +262,7 @@ impl OnnxPredictor {
     pub fn new(model_path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
         let session = ort::session::Session::builder()?
             .with_execution_providers([
-                ort::execution_providers::CUDAExecutionProvider::default().build()
+                ort::ep::CUDA::default().build()
             ])?
             .commit_from_file(model_path)?;
 

@@ -21,7 +21,7 @@ csv = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true }
 once_cell = { workspace = true }
-ort = { version = "2.0.0-rc.12", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "load-dynamic", "api-24"] }
+ort = { version = "2.0.0-rc.13", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "load-dynamic", "api-24", "cuda"] }
 
 [dev-dependencies]
 criterion = { workspace = true }

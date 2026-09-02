@@ -26,7 +26,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use ort::execution_providers::CUDAExecutionProvider;
+use ort::ep::CUDA;
 use ort::session::Session;
 
 use crate::accent_dict::AccentDict;
@@ -157,7 +157,7 @@ fn load_session(path: &Path) -> Result<Session, BundleError> {
     }
     let session = Session::builder()
         .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?
-        .with_execution_providers([CUDAExecutionProvider::default().build()])
+        .with_execution_providers([CUDA::default().build()])
         .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?
         .commit_from_file(path)
         .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?;
