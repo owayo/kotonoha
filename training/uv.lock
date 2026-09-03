@@ -1262,7 +1262,7 @@ requires-dist = [
     { name = "onnxruntime-gpu", specifier = ">=1.29.0" },
     { name = "pyopenjtalk-plus", specifier = ">=0.4.1.post9" },
     { name = "torch", specifier = ">=2.12.1", index = "https://download.pytorch.org/whl/cu126" },
-    { name = "transformers", specifier = ">=5.15.1" },
+    { name = "transformers", specifier = ">=5.16.1" },
     { name = "unidic-lite", specifier = ">=1.0.8" },
 ]
 
