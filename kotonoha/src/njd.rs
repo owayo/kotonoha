@@ -364,7 +364,111 @@ impl From<hasami::Token> for InputToken {
 
 /// トークン列からNjdNode列を構築する
 pub fn build_njd_nodes(tokens: &[InputToken]) -> Vec<NjdNode> {
-    tokens.iter().map(NjdNode::from_token).collect()
+    let mut nodes: Vec<NjdNode> = tokens.iter().map(NjdNode::from_token).collect();
+    apply_volitional_long_vowel(&mut nodes);
+    nodes
+}
+
+/// 意志・推量の「う」を直前のオ段と融合させて長音にする。
+///
+/// 「作ろう」は tsukuroo、「〜しましょう」は shimashoo で、tsukurou / shimashou では
+/// ない。辞書の発音は「ツクロウ」「マショ」+「ウ」のように仮名遣いのままなので、
+/// ここで長音に直さないと「オ段 + ウ」の 2 モーラとして読まれて不自然になる。
+///
+/// 五段動詞の終止形の「う」は融合しない（「思う」は omou、「迷う」は mayou）。
+/// 終止形は表層形と原形が一致するので、それを見分けに使う。
+///
+/// 「ましょ」+「う」のように助動詞「う」が独立したトークンになる場合と、
+/// 「作ろう」「見よう」「だろう」のように 1 トークンになる場合の両方を扱う。
+/// 1 トークンの表層形が意志形かどうかを判定する。
+///
+/// 終止形なら表層形と原形が一致するので、それが第一の手掛かり。ただし
+/// NEologd には活用形をそのまま原形として登録したエントリ（「作ろう」の原形が
+/// 「作ろう」）があり、それでは見分けられない。
+///
+/// そこで語幹の文字種も見る。五段動詞の終止形は語幹の直後に「う」が 1 文字だけ付く形
+/// （思う、問う、背負う）で、平仮名の「オ段 + う」が漢字・カタカナに続く形にはならない。
+/// 逆に「作ろう」「探そう」「ウケよう」は必ずこの形になる。
+/// 語幹まで平仮名の動詞（つくろう、まよう、かよう）は終止形と区別できないので触らない。
+///
+/// IPAdic でこの規則の反例は「映ろう（うつろう）」1 件だけで、これは意志形の
+/// 「移ろう」と表記が重なるため人間にも区別できない。
+///
+/// 助動詞は語幹の文字種を見ずに常に意志形として扱う。「だろう」「でしょう」
+/// 「たろう」「ましょう」はすべて推量・意志で、IPAdic で「オ段 + う」で終わる
+/// 助動詞は他に「とう（たい）」「のう（ない）」だけ。どちらも発音が既に長音なので
+/// この規則では何も変わらない。
+fn is_volitional_surface(surface: &str, lemma: &str, pos: &Pos) -> bool {
+    if surface != lemma || matches!(pos, Pos::Jodoushi) {
+        return true;
+    }
+    // 末尾が「〈漢字またはカタカナ〉+〈オ段の平仮名〉+ う」なら意志形
+    let mut chars = surface.chars().rev();
+    if chars.next() != Some('う') {
+        return false;
+    }
+    let Some(stem_end) = chars.next() else {
+        return false;
+    };
+    if !matches!(
+        stem_end,
+        'お' | 'こ'
+            | 'そ'
+            | 'と'
+            | 'の'
+            | 'ほ'
+            | 'も'
+            | 'よ'
+            | 'ろ'
+            | 'ご'
+            | 'ぞ'
+            | 'ど'
+            | 'ぼ'
+            | 'ぽ'
+    ) {
+        return false;
+    }
+    chars.next().is_some_and(|c| !matches!(c, 'ぁ'..='ゖ'))
+}
+
+fn apply_volitional_long_vowel(nodes: &mut [NjdNode]) {
+    for i in 0..nodes.len() {
+        if !matches!(nodes[i].pos, Pos::Doushi | Pos::Jodoushi) {
+            continue;
+        }
+        if !nodes[i].surface.ends_with('う') {
+            continue;
+        }
+        // 独立した助動詞「う」は直前のトークンの末尾の母音を見る
+        let preceding_vowel = if nodes[i].surface == "う" {
+            if i == 0 {
+                continue;
+            }
+            nodes[i - 1]
+                .pronunciation
+                .chars()
+                .next_back()
+                .and_then(last_vowel_of_kana)
+        } else {
+            if !is_volitional_surface(&nodes[i].surface, &nodes[i].lemma, &nodes[i].pos) {
+                continue;
+            }
+            let mut chars = nodes[i].pronunciation.chars().rev();
+            if chars.next() != Some('ウ') {
+                continue;
+            }
+            chars.next().and_then(last_vowel_of_kana)
+        };
+        if preceding_vowel != Some('オ') {
+            continue;
+        }
+        if !nodes[i].pronunciation.ends_with('ウ') {
+            continue;
+        }
+        let len = nodes[i].pronunciation.len() - 'ウ'.len_utf8();
+        nodes[i].pronunciation.truncate(len);
+        nodes[i].pronunciation.push('オ');
+    }
 }
 
 #[cfg(test)]
@@ -529,5 +633,136 @@ mod tests {
         // IPAdic品詞はそのまま通過
         assert_eq!(map_unidic_detail("助詞", "格助詞"), "格助詞");
         assert_eq!(map_unidic_detail("助動詞", "*"), "*");
+    }
+
+    /// 原形を指定できる InputToken を作る
+    fn token_with_lemma(
+        surface: &str,
+        pos: &str,
+        lemma: &str,
+        reading: &str,
+        pronunciation: &str,
+    ) -> InputToken {
+        let mut token = InputToken::new(surface, pos, reading, pronunciation);
+        token.lemma = lemma.to_string();
+        token
+    }
+
+    fn pronunciations(tokens: &[InputToken]) -> Vec<String> {
+        build_njd_nodes(tokens)
+            .into_iter()
+            .map(|node| node.pronunciation)
+            .collect()
+    }
+
+    #[test]
+    fn test_volitional_u_after_o_row_becomes_long_vowel() {
+        // 「〜ましょう」は「ましょ」+「う」に分かれる。融合させないと mashou になる
+        let tokens = vec![
+            token_with_lemma("確認", "名詞,サ変接続", "確認", "カクニン", "カクニン"),
+            token_with_lemma("し", "動詞,自立", "する", "シ", "シ"),
+            token_with_lemma("ましょ", "助動詞", "ます", "マショ", "マショ"),
+            token_with_lemma("う", "助動詞", "う", "ウ", "ウ"),
+        ];
+        assert_eq!(pronunciations(&tokens), ["カクニン", "シ", "マショ", "オ"]);
+    }
+
+    #[test]
+    fn test_volitional_u_in_single_token_becomes_long_vowel() {
+        // 「作ろう」「見よう」「だろう」は 1 トークン。原形と表層形が違う
+        for (surface, pos, lemma, pron, expected) in [
+            ("作ろう", "動詞,自立", "作る", "ツクロウ", "ツクロオ"),
+            ("言おう", "動詞,自立", "言う", "イオウ", "イオオ"),
+            ("見よう", "動詞,自立", "見る", "ミヨウ", "ミヨオ"),
+            ("だろう", "助動詞", "だ", "ダロウ", "ダロオ"),
+        ] {
+            let tokens = vec![token_with_lemma(surface, pos, lemma, pron, pron)];
+            assert_eq!(pronunciations(&tokens), [expected], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_volitional_with_broken_lemma_is_merged() {
+        // NEologd には活用形をそのまま原形にしたエントリがある。
+        // 語幹が漢字・カタカナなら、平仮名の「オ段 + う」は終止形にはならない
+        for (surface, pron, expected) in [
+            ("作ろう", "ツクロウ", "ツクロオ"),
+            ("探そう", "サガソウ", "サガソオ"),
+            ("雇おう", "ヤトオウ", "ヤトオオ"),
+            ("ウケよう", "ウケヨウ", "ウケヨオ"),
+        ] {
+            let tokens = vec![token_with_lemma(surface, "動詞,自立", surface, pron, pron)];
+            assert_eq!(pronunciations(&tokens), [expected], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_auxiliary_verb_is_always_volitional() {
+        // 「だろう」「たろう」は原形が壊れていても推量。語幹が平仮名でも長音にする
+        for (surface, pron, expected) in [
+            ("だろう", "ダロウ", "ダロオ"),
+            ("たろう", "タロウ", "タロオ"),
+            ("でしょう", "デショウ", "デショオ"),
+        ] {
+            let tokens = vec![token_with_lemma(surface, "助動詞", surface, pron, pron)];
+            assert_eq!(pronunciations(&tokens), [expected], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_auxiliary_verb_with_long_vowel_pronunciation_is_untouched() {
+        // 「とう(たい)」「のう(ない)」は発音が既に長音なので何も変わらない
+        // (期待値は expand_long_vowels() が長音記号を母音に展開したあとの形)
+        for (surface, pron, expected) in [("とう", "トー", "トオ"), ("のう", "ノー", "ノオ")]
+        {
+            let tokens = vec![token_with_lemma(surface, "助動詞", "たい", pron, pron)];
+            assert_eq!(pronunciations(&tokens), [expected], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_all_kana_verb_is_not_merged() {
+        // 語幹まで平仮名の動詞は終止形と区別できないので触らない
+        // (つくろう=繕う、まよう=迷う、かよう=通う はいずれも終止形)
+        for (surface, pron) in [("つくろう", "ツクロウ"), ("かよう", "カヨウ")] {
+            let tokens = vec![token_with_lemma(surface, "動詞,自立", surface, pron, pron)];
+            assert_eq!(pronunciations(&tokens), [pron], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_dictionary_form_u_is_not_merged() {
+        // 五段動詞の終止形の「う」は融合しない (思う=omou、迷う=mayou)
+        for (surface, lemma, pron) in [
+            ("思う", "思う", "オモウ"),
+            ("迷う", "迷う", "マヨウ"),
+            ("問う", "問う", "トウ"),
+        ] {
+            let tokens = vec![token_with_lemma(surface, "動詞,自立", lemma, pron, pron)];
+            assert_eq!(pronunciations(&tokens), [pron], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_u_after_non_o_row_is_not_merged() {
+        // オ段以外の後ろの「う」は長音にならない (「言う」は iu)
+        let tokens = vec![
+            token_with_lemma("言", "動詞,自立", "言う", "イ", "イ"),
+            token_with_lemma("う", "助動詞", "う", "ウ", "ウ"),
+        ];
+        assert_eq!(pronunciations(&tokens), ["イ", "ウ"]);
+    }
+
+    #[test]
+    fn test_noun_ending_with_u_is_not_merged() {
+        // 名詞の「オ段 + ウ」には当てない (「方法」は辞書側で長音化される)
+        let tokens = vec![token_with_lemma(
+            "ノウハウ",
+            "名詞,一般",
+            "ノウハウ",
+            "ノウハウ",
+            "ノウハウ",
+        )];
+        assert_eq!(pronunciations(&tokens), ["ノウハウ"]);
     }
 }
