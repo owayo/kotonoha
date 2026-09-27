@@ -477,7 +477,7 @@ fn cmd_build_dict(
 ) {
     let total_start = Instant::now();
 
-    eprintln!("[1/4] CSVファイルを読み込み中...");
+    eprintln!("[1/3] CSVファイルを読み込み中...");
     let mut builder = hasami::dict::DictBuilder::new();
 
     if let Err(e) = builder.add_csv_dir(csv_dir) {
@@ -486,7 +486,7 @@ fn cmd_build_dict(
     }
     eprintln!("  エントリ数: {}", builder.entry_count());
 
-    eprintln!("[2/4] 接続行列・未知語定義を読み込み中...");
+    eprintln!("[2/3] 接続行列・未知語定義を読み込み中...");
     if let Err(e) = builder.load_matrix(matrix_path) {
         eprintln!("matrix.def の読み込みに失敗: {e}");
         std::process::exit(1);
@@ -500,24 +500,21 @@ fn cmd_build_dict(
         std::process::exit(1);
     }
 
-    eprintln!("[3/4] Double-Array Trieを構築中...");
+    eprintln!("[3/3] Double-Array Trieを構築してバイナリ辞書を書き出し中...");
     let trie_start = Instant::now();
-    let dict = builder.build_with_progress(|processed, total| {
+    let options = builder.write_options();
+    if let Err(e) = builder.write_hsd(output_path, &options, |processed, total| {
         if processed % 50_000 == 0 {
-            eprint!("\r  進捗: {processed}/{total} ノード");
+            eprint!("\r  進捗: {processed}/{total} キー");
         }
-    });
-    eprintln!(
-        "\r  Trie構築完了 ({:.2}秒)          ",
-        trie_start.elapsed().as_secs_f64()
-    );
-
-    eprintln!("[4/4] バイナリ辞書を書き出し中...");
-    let mmap_builder = hasami::mmap_dict::MmapDictBuilder::from_dictionary(&dict);
-    if let Err(e) = mmap_builder.write(output_path) {
-        eprintln!("辞書の書き出しに失敗: {e}");
+    }) {
+        eprintln!("辞書の構築・書き出しに失敗: {e}");
         std::process::exit(1);
     }
+    eprintln!(
+        "\r  辞書の構築・書き出し完了 ({:.2}秒)          ",
+        trie_start.elapsed().as_secs_f64()
+    );
 
     let file_size = std::fs::metadata(output_path).map(|m| m.len()).unwrap_or(0);
     let total_elapsed = total_start.elapsed();
