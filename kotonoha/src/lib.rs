@@ -214,35 +214,35 @@ impl Engine {
 
     // === 便利メソッド（トークンから直接出力を得る） ===
 
-    /// トークン列からHTS Full-Context Labelを生成する
-    pub fn tokens_to_labels(&self, tokens: &[InputToken]) -> Vec<String> {
+    /// 予測器を適用してから句を組み立て、アクセント推定済みのノードと句を返す。
+    fn prepare_prosody(&self, tokens: &[InputToken]) -> (Vec<NjdNode>, Vec<AccentPhrase>) {
         let mut nodes = self.analyze(tokens);
         self.apply_predictor(tokens, &mut nodes);
         let phrases = self.estimate_accent(&mut nodes);
+        (nodes, phrases)
+    }
+
+    /// トークン列からHTS Full-Context Labelを生成する
+    pub fn tokens_to_labels(&self, tokens: &[InputToken]) -> Vec<String> {
+        let (nodes, phrases) = self.prepare_prosody(tokens);
         self.make_label(&nodes, &phrases)
     }
 
     /// トークン列からPhoneTone列を抽出する
     pub fn tokens_to_phone_tones(&self, tokens: &[InputToken]) -> Vec<PhoneTone> {
-        let mut nodes = self.analyze(tokens);
-        self.apply_predictor(tokens, &mut nodes);
-        let phrases = self.estimate_accent(&mut nodes);
+        let (nodes, phrases) = self.prepare_prosody(tokens);
         self.extract_phone_tones(&nodes, &phrases)
     }
 
     /// トークン列からPhoneTone列を抽出する（句読点を保持）
     pub fn tokens_to_phone_tones_with_punct(&self, tokens: &[InputToken]) -> Vec<PhoneTone> {
-        let mut nodes = self.analyze(tokens);
-        self.apply_predictor(tokens, &mut nodes);
-        let phrases = self.estimate_accent(&mut nodes);
+        let (nodes, phrases) = self.prepare_prosody(tokens);
         self.extract_phone_tones_with_punct(&nodes, &phrases)
     }
 
     /// トークン列から韻律記号列を抽出する
     pub fn tokens_to_prosody_symbols(&self, tokens: &[InputToken]) -> Vec<String> {
-        let mut nodes = self.analyze(tokens);
-        self.apply_predictor(tokens, &mut nodes);
-        let phrases = self.estimate_accent(&mut nodes);
+        let (nodes, phrases) = self.prepare_prosody(tokens);
         self.extract_prosody_symbols(&nodes, &phrases)
     }
 
@@ -251,6 +251,7 @@ impl Engine {
     /// `analyze` で初期 accent_type をセットしたのち、`apply_predictor` で
     /// neural predictor (contextual or legacy) があれば上書きしてから値を取り出す。
     pub fn predict_accent_types(&self, tokens: &[InputToken]) -> Vec<u8> {
+        // 句結合前の予測値を返すため、prepare_prosody による句の組み立ては行わない。
         let mut nodes = self.analyze(tokens);
         self.apply_predictor(tokens, &mut nodes);
         nodes.into_iter().map(|n| n.accent_type).collect()

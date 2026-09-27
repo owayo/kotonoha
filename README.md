@@ -29,7 +29,7 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 
 - Rust 1.98 以上と、OS に対応する C/C++ ビルドツール
 - 開発用ツールの管理には [mise](https://mise.jdx.dev/)。Rust・Python・uv の版は `mise.toml` に固定しています
-- Python バインディングは Python 3.9 以上。通常の開発・CI は Python 3.12 を使います
+- Python バインディングは Python 3.9 以上。通常の開発・CI は Python 3.14 を使います
 - テキストの形態素解析には hasami の `.hsd` 辞書が必要です。トークン列を直接渡す処理は辞書なしで使えます
 
 ONNX 推論にはモデルと ONNX Runtime の共有ライブラリも必要です。`ORT_DYLIB_PATH` にライブラリのパスを指定します。CUDA を使う場合は対応する GPU・ドライバ・実行環境を用意してください。

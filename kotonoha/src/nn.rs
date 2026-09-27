@@ -261,9 +261,7 @@ impl OnnxPredictor {
     /// 利用不可の場合はCPUにフォールバックする。
     pub fn new(model_path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
         let session = ort::session::Session::builder()?
-            .with_execution_providers([
-                ort::ep::CUDA::default().build()
-            ])?
+            .with_execution_providers([ort::ep::CUDA::default().build()])?
             .commit_from_file(model_path)?;
 
         Ok(Self {

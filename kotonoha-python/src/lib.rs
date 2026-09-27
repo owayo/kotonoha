@@ -100,7 +100,7 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[str]: HTS Full-Context Label strings
     fn make_label(&self, tokens: Vec<PyToken>) -> Vec<String> {
-        let input_tokens = convert_tokens(&tokens);
+        let input_tokens = convert_tokens(tokens);
         self.inner.tokens_to_labels(&input_tokens)
     }
 
@@ -109,7 +109,7 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[tuple[str, int]]: (phone, tone) pairs
     fn phone_tones(&self, tokens: Vec<PyToken>) -> Vec<(String, u8)> {
-        let input_tokens = convert_tokens(&tokens);
+        let input_tokens = convert_tokens(tokens);
         self.inner
             .tokens_to_phone_tones(&input_tokens)
             .into_iter()
@@ -122,7 +122,7 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[tuple[str, int]]: (phone, tone) pairs including punctuation
     fn phone_tones_with_punct(&self, tokens: Vec<PyToken>) -> Vec<(String, u8)> {
-        let input_tokens = convert_tokens(&tokens);
+        let input_tokens = convert_tokens(tokens);
         self.inner
             .tokens_to_phone_tones_with_punct(&input_tokens)
             .into_iter()
@@ -135,7 +135,7 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[str]: Prosody symbols
     fn prosody_symbols(&self, tokens: Vec<PyToken>) -> Vec<String> {
-        let input_tokens = convert_tokens(&tokens);
+        let input_tokens = convert_tokens(tokens);
         self.inner.tokens_to_prosody_symbols(&input_tokens)
     }
 
@@ -195,7 +195,7 @@ impl KotonohaEngine {
 
     /// 個別ステップ: トークンからNjdNodeを構築する
     fn analyze(&self, tokens: Vec<PyToken>) -> Vec<PyNjdNode> {
-        let input_tokens = convert_tokens(&tokens);
+        let input_tokens = convert_tokens(tokens);
         let nodes = self.inner.analyze(&input_tokens);
         nodes.into_iter().map(PyNjdNode::from).collect()
     }
@@ -217,7 +217,7 @@ impl KotonohaEngine {
     /// Returns:
     ///     list[int]: 各トークンの predicted accent_type (0..20)
     fn predict_accent_types(&self, tokens: Vec<PyToken>) -> Vec<u8> {
-        let input_tokens = convert_tokens(&tokens);
+        let input_tokens = convert_tokens(tokens);
         self.inner.predict_accent_types(&input_tokens)
     }
 }
@@ -351,20 +351,36 @@ impl From<NjdNode> for PyNjdNode {
     }
 }
 
-fn convert_tokens(tokens: &[PyToken]) -> Vec<InputToken> {
+fn convert_tokens(tokens: Vec<PyToken>) -> Vec<InputToken> {
     tokens
-        .iter()
-        .map(|t| InputToken {
-            surface: t.surface.clone(),
-            pos: t.pos.clone(),
-            pos_detail1: t.pos_detail1.clone().unwrap_or_else(|| "*".to_string()),
-            pos_detail2: t.pos_detail2.clone().unwrap_or_else(|| "*".to_string()),
-            pos_detail3: t.pos_detail3.clone().unwrap_or_else(|| "*".to_string()),
-            ctype: t.ctype.clone().unwrap_or_else(|| "*".to_string()),
-            cform: t.cform.clone().unwrap_or_else(|| "*".to_string()),
-            lemma: t.lemma.clone().unwrap_or_else(|| t.surface.clone()),
-            reading: t.reading.clone(),
-            pronunciation: t.pronunciation.clone().unwrap_or_else(|| t.reading.clone()),
+        .into_iter()
+        .map(|token| {
+            let PyToken {
+                surface,
+                pos,
+                pos_detail1,
+                pos_detail2,
+                pos_detail3,
+                ctype,
+                cform,
+                lemma,
+                reading,
+                pronunciation,
+            } = token;
+            let lemma = lemma.unwrap_or_else(|| surface.clone());
+            let pronunciation = pronunciation.unwrap_or_else(|| reading.clone());
+            InputToken {
+                surface,
+                pos,
+                pos_detail1: pos_detail1.unwrap_or_else(|| "*".to_string()),
+                pos_detail2: pos_detail2.unwrap_or_else(|| "*".to_string()),
+                pos_detail3: pos_detail3.unwrap_or_else(|| "*".to_string()),
+                ctype: ctype.unwrap_or_else(|| "*".to_string()),
+                cform: cform.unwrap_or_else(|| "*".to_string()),
+                lemma,
+                reading,
+                pronunciation,
+            }
         })
         .collect()
 }

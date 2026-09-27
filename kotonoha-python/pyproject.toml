@@ -32,6 +32,7 @@ cuda = []
 [tool.uv]
 cache-keys = [
     { file = "Cargo.toml" },
+    { file = "build.rs" },
     { file = "src/**/*.rs" },
     { file = "../Cargo.toml" },
     { file = "../Cargo.lock" },

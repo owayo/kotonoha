@@ -445,6 +445,7 @@ dependencies = [
  "hasami",
  "kotonoha",
  "pyo3",
+ "pyo3-build-config",
 ]
 
 [[package]]

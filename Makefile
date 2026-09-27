@@ -84,5 +84,5 @@ clean: ## ビルド成果物を消す
 help: ## このヘルプを表示する
 	@echo "kotonoha の開発タスク"
 	@echo "使い方: make <target>"
-	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-16s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 	@echo "版は mise.toml に固定しています。最初に make setup を実行してください。"

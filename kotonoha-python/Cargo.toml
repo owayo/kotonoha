@@ -19,3 +19,6 @@ cuda = ["kotonoha/cuda"]
 kotonoha = { workspace = true }
 hasami = { workspace = true }
 pyo3 = { workspace = true }
+
+[build-dependencies]
+pyo3-build-config = "0.29.2"

@@ -30,3 +30,9 @@ __pycache__/
 
 # 検証用一時ファイル(エージェント作業中の grep 出力等)
 /tmp_*.txt
+
+# Local toolchain overrides and generated files
+mise.local.toml
+.mise.local.toml
+.venv/
+/data/*.hsd
