@@ -37,8 +37,6 @@ cache-keys = [
     { file = "../Cargo.lock" },
     { file = "../kotonoha/Cargo.toml" },
     { file = "../kotonoha/src/**/*.rs" },
-    { file = "../../hasami/Cargo.toml" },
-    { file = "../../hasami/src/**/*.rs" },
 ]
 
 [tool.maturin]

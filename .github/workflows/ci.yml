@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: Quality (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          minimum_release_age: 14d
+          cache: false
+      - uses: Swatinem/rust-cache@v2
+      - run: make setup
+      - run: make ci
+
+  windows:
+    name: Test and build (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          minimum_release_age: 14d
+          cache: false
+      - uses: Swatinem/rust-cache@v2
+      # Windows の make は POSIX シェルのレシピと互換性がないため直接実行する。
+      - name: Test the Rust API and CLI
+        run: cargo test --locked --workspace --exclude kotonoha-python --no-fail-fast
+      - name: Test optional ONNX features
+        run: cargo test --locked -p kotonoha --all-features --no-fail-fast
+      - name: Test Python bindings
+        run: uv run --locked --project kotonoha-python python -m unittest discover -s kotonoha-python/tests -v
+      - name: Build
+        run: cargo build --release --locked --workspace

@@ -2,6 +2,7 @@
 name = "kotonoha-cli"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 
 [[bin]]
@@ -10,6 +11,6 @@ path = "src/main.rs"
 
 [dependencies]
 kotonoha = { workspace = true }
-hasami = { workspace = true }
-clap = { version = "4.6.6", features = ["derive"] }
+hasami = { workspace = true, features = ["build"] }
+clap = { workspace = true }
 serde_json = { workspace = true }

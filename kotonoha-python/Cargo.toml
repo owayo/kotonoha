@@ -2,6 +2,7 @@
 name = "kotonoha-python"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 description = "Python bindings for kotonoha Japanese prosody engine"
