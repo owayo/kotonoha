@@ -16,10 +16,24 @@ use accent::AccentPhrase;
 use accent_dict::AccentDict;
 use accent_rule::AccentRuleTable;
 use njd::{InputToken, NjdNode};
-use nn::{AccentPredictor, ContextualAccentPredictor, FeatureMorpheme};
+use nn::{AccentPredictor, ContextualAccentError, ContextualAccentPredictor, FeatureMorpheme};
 use prosody::PhoneTone;
 use std::path::Path;
 use std::sync::Mutex;
+
+/// アクセント予測の失敗。結果が不完全な場合もノードを書き換えずに返す。
+#[derive(Debug, thiserror::Error)]
+pub enum AccentPredictionError {
+    /// 文脈入力のトークン数とノード数が異なる
+    #[error("tokens.len ({tokens}) != nodes.len ({nodes})")]
+    InputLength { tokens: usize, nodes: usize },
+    /// 予測結果がノード数と異なる
+    #[error("predicted.len ({actual}) != nodes.len ({expected})")]
+    OutputLength { expected: usize, actual: usize },
+    /// 推論バックエンドで失敗した
+    #[error("accent predictor failed: {0}")]
+    Backend(#[source] ContextualAccentError),
+}
 
 /// kotonohaエンジン
 /// スレッドセーフ: ルールテーブルは不変、アクセント辞書・予測器はオプション
@@ -159,57 +173,47 @@ impl Engine {
     /// **書き換えず**、stderr にエラーを記録する。これにより推論不調 (ORT エラー、
     /// bundle 不整合) が「平板語が増えた」だけに見えて検知不能になる事態を防ぐ。
     fn apply_predictor(&self, tokens: &[InputToken], nodes: &mut [NjdNode]) {
-        if let Some(ref predictor) = self.contextual_predictor {
+        if let Err(e) = self.try_apply_predictor(tokens, nodes) {
+            eprintln!("kotonoha: {e}; keeping existing accent_type");
+        }
+    }
+
+    /// 結果全体を検証してからノードへ適用する。失敗時は既存の値を保持する。
+    fn try_apply_predictor(
+        &self,
+        tokens: &[InputToken],
+        nodes: &mut [NjdNode],
+    ) -> Result<(), AccentPredictionError> {
+        let predicted = if let Some(ref predictor) = self.contextual_predictor {
             if tokens.len() != nodes.len() {
-                eprintln!(
-                    "kotonoha: apply_predictor: tokens.len ({}) != nodes.len ({}); \
-                     skipping contextual predictor",
-                    tokens.len(),
-                    nodes.len(),
-                );
-                return;
+                return Err(AccentPredictionError::InputLength {
+                    tokens: tokens.len(),
+                    nodes: nodes.len(),
+                });
             }
             let ctx: Vec<FeatureMorpheme<'_>> = tokens
                 .iter()
                 .zip(nodes.iter())
                 .map(|(token, node)| FeatureMorpheme { token, node })
                 .collect();
-            match predictor.predict_with_context(&ctx) {
-                Ok(predicted) => {
-                    if predicted.len() != nodes.len() {
-                        eprintln!(
-                            "kotonoha: apply_predictor: predicted.len ({}) != nodes.len ({}); \
-                             keeping existing accent_type",
-                            predicted.len(),
-                            nodes.len(),
-                        );
-                        return;
-                    }
-                    for (node, accent) in nodes.iter_mut().zip(predicted) {
-                        node.accent_type = accent;
-                    }
-                }
-                Err(e) => {
-                    eprintln!(
-                        "kotonoha: contextual predictor failed ({e}); keeping existing accent_type"
-                    );
-                }
-            }
+            predictor.predict_with_context(&ctx)
         } else if let Some(ref predictor) = self.accent_predictor {
-            let predicted = predictor.predict(nodes);
-            if predicted.len() != nodes.len() {
-                eprintln!(
-                    "kotonoha: apply_predictor: predicted.len ({}) != nodes.len ({}); \
-                     keeping existing accent_type",
-                    predicted.len(),
-                    nodes.len(),
-                );
-                return;
-            }
-            for (node, accent) in nodes.iter_mut().zip(predicted) {
-                node.accent_type = accent;
-            }
+            predictor.try_predict(nodes)
+        } else {
+            return Ok(());
         }
+        .map_err(AccentPredictionError::Backend)?;
+
+        if predicted.len() != nodes.len() {
+            return Err(AccentPredictionError::OutputLength {
+                expected: nodes.len(),
+                actual: predicted.len(),
+            });
+        }
+        for (node, accent) in nodes.iter_mut().zip(predicted) {
+            node.accent_type = accent;
+        }
+        Ok(())
     }
 
     // === 便利メソッド（トークンから直接出力を得る） ===
@@ -248,13 +252,26 @@ impl Engine {
 
     /// トークン列に対し、設定された predictor によるアクセント型予測値を返す
     ///
-    /// `analyze` で初期 accent_type をセットしたのち、`apply_predictor` で
-    /// neural predictor (contextual or legacy) があれば上書きしてから値を取り出す。
+    /// 推論失敗時は既存のアクセント型を返す。
+    /// 失敗を検出する必要がある評価処理には [`Self::try_predict_accent_types`] を使う。
     pub fn predict_accent_types(&self, tokens: &[InputToken]) -> Vec<u8> {
         // 句結合前の予測値を返すため、prepare_prosody による句の組み立ては行わない。
         let mut nodes = self.analyze(tokens);
         self.apply_predictor(tokens, &mut nodes);
         nodes.into_iter().map(|n| n.accent_type).collect()
+    }
+
+    /// トークン列のアクセント型を予測し、推論失敗を呼び出し側へ返す。
+    ///
+    /// 予測器が未設定の場合は辞書由来の値を返す。句結合前の予測値を返すため、
+    /// `prepare_prosody` による句の組み立ては行わない。
+    pub fn try_predict_accent_types(
+        &self,
+        tokens: &[InputToken],
+    ) -> Result<Vec<u8>, AccentPredictionError> {
+        let mut nodes = self.analyze(tokens);
+        self.try_apply_predictor(tokens, &mut nodes)?;
+        Ok(nodes.into_iter().map(|n| n.accent_type).collect())
     }
 
     // === テキスト直接解析メソッド（形態素解析含む） ===

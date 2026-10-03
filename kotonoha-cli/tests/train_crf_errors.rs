@@ -33,3 +33,38 @@ fn invalid_training_rows_do_not_create_a_model() {
 
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn invalid_training_parameters_do_not_create_a_model() {
+    let dir = std::env::temp_dir().join(format!("kotonoha-crf-params-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let data = dir.join("training.csv");
+    let model = dir.join("model.bin");
+    std::fs::write(&data, "猫,名詞,ネコ,1\n").unwrap();
+
+    for (args, expected_error) in [
+        (["--epochs", "0"], "エポック数"),
+        (["--lr", "NaN"], "学習率"),
+        (["--lr", "inf"], "学習率"),
+        (["--lr", "0"], "学習率"),
+        (["--l2-reg", "NaN"], "L2正則化係数"),
+        (["--l2-reg", "10"], "積は1未満"),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_kotonoha"))
+            .args(["train-crf", "--data"])
+            .arg(&data)
+            .arg("--output")
+            .arg(&model)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected_error),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(!model.exists());
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}

@@ -5,7 +5,7 @@
 
 use crate::njd::{NjdNode, Pos};
 use crate::nn::AccentPredictor;
-use std::io::{Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 /// 特徴量の次元数（ハッシュトリック用）
@@ -394,37 +394,34 @@ impl CrfAccentPredictor {
 
         let num_labels = self.num_labels;
 
-        // viterbi[t][l] = best score ending at time t with label l
-        let mut viterbi = vec![vec![f32::NEG_INFINITY; num_labels]; seq_len];
+        // スコアは直前の位置だけを参照する。経路復元用の backptr は全位置を保持する。
+        let mut previous = emissions[0][..num_labels].to_vec();
+        let mut current = vec![f32::NEG_INFINITY; num_labels];
         let mut backptr = vec![vec![0usize; num_labels]; seq_len];
-
-        // Initialize t=0
-        for l in 0..num_labels {
-            viterbi[0][l] = emissions[0][l];
-        }
 
         // Forward pass
         for t in 1..seq_len {
             for l in 0..num_labels {
                 let mut best_score = f32::NEG_INFINITY;
                 let mut best_prev = 0;
-                for (p, &prev_score) in viterbi[t - 1].iter().enumerate() {
+                for (p, &prev_score) in previous.iter().enumerate() {
                     let s = prev_score + self.transition[p][l] + emissions[t][l];
                     if s > best_score {
                         best_score = s;
                         best_prev = p;
                     }
                 }
-                viterbi[t][l] = best_score;
+                current[l] = best_score;
                 backptr[t][l] = best_prev;
             }
+            std::mem::swap(&mut previous, &mut current);
         }
 
         // Backtrace
         let mut path = vec![0usize; seq_len];
         let mut best_last = 0;
         let mut best_score = f32::NEG_INFINITY;
-        for (l, &score) in viterbi[seq_len - 1].iter().enumerate() {
+        for (l, &score) in previous.iter().enumerate() {
             if score > best_score {
                 best_score = score;
                 best_last = l;
@@ -440,18 +437,20 @@ impl CrfAccentPredictor {
 
     /// ノード列から各位置の emission スコアを計算する
     fn compute_emissions(&self, nodes: &[NjdNode]) -> Vec<Vec<f32>> {
-        let mut emissions = Vec::with_capacity(nodes.len());
-        for pos in 0..nodes.len() {
-            let feats = extract_features(nodes, pos);
-            let mut scores = vec![0.0f32; self.num_labels];
-            for (label, score) in scores.iter_mut().enumerate() {
-                for &(idx, val) in &feats {
-                    *score += self.weights[label * FEATURE_DIM + idx] * val;
-                }
+        (0..nodes.len())
+            .map(|pos| self.emission_scores(&extract_features(nodes, pos)))
+            .collect()
+    }
+
+    /// 事前抽出した特徴量を、学習・推論で共通の放出スコアへ変換する。
+    fn emission_scores(&self, features: &[(usize, f32)]) -> Vec<f32> {
+        let mut scores = vec![0.0f32; self.num_labels];
+        for (label, score) in scores.iter_mut().enumerate() {
+            for &(idx, val) in features {
+                *score += self.weights[label * FEATURE_DIM + idx] * val;
             }
-            emissions.push(scores);
         }
-        emissions
+        scores
     }
 }
 
@@ -505,6 +504,7 @@ impl CrfTrainer {
         &self,
         data: &[TrainingExample],
     ) -> Result<CrfAccentPredictor, Box<dyn std::error::Error>> {
+        self.validate_params()?;
         if data.is_empty() {
             return Err("CRF学習データが空です".into());
         }
@@ -536,8 +536,11 @@ impl CrfTrainer {
 
         let num_labels = DEFAULT_NUM_LABELS;
         let weight_size = num_labels * FEATURE_DIM;
-        let mut weights = vec![0.0f32; weight_size];
-        let mut transition = vec![vec![0.0f32; num_labels]; num_labels];
+        let mut predictor = CrfAccentPredictor {
+            weights: vec![0.0f32; weight_size],
+            transition: vec![vec![0.0f32; num_labels]; num_labels],
+            num_labels,
+        };
 
         // Averaged perceptron: accumulate sum of all weight snapshots
         let mut weights_sum = vec![0.0f32; weight_size];
@@ -568,64 +571,12 @@ impl CrfTrainer {
 
                 let all_feats = &all_example_feats[ex_idx];
 
-                // Compute emissions inline (avoids cloning weights into a predictor)
-                let mut emissions = Vec::with_capacity(example.nodes.len());
-                for feats in all_feats.iter() {
-                    let mut scores = vec![0.0f32; num_labels];
-                    for (label, score) in scores.iter_mut().enumerate() {
-                        for &(idx, val) in feats {
-                            *score += weights[label * FEATURE_DIM + idx] * val;
-                        }
-                    }
-                    emissions.push(scores);
-                }
-
-                // Inline viterbi decode (avoids allocating a predictor)
-                let predicted = {
-                    let seq_len = emissions.len();
-                    if seq_len == 0 {
-                        Vec::new()
-                    } else {
-                        let mut viterbi_scores = vec![vec![f32::NEG_INFINITY; num_labels]; seq_len];
-                        let mut backptr = vec![vec![0usize; num_labels]; seq_len];
-
-                        for l in 0..num_labels {
-                            viterbi_scores[0][l] = emissions[0][l];
-                        }
-                        for t in 1..seq_len {
-                            for l in 0..num_labels {
-                                let mut best_score = f32::NEG_INFINITY;
-                                let mut best_prev = 0;
-                                for p in 0..num_labels {
-                                    let s = viterbi_scores[t - 1][p]
-                                        + transition[p][l]
-                                        + emissions[t][l];
-                                    if s > best_score {
-                                        best_score = s;
-                                        best_prev = p;
-                                    }
-                                }
-                                viterbi_scores[t][l] = best_score;
-                                backptr[t][l] = best_prev;
-                            }
-                        }
-
-                        let mut path = vec![0usize; seq_len];
-                        let mut best_last = 0;
-                        let mut best_s = f32::NEG_INFINITY;
-                        for (l, &score) in viterbi_scores[seq_len - 1].iter().enumerate() {
-                            if score > best_s {
-                                best_s = score;
-                                best_last = l;
-                            }
-                        }
-                        path[seq_len - 1] = best_last;
-                        for t in (0..seq_len - 1).rev() {
-                            path[t] = backptr[t + 1][path[t + 1]];
-                        }
-                        path
-                    }
-                };
+                // 学習中の重みをそのまま使い、推論と同じ経路でデコードする。
+                let emissions: Vec<_> = all_feats
+                    .iter()
+                    .map(|features| predictor.emission_scores(features))
+                    .collect();
+                let predicted = predictor.viterbi_decode(&emissions);
 
                 // Track accuracy
                 for (t, &gold) in gold_labels.iter().enumerate() {
@@ -636,15 +587,13 @@ impl CrfTrainer {
                 }
 
                 // Update weights: promote gold, demote predicted
-                let mut any_update = false;
                 for (t, feats) in all_feats.iter().enumerate() {
                     let gold = gold_labels[t];
                     let pred = predicted[t];
                     if gold != pred {
-                        any_update = true;
                         for &(idx, val) in feats {
-                            weights[gold * FEATURE_DIM + idx] += lr * val;
-                            weights[pred * FEATURE_DIM + idx] -= lr * val;
+                            predictor.weights[gold * FEATURE_DIM + idx] += lr * val;
+                            predictor.weights[pred * FEATURE_DIM + idx] -= lr * val;
                         }
                     }
                     // Transition updates
@@ -652,43 +601,30 @@ impl CrfTrainer {
                         let prev_gold = gold_labels[t - 1];
                         let prev_pred = predicted[t - 1];
                         if gold != pred || prev_gold != prev_pred {
-                            transition[prev_gold][gold] += lr;
-                            transition[prev_pred][pred] -= lr;
+                            predictor.transition[prev_gold][gold] += lr;
+                            predictor.transition[prev_pred][pred] -= lr;
                         }
                     }
                 }
 
-                // Accumulate weights for averaging (after each example update)
-                if any_update {
-                    for (i, &w) in weights.iter().enumerate() {
-                        weights_sum[i] += w;
-                    }
-                    for i in 0..num_labels {
-                        for j in 0..num_labels {
-                            transition_sum[i][j] += transition[i][j];
-                        }
-                    }
-                    update_count += 1;
-                } else {
-                    // Even if no update, the current weights contribute to the average
-                    for (i, &w) in weights.iter().enumerate() {
-                        weights_sum[i] += w;
-                    }
-                    for i in 0..num_labels {
-                        for j in 0..num_labels {
-                            transition_sum[i][j] += transition[i][j];
-                        }
-                    }
-                    update_count += 1;
+                // 更新が無い発話も、現在の重みを平均に含める。
+                for (sum, &weight) in weights_sum.iter_mut().zip(&predictor.weights) {
+                    *sum += weight;
                 }
+                for (sum_row, row) in transition_sum.iter_mut().zip(&predictor.transition) {
+                    for (sum, &weight) in sum_row.iter_mut().zip(row) {
+                        *sum += weight;
+                    }
+                }
+                update_count += 1;
             }
 
             // L2 regularization (applied per-epoch with decayed rate)
             let reg_factor = 1.0 - lr * self.l2_reg;
-            for w in &mut weights {
+            for w in &mut predictor.weights {
                 *w *= reg_factor;
             }
-            for row in &mut transition {
+            for row in &mut predictor.transition {
                 for w in row.iter_mut() {
                     *w *= reg_factor;
                 }
@@ -711,21 +647,42 @@ impl CrfTrainer {
         // Use averaged weights for better generalization
         if update_count > 0 {
             let divisor = update_count as f32;
-            for (i, w) in weights_sum.iter_mut().enumerate() {
-                weights[i] = *w / divisor;
+            for (weight, sum) in predictor.weights.iter_mut().zip(weights_sum) {
+                *weight = sum / divisor;
             }
-            for i in 0..num_labels {
-                for j in 0..num_labels {
-                    transition[i][j] = transition_sum[i][j] / divisor;
+            for (row, sum_row) in predictor.transition.iter_mut().zip(transition_sum) {
+                for (weight, sum) in row.iter_mut().zip(sum_row) {
+                    *weight = sum / divisor;
                 }
             }
         }
 
-        Ok(CrfAccentPredictor {
-            weights,
-            transition,
-            num_labels,
-        })
+        if predictor
+            .weights
+            .iter()
+            .chain(predictor.transition.iter().flatten())
+            .any(|weight| !weight.is_finite())
+        {
+            return Err("CRF学習中に重みが有限値でなくなりました。学習率を確認してください".into());
+        }
+        Ok(predictor)
+    }
+
+    /// 不正な設定から学習不能なモデルを生成する前に検査する。
+    fn validate_params(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.num_epochs == 0 {
+            return Err("CRFエポック数は1以上が必要です".into());
+        }
+        if !self.learning_rate.is_finite() || self.learning_rate <= 0.0 {
+            return Err(format!("不正なCRF学習率: {}", self.learning_rate).into());
+        }
+        if !self.l2_reg.is_finite() || self.l2_reg < 0.0 {
+            return Err(format!("不正なCRF L2正則化係数: {}", self.l2_reg).into());
+        }
+        if self.learning_rate * self.l2_reg >= 1.0 {
+            return Err("CRF学習率とL2正則化係数の積は1未満が必要です".into());
+        }
+        Ok(())
     }
 
     /// モデルの重みをバイナリファイルに保存する
@@ -739,7 +696,7 @@ impl CrfTrainer {
         predictor: &CrfAccentPredictor,
         path: &Path,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = std::fs::File::create(path)?;
+        let mut file = BufWriter::new(std::fs::File::create(path)?);
         let num_features = FEATURE_DIM as u32;
         let num_labels = predictor.num_labels as u32;
 
@@ -755,12 +712,13 @@ impl CrfTrainer {
             }
         }
 
+        file.flush()?;
         Ok(())
     }
 
     /// バイナリファイルからモデルの重みを読み込む
     pub fn load_weights(path: &Path) -> Result<CrfAccentPredictor, Box<dyn std::error::Error>> {
-        let mut file = std::fs::File::open(path)?;
+        let mut file = BufReader::new(std::fs::File::open(path)?);
 
         let mut buf4 = [0u8; 4];
         file.read_exact(&mut buf4)?;
@@ -784,6 +742,9 @@ impl CrfTrainer {
         for w in &mut weights {
             file.read_exact(&mut buf4)?;
             *w = f32::from_le_bytes(buf4);
+            if !w.is_finite() {
+                return Err("CRF重みに有限値でない値が含まれています".into());
+            }
         }
 
         let mut transition = vec![vec![0.0f32; num_labels]; num_labels];
@@ -791,7 +752,13 @@ impl CrfTrainer {
             for w in row.iter_mut() {
                 file.read_exact(&mut buf4)?;
                 *w = f32::from_le_bytes(buf4);
+                if !w.is_finite() {
+                    return Err("CRF遷移スコアに有限値でない値が含まれています".into());
+                }
             }
+        }
+        if file.read(&mut [0u8; 1])? != 0 {
+            return Err("CRF重みファイルの末尾に余分なデータがあります".into());
         }
 
         Ok(CrfAccentPredictor {
@@ -925,6 +892,41 @@ mod tests {
     }
 
     #[test]
+    fn test_viterbi_decode_matches_exhaustive_path_scores() {
+        let predictor = CrfAccentPredictor {
+            weights: vec![0.0; 2 * FEATURE_DIM],
+            transition: vec![vec![0.5, -1.0], vec![1.5, -0.5]],
+            num_labels: 2,
+        };
+        let emissions = vec![vec![-1.0, 0.0], vec![0.5, -0.5], vec![0.0, 1.0]];
+        let score = |path: &[usize]| {
+            let emission_sum: f32 = path
+                .iter()
+                .enumerate()
+                .map(|(i, &label)| emissions[i][label])
+                .sum();
+            emission_sum
+                + path
+                    .windows(2)
+                    .map(|pair| predictor.transition[pair[0]][pair[1]])
+                    .sum::<f32>()
+        };
+        let best_score = (0..8)
+            .map(|bits| {
+                let path = [(bits >> 2) & 1, (bits >> 1) & 1, bits & 1];
+                score(&path)
+            })
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert_eq!(score(&predictor.viterbi_decode(&emissions)), best_score);
+
+        let tied = CrfAccentPredictor {
+            transition: vec![vec![0.0; 2]; 2],
+            ..predictor
+        };
+        assert_eq!(tied.viterbi_decode(&vec![vec![0.0; 2]; 4]), vec![0; 4]);
+    }
+
+    #[test]
     fn test_score_computation() {
         let num_labels = 2;
         let mut weights = vec![0.0f32; num_labels * FEATURE_DIM];
@@ -1008,6 +1010,33 @@ mod tests {
     }
 
     #[test]
+    fn test_load_weights_rejects_nonfinite_truncated_and_trailing_data() {
+        let path =
+            std::env::temp_dir().join(format!("kotonoha-crf-content-{}.bin", std::process::id()));
+        let mut valid = Vec::new();
+        valid.extend_from_slice(&(FEATURE_DIM as u32).to_le_bytes());
+        valid.extend_from_slice(&1u32.to_le_bytes());
+        valid.resize(8 + (FEATURE_DIM + 1) * 4, 0);
+        std::fs::write(&path, &valid).unwrap();
+        assert!(CrfTrainer::load_weights(&path).is_ok());
+
+        for offset in [8, 8 + FEATURE_DIM * 4] {
+            for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                let mut corrupt = valid.clone();
+                corrupt[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+                std::fs::write(&path, corrupt).unwrap();
+                assert!(CrfTrainer::load_weights(&path).is_err());
+            }
+        }
+        std::fs::write(&path, &valid[..valid.len() - 1]).unwrap();
+        assert!(CrfTrainer::load_weights(&path).is_err());
+        valid.push(0);
+        std::fs::write(&path, &valid).unwrap();
+        assert!(CrfTrainer::load_weights(&path).is_err());
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
     fn test_crf_as_accent_predictor() {
         // 全ての入力にラベル0を返す、重みがゼロの予測器を作る。
         let predictor = CrfAccentPredictor {
@@ -1082,6 +1111,59 @@ mod tests {
                 }])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn test_trainer_rejects_invalid_parameters() {
+        let examples = [TrainingExample {
+            nodes: vec![make_node("猫", "名詞", "ネコ")],
+            labels: vec![1],
+        }];
+        for rate in [0.0, -0.1, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert!(CrfTrainer::new(rate, 1).train(&examples).is_err());
+        }
+        assert!(CrfTrainer::new(0.1, 0).train(&examples).is_err());
+        for regularization in [-1.0, f32::NAN, f32::INFINITY, 10.0, 20.0] {
+            assert!(
+                CrfTrainer::new(0.1, 1)
+                    .with_l2_reg(regularization)
+                    .train(&examples)
+                    .is_err()
+            );
+        }
+        assert!(
+            CrfTrainer::new(f32::MAX, 2)
+                .with_l2_reg(0.0)
+                .train(&examples)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_trainer_averages_examples_without_an_update() {
+        let node = make_node("猫", "名詞", "ネコ");
+        let examples: Vec<_> = [1, 1, 2]
+            .into_iter()
+            .map(|label| TrainingExample {
+                nodes: vec![node.clone()],
+                labels: vec![label],
+            })
+            .collect();
+        let predictor = CrfTrainer::new(1.0, 1)
+            .with_l2_reg(0.0)
+            .train(&examples)
+            .unwrap();
+
+        // 第2例は予測が正解して更新が無い。それでも平均には同じ重みを再度含める。
+        let mut feature_values = vec![0.0; FEATURE_DIM];
+        for (index, value) in extract_features(&[node], 0) {
+            feature_values[index] += value;
+        }
+        for (index, value) in feature_values.into_iter().enumerate() {
+            assert!((predictor.weights[index] + value).abs() < 1e-6);
+            assert!((predictor.weights[FEATURE_DIM + index] - 2.0 * value / 3.0).abs() < 1e-6);
+            assert!((predictor.weights[2 * FEATURE_DIM + index] - value / 3.0).abs() < 1e-6);
+        }
     }
 
     #[test]

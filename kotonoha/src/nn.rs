@@ -13,6 +13,13 @@ pub mod v66;
 pub trait AccentPredictor {
     /// NjdNode列からアクセント型を予測する
     fn predict(&self, nodes: &[NjdNode]) -> Vec<u8>;
+
+    /// 推論失敗を呼び出し側へ返す。失敗しうる予測器はこのメソッドを実装する。
+    ///
+    /// 既存の予測器は `predict` の実装だけでも利用できる。
+    fn try_predict(&self, nodes: &[NjdNode]) -> Result<Vec<u8>, ContextualAccentError> {
+        Ok(self.predict(nodes))
+    }
 }
 
 /// 特徴量抽出に必要な、生 InputToken と NjdNode のペア
@@ -26,7 +33,7 @@ pub struct FeatureMorpheme<'a> {
     pub node: &'a NjdNode,
 }
 
-/// `ContextualAccentPredictor::predict_with_context` のエラー型
+/// アクセント予測器が返すエラー型
 pub type ContextualAccentError = Box<dyn std::error::Error + Send + Sync>;
 
 /// `(InputToken, NjdNode)` ペア列からアクセント型を予測するトレイト
@@ -270,7 +277,7 @@ impl OnnxPredictor {
     }
 
     /// 特徴量テンソルを構築し推論を実行する（v2: 11次元特徴量）
-    fn run_inference(&self, nodes: &[NjdNode]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn run_inference(&self, nodes: &[NjdNode]) -> Result<Vec<u8>, ContextualAccentError> {
         let node_count = nodes.len();
         if node_count == 0 {
             return Ok(Vec::new());
@@ -332,10 +339,15 @@ impl OnnxPredictor {
 #[cfg(feature = "cuda")]
 impl AccentPredictor for OnnxPredictor {
     fn predict(&self, nodes: &[NjdNode]) -> Vec<u8> {
-        self.run_inference(nodes).unwrap_or_else(|_| {
+        self.try_predict(nodes).unwrap_or_else(|e| {
+            eprintln!("kotonoha: ONNX predictor failed ({e}); keeping existing accent_type");
             // 推論失敗時はルールベースにフォールバック
             RuleBasedPredictor.predict(nodes)
         })
+    }
+
+    fn try_predict(&self, nodes: &[NjdNode]) -> Result<Vec<u8>, ContextualAccentError> {
+        self.run_inference(nodes)
     }
 }
 

@@ -93,6 +93,11 @@ let phone_tones = engine.tokens_to_phone_tones(&tokens);
 `AccentPhrase::accent_type` は `usize` です。長い発音やトークン列でも、
 モーラ数とラベル内の位置を保持します。
 
+アクセント型の予測失敗を検出するには `engine.try_predict_accent_types(&tokens)` を使います。
+推論エラーや予測結果の長さの不一致を `AccentPredictionError` として返します。
+`predict_accent_types` と `tokens_to_*` は、失敗を標準エラーへ記録し、既存のアクセント型で処理を続けます。
+予測器が未設定の場合、どちらの予測 API も辞書由来のアクセント型を返します。
+
 テキストを解析する場合は、先に辞書を読み込みます。
 
 ```rust
@@ -121,6 +126,9 @@ kotonoha --help
 `label` は解析済みトークンの JSON、`build-dict` は MeCab 辞書ソースからの構築、`train-crf` は CRF モデルの学習を扱います。各サブコマンドの引数は `kotonoha <サブコマンド> --help` で確認できます。
 `train-crf` の入力は発話を空行で区切り、各行を4列または9列にしてください。
 列数やアクセント型が不正な場合はモデルを作らずにエラーで終了します。
+エポック数は1以上、学習率は有限の正数、L2 正則化係数は有限の非負数を指定してください。
+学習率と L2 正則化係数の積は1未満が必要です。
+CRF 重みファイルの非有限値・途中切れ・末尾の余分なデータも読み込み時にエラーになります。
 
 ### Python API
 
@@ -137,6 +145,9 @@ phone_tones = engine.phone_tones(tokens)
 ```
 
 `dict_path` をコンストラクタへ渡すと、`text_to_labels()` などでテキストを直接解析できます。`model_bundle` による ONNX 推論や学習・評価の手順は [training/README.md](training/README.md) を参照してください。
+
+`engine.predict_accent_types(tokens)` は、推論失敗や予測結果の長さの不一致で `RuntimeError` を返します。
+評価処理で辞書値へのフォールバックをモデルの予測として数えないための仕様です。
 
 ## クレート構成
 

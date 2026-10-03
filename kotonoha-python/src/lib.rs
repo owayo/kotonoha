@@ -216,9 +216,14 @@ impl KotonohaEngine {
     ///
     /// Returns:
     ///     list[int]: 各トークンの predicted accent_type (0..20)
-    fn predict_accent_types(&self, tokens: Vec<PyToken>) -> Vec<u8> {
+    ///
+    /// Raises:
+    ///     RuntimeError: 推論が失敗した場合、または予測結果の長さが不正な場合
+    fn predict_accent_types(&self, tokens: Vec<PyToken>) -> PyResult<Vec<u8>> {
         let input_tokens = convert_tokens(tokens);
-        self.inner.predict_accent_types(&input_tokens)
+        self.inner
+            .try_predict_accent_types(&input_tokens)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }
 

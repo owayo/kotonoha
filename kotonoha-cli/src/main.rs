@@ -654,7 +654,7 @@ fn cmd_train_crf(
 
     let trainer = CrfTrainer::new(learning_rate, num_epochs).with_l2_reg(l2_reg);
     let predictor = trainer.train(&examples).unwrap_or_else(|e| {
-        eprintln!("CRF学習データが不正です: {e}");
+        eprintln!("CRF学習に失敗: {e}");
         std::process::exit(1);
     });
 

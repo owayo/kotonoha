@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 use ort::session::Session;
 use ort::value::TensorRef;
 
-use super::bundle::V66Bundle;
+use super::bundle::{STUDENT_FILENAMES, V66Bundle};
 use super::enrich::resolve_one;
 use super::features::{FEATURE13_DIM, MorphemeView, extract_feat13, morpheme_dict_accent};
 use super::math::{argmax, meta_features, softmax, teacher_soft_stats};
@@ -35,7 +35,7 @@ const FEATURE14_DIM: usize = 14;
 const FEATURE24_DIM: usize = 24;
 const FEATURE103_DIM: usize = 103;
 const STACKER_DIM: usize = 84;
-const NUM_STUDENTS: usize = 9;
+const NUM_STUDENTS: usize = STUDENT_FILENAMES.len();
 
 /// v66 系推論パイプライン
 ///
@@ -71,15 +71,13 @@ impl V66Pipeline {
         dict_accents: &[Option<u8>],
     ) -> Result<Vec<u8>, V66PredictError> {
         let seq_len = ctx.len();
+        validate_request(
+            seq_len,
+            dict_accents.len(),
+            self.bundle.models.students.len(),
+        )?;
         if seq_len == 0 {
             return Ok(Vec::new());
-        }
-        if dict_accents.len() != seq_len {
-            return Err(V66PredictError::Shape(format!(
-                "dict_accents.len ({}) != ctx.len ({})",
-                dict_accents.len(),
-                seq_len
-            )));
         }
 
         let mut feat13 = vec![0f32; seq_len * FEATURE13_DIM];
@@ -110,7 +108,6 @@ impl V66Pipeline {
                 .copy_from_slice(&feat13[i * FEATURE13_DIM..i * FEATURE13_DIM + 11]);
         }
         let v24_logits = run_session(&self.bundle.models.v24, &feat11, seq_len, 11)?;
-        debug_assert_eq!(v24_logits.len(), seq_len * NUM_CLASSES);
 
         // teacher_soft_stats と v24_arg を per-token で用意
         let mut v24_arg_norm = vec![0f32; seq_len];
@@ -274,6 +271,45 @@ impl V66Pipeline {
     }
 }
 
+/// 空入力を含め、特徴量の組み立てに必要な長さを推論前に検証する。
+fn validate_request(
+    seq_len: usize,
+    dict_accent_count: usize,
+    student_count: usize,
+) -> Result<(), V66PredictError> {
+    if dict_accent_count != seq_len {
+        return Err(V66PredictError::Shape(format!(
+            "dict_accents.len ({dict_accent_count}) != ctx.len ({seq_len})"
+        )));
+    }
+    if student_count != NUM_STUDENTS {
+        return Err(V66PredictError::Shape(format!(
+            "students.len ({student_count}) != NUM_STUDENTS ({NUM_STUDENTS})"
+        )));
+    }
+    Ok(())
+}
+
+/// 要素数が同じでも、転置や余分な軸を持つ出力を受け入れない。
+fn validate_output_shape(
+    shape: &[i64],
+    output_len: usize,
+    seq_len: usize,
+) -> Result<(), V66PredictError> {
+    let expected_seq = i64::try_from(seq_len)
+        .map_err(|_| V66PredictError::Shape("seq_len exceeds i64 range".to_string()))?;
+    let expected_len = seq_len
+        .checked_mul(NUM_CLASSES)
+        .ok_or_else(|| V66PredictError::Shape("output size overflow".to_string()))?;
+    if shape != [expected_seq, NUM_CLASSES as i64] || output_len != expected_len {
+        return Err(V66PredictError::Shape(format!(
+            "expected output [{seq_len}, {NUM_CLASSES}] ({expected_len} values), \
+             got {shape:?} ({output_len} values)"
+        )));
+    }
+    Ok(())
+}
+
 impl ContextualAccentPredictor for V66Pipeline {
     fn predict_with_context(
         &self,
@@ -289,20 +325,23 @@ impl ContextualAccentPredictor for V66Pipeline {
 ///
 /// 入力データはスライス借用なので clone 不要。同じ入力を複数セッションへ流す
 /// (9 student) ケースでアロケーションが発生しない。
-/// 入力長 / 出力長を release でも検証し、不整合時は `V66PredictError::Shape` を返す。
+/// 入力長 / 出力形状を release でも検証し、不整合時は `V66PredictError::Shape` を返す。
 fn run_session(
     session: &Mutex<Session>,
     input_data: &[f32],
     seq_len: usize,
     dim: usize,
 ) -> Result<Vec<f32>, V66PredictError> {
-    if input_data.len() != seq_len * dim {
+    let expected_input_len = seq_len
+        .checked_mul(dim)
+        .ok_or_else(|| V66PredictError::Shape("input size overflow".to_string()))?;
+    if input_data.len() != expected_input_len {
         return Err(V66PredictError::Shape(format!(
             "input_data.len ({}) != seq_len ({}) * dim ({}) = {}",
             input_data.len(),
             seq_len,
             dim,
-            seq_len * dim
+            expected_input_len
         )));
     }
     let tensor = TensorRef::from_array_view(([seq_len, dim], input_data))
@@ -313,19 +352,14 @@ fn run_session(
     let outputs = sess
         .run(ort::inputs!["input" => tensor])
         .map_err(|e| V66PredictError::Run(e.to_string()))?;
-    let (shape, data) = outputs[0]
+    let output = outputs
+        .values()
+        .next()
+        .ok_or_else(|| V66PredictError::Extract("session returned no outputs".to_string()))?;
+    let (shape, data) = output
         .try_extract_tensor::<f32>()
         .map_err(|e| V66PredictError::Extract(e.to_string()))?;
-    let expected_len = seq_len * NUM_CLASSES;
-    if data.len() != expected_len {
-        return Err(V66PredictError::Shape(format!(
-            "output len ({}) != seq_len ({}) * NUM_CLASSES ({}) = {} (shape={shape:?})",
-            data.len(),
-            seq_len,
-            NUM_CLASSES,
-            expected_len
-        )));
-    }
+    validate_output_shape(shape, data.len(), seq_len)?;
     Ok(data.to_vec())
 }
 
@@ -347,4 +381,39 @@ pub enum V66PredictError {
     /// 出力 tensor 抽出失敗
     #[error("output tensor extraction failed: {0}")]
     Extract(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_rejects_misaligned_dictionary_and_incomplete_ensembles() {
+        assert!(validate_request(2, 2, NUM_STUDENTS).is_ok());
+        assert!(validate_request(0, 0, NUM_STUDENTS).is_ok());
+        for (seq, dict, students) in [
+            (2, 1, NUM_STUDENTS),
+            (0, 1, NUM_STUDENTS),
+            (2, 2, NUM_STUDENTS - 1),
+            (2, 2, NUM_STUDENTS + 1),
+        ] {
+            assert!(matches!(
+                validate_request(seq, dict, students),
+                Err(V66PredictError::Shape(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn output_shape_rejects_same_size_transposed_and_extra_axes() {
+        assert!(validate_output_shape(&[2, 21], 42, 2).is_ok());
+        assert!(validate_output_shape(&[1, 21], 21, 1).is_ok());
+        for shape in [&[21, 2][..], &[42][..], &[1, 2, 21][..], &[2, 20][..]] {
+            assert!(matches!(
+                validate_output_shape(shape, 42, 2),
+                Err(V66PredictError::Shape(_))
+            ));
+        }
+        assert!(validate_output_shape(&[2, 21], 41, 2).is_err());
+    }
 }
