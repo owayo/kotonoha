@@ -13,9 +13,9 @@ pub struct Mora {
 
 /// カタカナ読みからモーラ数を計算する
 /// 拗音は1モーラ、促音・撥音も各1モーラとカウント
-pub fn count_mora(reading: &str) -> u8 {
+pub fn count_mora(reading: &str) -> usize {
     let chars: Vec<char> = reading.chars().collect();
-    let mut count: u8 = 0;
+    let mut count: usize = 0;
     let mut i = 0;
 
     while i < chars.len() {
@@ -173,6 +173,7 @@ mod tests {
         assert_eq!(count_mora("コンニチワ"), 5);
         assert_eq!(count_mora("ガッコー"), 4); // ガ・ッ・コ・ー
         assert_eq!(count_mora("トーキョー"), 4); // ト・ー・キョ・ー
+        assert_eq!(count_mora(&"カ".repeat(256)), 256);
     }
 
     #[test]

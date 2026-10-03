@@ -6,7 +6,7 @@ use kotonoha::accent::AccentPhrase;
 use kotonoha::njd::{InputToken, NjdNode};
 
 // ============================================================
-// helpers
+// テスト用の補助関数
 // ============================================================
 
 fn tok(surface: &str, pos: &str, reading: &str) -> InputToken {
@@ -17,8 +17,8 @@ fn tok_pron(surface: &str, pos: &str, reading: &str, pron: &str) -> InputToken {
     InputToken::new(surface, pos, reading, pron)
 }
 
-fn make_phrases(nodes: &[NjdNode], accent_type: u8) -> Vec<AccentPhrase> {
-    let mora_count: u8 = nodes.iter().map(|n| n.mora_count).sum();
+fn make_phrases(nodes: &[NjdNode], accent_type: usize) -> Vec<AccentPhrase> {
+    let mora_count: usize = nodes.iter().map(|n| n.mora_count).sum();
     vec![AccentPhrase {
         nodes: (0..nodes.len()).collect(),
         accent_type,

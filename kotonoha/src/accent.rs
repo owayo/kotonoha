@@ -11,8 +11,8 @@ use crate::njd::{NjdNode, Pos};
 #[derive(Debug, Clone)]
 pub struct AccentPhrase {
     pub nodes: Vec<usize>,      // NjdNodeのインデックス
-    pub accent_type: u8,        // アクセント型 (0=平板)
-    pub mora_count: u8,         // 総モーラ数
+    pub accent_type: usize,     // アクセント型 (0=平板)
+    pub mora_count: usize,      // 総モーラ数
     pub is_interrogative: bool, // 疑問文末か
 }
 
@@ -167,7 +167,7 @@ fn is_keiyoudoushi_gokan(pos_detail: &str) -> bool {
 fn build_accent_phrases(nodes: &[NjdNode]) -> Vec<AccentPhrase> {
     let mut phrases = Vec::new();
     let mut current_nodes = Vec::new();
-    let mut current_mora_count: u8 = 0;
+    let mut current_mora_count: usize = 0;
 
     for (i, node) in nodes.iter().enumerate() {
         if node.chain_flag == 0 && !current_nodes.is_empty() {
@@ -182,7 +182,7 @@ fn build_accent_phrases(nodes: &[NjdNode]) -> Vec<AccentPhrase> {
             current_mora_count = 0;
         }
         current_nodes.push(i);
-        current_mora_count = current_mora_count.saturating_add(node.mora_count);
+        current_mora_count += node.mora_count;
     }
 
     // 最後のアクセント句
@@ -224,8 +224,8 @@ fn combine_accent_types(
 
         // 最初のノードのアクセント型を初期値とする
         let first_idx = phrase.nodes[0];
-        let mut combined_accent = nodes[first_idx].accent_type;
-        let mut combined_mora: u8 = nodes[first_idx].mora_count;
+        let mut combined_accent = usize::from(nodes[first_idx].accent_type);
+        let mut combined_mora = nodes[first_idx].mora_count;
 
         // 2番目以降のノードとアクセントを結合
         for window_idx in 1..phrase.nodes.len() {
@@ -242,12 +242,12 @@ fn combine_accent_types(
                     &rule.rule_type,
                     combined_accent,
                     combined_mora,
-                    node.accent_type,
+                    usize::from(node.accent_type),
                     node.mora_count,
                 );
             }
 
-            combined_mora = combined_mora.saturating_add(node.mora_count);
+            combined_mora += node.mora_count;
         }
 
         phrase.accent_type = combined_accent;
@@ -258,26 +258,28 @@ fn combine_accent_types(
 /// アクセント結合規則を適用する
 fn apply_accent_rule(
     rule_type: &AccentRuleType,
-    left_accent: u8,
-    left_mora: u8,
-    right_accent: u8,
-    right_mora: u8,
-) -> u8 {
+    left_accent: usize,
+    left_mora: usize,
+    right_accent: usize,
+    right_mora: usize,
+) -> usize {
     match rule_type {
         AccentRuleType::KeepLeft => left_accent,
         AccentRuleType::KeepRight => {
             if right_accent == 0 {
                 0
             } else {
-                left_mora.saturating_add(right_accent)
+                left_mora + right_accent
             }
         }
-        AccentRuleType::Fixed(n) => *n,
+        AccentRuleType::Fixed(n) => usize::from(*n),
         AccentRuleType::LeftMoraCount => left_mora,
-        AccentRuleType::LeftMoraCountPlus(offset) => (left_mora as i8 + offset).max(0) as u8,
+        AccentRuleType::LeftMoraCountPlus(offset) => {
+            left_mora.saturating_add_signed(isize::from(*offset))
+        }
         AccentRuleType::RightMoraCount => {
             // 後部のモーラ数がアクセント位置（前部モーラ数を加算）
-            left_mora.saturating_add(right_mora)
+            left_mora + right_mora
         }
         AccentRuleType::Flat => 0,
     }
@@ -473,7 +475,19 @@ mod tests {
     #[test]
     fn test_apply_accent_rule_right_mora() {
         let result = apply_accent_rule(&AccentRuleType::RightMoraCount, 1, 3, 2, 2);
-        assert_eq!(result, 5); // 3 + 2 (left_mora + right_mora)
+        assert_eq!(result, 5); // 前部3モーラと後部2モーラを足す
+    }
+
+    #[test]
+    fn test_apply_accent_rule_left_mora_plus_over_i8_limit() {
+        assert_eq!(
+            apply_accent_rule(&AccentRuleType::LeftMoraCountPlus(2), 0, 130, 0, 1),
+            132
+        );
+        assert_eq!(
+            apply_accent_rule(&AccentRuleType::LeftMoraCountPlus(-2), 0, 1, 0, 1),
+            0
+        );
     }
 
     #[test]

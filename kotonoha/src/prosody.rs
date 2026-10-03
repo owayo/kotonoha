@@ -33,7 +33,7 @@ pub fn extract_phone_tones(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> Vec<P
     });
 
     for phrase in phrases {
-        let mut mora_idx: u8 = 0;
+        let mut mora_idx: usize = 0;
 
         for &node_idx in &phrase.nodes {
             let node = &nodes[node_idx];
@@ -82,6 +82,7 @@ pub fn extract_phone_tones_with_punct(
     phrases: &[AccentPhrase],
 ) -> Vec<PhoneTone> {
     let mut result = Vec::new();
+    let mut last_vowel: Option<String> = None;
 
     result.push(PhoneTone {
         phone: "sil".to_string(),
@@ -89,7 +90,7 @@ pub fn extract_phone_tones_with_punct(
     });
 
     for phrase in phrases {
-        let mut mora_idx: u8 = 0;
+        let mut mora_idx: usize = 0;
 
         for &node_idx in &phrase.nodes {
             let node = &nodes[node_idx];
@@ -101,20 +102,19 @@ pub fn extract_phone_tones_with_punct(
                 for ch in node.surface.chars() {
                     if ch == 'ー' {
                         // 長音記号: 直前の母音を繰り返す
-                        let prev_vowel =
-                            result.iter().rev().find_map(|pt| match pt.phone.as_str() {
-                                "a" | "i" | "u" | "e" | "o" => Some(pt.phone.clone()),
-                                _ => None,
-                            });
-                        if let Some(vowel) = prev_vowel {
+                        if let Some(ref vowel) = last_vowel {
                             let tone = result.last().map_or(0, |pt| pt.tone);
-                            result.push(PhoneTone { phone: vowel, tone });
+                            result.push(PhoneTone {
+                                phone: vowel.clone(),
+                                tone,
+                            });
                         }
                     } else {
-                        result.push(PhoneTone {
-                            phone: ch.to_string(),
-                            tone: 0,
-                        });
+                        let phone = ch.to_string();
+                        if matches!(phone.as_str(), "a" | "i" | "u" | "e" | "o") {
+                            last_vowel = Some(phone.clone());
+                        }
+                        result.push(PhoneTone { phone, tone: 0 });
                     }
                 }
                 continue;
@@ -130,6 +130,9 @@ pub fn extract_phone_tones_with_punct(
                     });
                 }
 
+                if matches!(m.vowel.as_str(), "a" | "i" | "u" | "e" | "o") {
+                    last_vowel = Some(m.vowel.clone());
+                }
                 result.push(PhoneTone {
                     phone: m.vowel.clone(),
                     tone,
@@ -154,7 +157,7 @@ pub fn extract_phone_tones_with_punct(
 /// - 0型（平板）: 1モーラ目=低, 2モーラ目以降=高
 /// - 1型（頭高）: 1モーラ目=高, 2モーラ目以降=低
 /// - n型（中高/尾高）: 1モーラ目=低, 2〜nモーラ目=高, n+1以降=低
-fn compute_tone(mora_idx: u8, accent_type: u8, _mora_count: u8) -> u8 {
+fn compute_tone(mora_idx: usize, accent_type: usize, _mora_count: usize) -> u8 {
     if accent_type == 0 {
         // 平板型: 1モーラ目は低、2モーラ目以降は高
         if mora_idx == 0 { 0 } else { 1 }
@@ -181,7 +184,7 @@ pub fn extract_prosody_symbols(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> V
     result.push(SYMBOL_PHRASE_START.to_string());
 
     for (phrase_idx, phrase) in phrases.iter().enumerate() {
-        let mut mora_idx: u8 = 0;
+        let mut mora_idx: usize = 0;
 
         for &node_idx in &phrase.nodes {
             let node = &nodes[node_idx];

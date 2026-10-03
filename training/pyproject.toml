@@ -5,7 +5,7 @@ description = "CRF/ONNX accent model training for kotonoha"
 requires-python = ">=3.12"
 dependencies = [
     "torch>=2.12.1",
-    "onnx>=1.22.0",
+    "onnx>=1.23.0",
     "onnxruntime-gpu>=1.30.0; sys_platform != 'darwin'",
     "onnxruntime>=1.30.0; sys_platform == 'darwin'",
     "transformers>=5.17.0",

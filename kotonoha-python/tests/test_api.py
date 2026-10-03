@@ -69,6 +69,14 @@ class EngineApiTests(unittest.TestCase):
         self.assertEqual(node.mora_count, 2)
         self.assertEqual(token.pronunciation, "キョー")
 
+    def test_long_pronunciation_keeps_mora_count(self):
+        """256 モーラでも Python API の個数と出力位置を保持する。"""
+        reading = "カ" * 256
+        token = SimpleNamespace(surface=reading, pos="名詞", reading=reading)
+        self.assertEqual(self.engine.analyze([token])[0].mora_count, 256)
+        self.assertEqual(len(self.engine.phone_tones([token])), 514)
+        self.assertEqual(self.engine.prosody_symbols([token]).count("カ"), 256)
+
     def test_punctuation_output_is_distinct(self):
         """句読点を保持する API の出力を通常の PhoneTone と区別する。"""
         tokens = [

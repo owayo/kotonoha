@@ -47,7 +47,7 @@ impl AccentDict {
             }
             let lemma = record[0].trim().to_string();
             let reading = record[1].trim().to_string();
-            let accent_type: u8 = record[2].trim().parse().unwrap_or(0);
+            let accent_type: u8 = record[2].trim().parse()?;
 
             dict.entries
                 .entry(lemma)
@@ -204,6 +204,19 @@ mod tests {
             // 辞書に猫があるはず
             assert!(dict.lookup("猫", Some("ネコ")).is_some());
         }
+    }
+
+    #[test]
+    fn test_from_csv_rejects_invalid_accent() {
+        let path = std::env::temp_dir().join(format!(
+            "kotonoha-invalid-accent-{}.csv",
+            std::process::id()
+        ));
+        std::fs::write(&path, "lemma,reading,accent_type\n猫,ネコ,不正\n").unwrap();
+
+        let result = AccentDict::from_csv(&path);
+        std::fs::remove_file(&path).unwrap();
+        assert!(result.is_err());
     }
 
     #[test]

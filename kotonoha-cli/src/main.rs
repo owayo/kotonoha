@@ -8,7 +8,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 use std::time::Instant;
 
-/// kotonoha - Japanese prosody engine CLI
+/// 日本語韻律エンジンのコマンドライン入口
 #[derive(Parser)]
 #[command(name = "kotonoha", version, about = "Japanese prosody analysis tool")]
 struct Cli {
@@ -18,97 +18,97 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Full pipeline: text -> morphemes -> labels/prosody
+    /// テキストから形態素解析・ラベル生成・韻律抽出まで実行する。
     Analyze {
-        /// Input text to analyze
+        /// 解析するテキスト
         text: String,
 
-        /// Path to hasami dictionary (.hsd)
+        /// 形態素解析辞書（.hsd）のパス
         #[arg(long)]
         dict: Option<PathBuf>,
 
-        /// Path to accent dictionary (CSV)
+        /// アクセント辞書（CSV）のパス
         #[arg(long)]
         accent_dict: Option<PathBuf>,
 
-        /// Output format
+        /// 出力形式
         #[arg(long, value_enum, default_value_t = AnalyzeFormat::Labels)]
         format: AnalyzeFormat,
 
-        /// Also print morpheme tokens
+        /// 形態素トークンも表示する。
         #[arg(long)]
         tokens: bool,
     },
 
-    /// Tokenize only (hasami morphological analysis)
+    /// 形態素解析だけを実行する。
     Tokenize {
-        /// Input text to tokenize
+        /// 分割するテキスト
         text: String,
 
-        /// Path to hasami dictionary (.hsd)
+        /// 形態素解析辞書（.hsd）のパス
         #[arg(long)]
         dict: PathBuf,
 
-        /// Output format
+        /// 出力形式
         #[arg(long, value_enum, default_value_t = TokenizeFormat::Mecab)]
         format: TokenizeFormat,
     },
 
-    /// Generate labels from pre-tokenized JSON input
+    /// 形態素解析済み JSON からラベルを生成する。
     Label {
-        /// JSON array of token objects (reads from stdin if omitted)
+        /// トークンの JSON 配列（省略時は標準入力から読む）
         tokens_json: Option<String>,
 
-        /// Output format
+        /// 出力形式
         #[arg(long, value_enum, default_value_t = LabelFormat::Labels)]
         format: LabelFormat,
     },
 
-    /// Run internal benchmarks
+    /// 内部ベンチマークを実行する。
     Bench,
 
-    /// Train CRF accent predictor from CSV training data
+    /// CSV 学習データから CRF アクセント予測器を学習する。
     TrainCrf {
-        /// Path to CSV training data (surface,pos,reading,accent_type)
+        /// CSV 学習データのパス（surface,pos,reading,accent_type）
         #[arg(long)]
         data: PathBuf,
 
-        /// Output path for binary weights file
+        /// バイナリ重みファイルの出力先
         #[arg(long, short)]
         output: PathBuf,
 
-        /// Learning rate
+        /// 学習率
         #[arg(long, default_value_t = 0.1)]
         lr: f32,
 
-        /// Number of training epochs
+        /// 学習エポック数
         #[arg(long, default_value_t = 30)]
         epochs: usize,
 
-        /// L2 regularization coefficient
+        /// L2 正則化係数
         #[arg(long, default_value_t = 0.01)]
         l2_reg: f32,
     },
 
-    /// Build hasami dictionary from MeCab IPAdic source files
+    /// MeCab IPAdic のソースから形態素解析辞書を構築する。
     BuildDict {
-        /// Path to directory containing MeCab CSV files
+        /// MeCab CSV ファイルを含むディレクトリ
         #[arg(long)]
         csv_dir: PathBuf,
 
-        /// Path to matrix.def
+        /// matrix.def のパス
         #[arg(long)]
         matrix: PathBuf,
 
-        /// Path to unk.def
+        /// unk.def のパス
         #[arg(long)]
         unk: PathBuf,
 
-        /// Path to char.def
+        /// char.def のパス
         #[arg(long)]
         char_def: PathBuf,
 
-        /// Output .hsd file path
+        /// 出力する .hsd ファイルのパス
         #[arg(long, short)]
         output: PathBuf,
     },
@@ -549,23 +549,22 @@ fn cmd_train_crf(
         }
     };
 
-    // Parse CSV: supports two formats
-    //   v1 (4 columns): surface,pos,reading,accent_type
-    //   v2 (9 columns): surface,pos,pos_detail1,pos_detail2,conjugation_type,conjugation_form,reading,pronunciation,accent_type
-    // Blank lines separate utterances
+    // CSV は4列の v1 と9列の v2 を受け付け、空行で発話を区切る。
+    // v1: surface,pos,reading,accent_type
+    // v2: surface,pos,pos_detail1,pos_detail2,conjugation_type,conjugation_form,reading,pronunciation,accent_type
     let mut examples: Vec<TrainingExample> = Vec::new();
     let mut current_nodes: Vec<NjdNode> = Vec::new();
     let mut current_labels: Vec<u8> = Vec::new();
 
-    for line in content.lines() {
+    for (line_idx, line) in content.lines().enumerate() {
         let line = line.trim();
 
-        // Skip comments
+        // コメント行を読み飛ばす。
         if line.starts_with('#') {
             continue;
         }
 
-        // Blank line = utterance boundary
+        // 空行で発話を確定する。
         if line.is_empty() {
             if !current_nodes.is_empty() {
                 examples.push(TrainingExample {
@@ -577,9 +576,31 @@ fn cmd_train_crf(
         }
 
         let fields: Vec<&str> = line.split(',').collect();
+        if fields.len() != 4 && fields.len() != 9 {
+            eprintln!(
+                "{}:{}: CRF学習データは4列または9列が必要です（{}列）",
+                data_path.display(),
+                line_idx + 1,
+                fields.len()
+            );
+            std::process::exit(1);
+        }
+        let accent_field = if fields.len() == 9 {
+            fields[8]
+        } else {
+            fields[3]
+        };
+        let accent_type: u8 = accent_field.parse().unwrap_or_else(|_| {
+            eprintln!(
+                "{}:{}: 不正なアクセント型: {accent_field}",
+                data_path.display(),
+                line_idx + 1
+            );
+            std::process::exit(1);
+        });
 
-        let node = if fields.len() >= 9 {
-            // v2 format: surface,pos,pos_detail1,pos_detail2,conjugation_type,conjugation_form,reading,pronunciation,accent_type
+        let node = if fields.len() == 9 {
+            // v2 のノードを構築する。
             let surface = fields[0];
             let pos_str = fields[1];
             let pos_detail1 = fields[2];
@@ -588,8 +609,6 @@ fn cmd_train_crf(
             let cform = fields[5];
             let reading = fields[6];
             let pronunciation = fields[7];
-            let accent_type: u8 = fields[8].parse().unwrap_or(0);
-
             let pos = Pos::parse(pos_str);
             let mut token = InputToken::new(surface, pos.to_label_str(), reading, pronunciation);
             token.pos_detail1 = pos_detail1.to_string();
@@ -599,20 +618,16 @@ fn cmd_train_crf(
             let mut node = NjdNode::from_token(&token);
             node.accent_type = accent_type;
             node
-        } else if fields.len() >= 4 {
-            // v1 format: surface,pos,reading,accent_type
+        } else {
+            // v1 のノードを構築する。
             let surface = fields[0];
             let pos_str = fields[1];
             let reading = fields[2];
-            let accent_type: u8 = fields[3].parse().unwrap_or(0);
-
             let pos = Pos::parse(pos_str);
             let token = InputToken::new(surface, pos.to_label_str(), reading, reading);
             let mut node = NjdNode::from_token(&token);
             node.accent_type = accent_type;
             node
-        } else {
-            continue;
         };
 
         let accent_type = node.accent_type;
@@ -620,7 +635,7 @@ fn cmd_train_crf(
         current_labels.push(accent_type);
     }
 
-    // Don't forget the last utterance
+    // 最後の発話も確定する。
     if !current_nodes.is_empty() {
         examples.push(TrainingExample {
             nodes: current_nodes,
@@ -638,7 +653,10 @@ fn cmd_train_crf(
     eprintln!("  L2正則化: {l2_reg}");
 
     let trainer = CrfTrainer::new(learning_rate, num_epochs).with_l2_reg(l2_reg);
-    let predictor = trainer.train(&examples);
+    let predictor = trainer.train(&examples).unwrap_or_else(|e| {
+        eprintln!("CRF学習データが不正です: {e}");
+        std::process::exit(1);
+    });
 
     eprintln!("[3/3] モデルを保存中...");
     if let Err(e) = CrfTrainer::save_weights(&predictor, output_path) {
@@ -649,7 +667,7 @@ fn cmd_train_crf(
     let file_size = std::fs::metadata(output_path).map(|m| m.len()).unwrap_or(0);
     let total_elapsed = total_start.elapsed();
 
-    // Quick evaluation on training data
+    // 学習データで精度を確認する。
     use kotonoha::nn::AccentPredictor;
     let mut correct = 0usize;
     let mut total = 0usize;

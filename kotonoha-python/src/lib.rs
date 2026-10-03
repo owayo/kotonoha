@@ -335,7 +335,7 @@ struct PyNjdNode {
     #[pyo3(get)]
     accent_type: u8,
     #[pyo3(get)]
-    mora_count: u8,
+    mora_count: usize,
 }
 
 impl From<NjdNode> for PyNjdNode {

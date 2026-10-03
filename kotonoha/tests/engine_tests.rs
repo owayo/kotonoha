@@ -657,7 +657,7 @@ fn test_analyze_preserves_token_order() {
 fn test_analyze_mora_count_various() {
     let engine = Engine::default();
     let test_cases = vec![
-        (tok("木", "名詞", "キ"), 1u8),
+        (tok("木", "名詞", "キ"), 1usize),
         (tok("猫", "名詞", "ネコ"), 2),
         (tok("桜", "名詞", "サクラ"), 3),
         (tok_pron("コーヒー", "名詞", "コーヒー", "コーヒー"), 4),
@@ -671,6 +671,31 @@ fn test_analyze_mora_count_various() {
             nodes[0].surface
         );
     }
+}
+
+#[test]
+fn test_long_pronunciation_keeps_mora_positions() {
+    let engine = Engine::default();
+    let reading = "カ".repeat(256);
+    let tokens = [tok(&reading, "名詞", &reading)];
+    let mut nodes = engine.analyze(&tokens);
+    assert_eq!(nodes[0].mora_count, 256);
+
+    let mut phrases = engine.estimate_accent(&mut nodes);
+    assert_eq!(phrases.len(), 1);
+    assert_eq!(phrases[0].mora_count, 256);
+
+    let labels = engine.make_label(&nodes, &phrases);
+    let phone_tones = engine.extract_phone_tones(&nodes, &phrases);
+    assert_eq!(labels.len(), 514);
+    assert_eq!(phone_tones.len(), labels.len());
+
+    let symbols = engine.extract_prosody_symbols(&nodes, &phrases);
+    assert_eq!(symbols.iter().filter(|symbol| *symbol == "カ").count(), 256);
+
+    phrases[0].accent_type = 1;
+    let accented_labels = engine.make_label(&nodes, &phrases);
+    assert!(accented_labels[512].contains("/A:-255+256+1"));
 }
 
 // ============================================================

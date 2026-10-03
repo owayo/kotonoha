@@ -136,7 +136,7 @@ pub struct NjdNode {
     pub reading: String,
     pub pronunciation: String,
     pub accent_type: u8,
-    pub mora_count: u8,
+    pub mora_count: usize,
     pub chain_rule: String,
     pub chain_flag: i8, // -1: 未決定, 0: 接続しない, 1: 接続する
 }

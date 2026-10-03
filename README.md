@@ -89,6 +89,10 @@ let labels = engine.tokens_to_labels(&tokens);
 let phone_tones = engine.tokens_to_phone_tones(&tokens);
 ```
 
+`mora::count_mora`、`NjdNode::mora_count`、`AccentPhrase::mora_count` と
+`AccentPhrase::accent_type` は `usize` です。長い発音やトークン列でも、
+モーラ数とラベル内の位置を保持します。
+
 テキストを解析する場合は、先に辞書を読み込みます。
 
 ```rust
@@ -102,6 +106,8 @@ let labels = engine.text_to_labels("今日は良い天気です")?;
 ```
 
 アクセント辞書は [kotonoha-training-data](https://github.com/owayo/kotonoha-training-data) の `data/dicts/` でも管理しています。
+アクセント辞書 CSV の `accent_type` は `u8` の整数、アクセント規則 CSV の規則名と数値は
+有効な値を指定してください。不正な値は読み込み時にエラーになります。
 
 ### CLI
 
@@ -113,6 +119,8 @@ kotonoha --help
 ```
 
 `label` は解析済みトークンの JSON、`build-dict` は MeCab 辞書ソースからの構築、`train-crf` は CRF モデルの学習を扱います。各サブコマンドの引数は `kotonoha <サブコマンド> --help` で確認できます。
+`train-crf` の入力は発話を空行で区切り、各行を4列または9列にしてください。
+列数やアクセント型が不正な場合はモデルを作らずにエラーで終了します。
 
 ### Python API
 

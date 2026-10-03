@@ -7,7 +7,7 @@ use kotonoha::njd::{InputToken, NjdNode};
 use kotonoha::prosody::PhoneTone;
 
 // ============================================================
-// helpers
+// テスト用の補助関数
 // ============================================================
 
 fn tok(surface: &str, pos: &str, reading: &str) -> InputToken {
@@ -73,14 +73,31 @@ fn is_consonant_phone(p: &str) -> bool {
     )
 }
 
-fn make_phrases(nodes: &[NjdNode], accent_type: u8) -> Vec<AccentPhrase> {
-    let mora_count: u8 = nodes.iter().map(|n| n.mora_count).sum();
+fn make_phrases(nodes: &[NjdNode], accent_type: usize) -> Vec<AccentPhrase> {
+    let mora_count: usize = nodes.iter().map(|n| n.mora_count).sum();
     vec![AccentPhrase {
         nodes: (0..nodes.len()).collect(),
         accent_type,
         mora_count,
         is_interrogative: false,
     }]
+}
+
+#[test]
+fn test_punctuation_long_vowel_repeats_previous_vowel() {
+    let engine = Engine::default();
+    let tokens = [tok("ア", "名詞", "ア"), tok("。ー", "記号", "")];
+    let mut nodes = engine.analyze(&tokens);
+    let phrases = engine.estimate_accent(&mut nodes);
+
+    let phone_tones = engine.extract_phone_tones_with_punct(&nodes, &phrases);
+    assert_eq!(phones(&phone_tones), vec!["sil", "a", "。", "a", "sil"]);
+
+    let ascii_token = [tok("aー", "記号", "")];
+    let mut ascii_nodes = engine.analyze(&ascii_token);
+    let ascii_phrases = engine.estimate_accent(&mut ascii_nodes);
+    let ascii_tones = engine.extract_phone_tones_with_punct(&ascii_nodes, &ascii_phrases);
+    assert_eq!(phones(&ascii_tones), vec!["sil", "a", "a", "sil"]);
 }
 
 // ============================================================

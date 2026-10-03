@@ -234,7 +234,7 @@ fn extract_features_v2(node: &NjdNode, position: f32) -> [f32; FEATURE_DIM] {
         pos_detail2_to_id(&node.pos_detail2) as f32,
         conj_type_to_id(&node.ctype) as f32,
         conj_form_to_id(&node.cform) as f32,
-        f32::from(node.mora_count) / 10.0,
+        node.mora_count as f32 / 10.0,
         reading_hash(&node.reading),
         first_ch,
         last_ch,

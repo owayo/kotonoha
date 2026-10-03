@@ -155,7 +155,7 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
     }
 
     // 6. Mora count (capped at 10)
-    let mora = node.mora_count.min(10) as usize;
+    let mora = node.mora_count.min(10);
     features.push((feature_hash_num("mora", mora), 1.0));
 
     // 7. Reading length
@@ -501,7 +501,39 @@ impl CrfTrainer {
     ///
     /// 平均化構造パーセプトロンアルゴリズムで重みを更新する。
     /// 学習率減衰と重み平均化により汎化性能を向上させる。
-    pub fn train(&self, data: &[TrainingExample]) -> CrfAccentPredictor {
+    pub fn train(
+        &self,
+        data: &[TrainingExample],
+    ) -> Result<CrfAccentPredictor, Box<dyn std::error::Error>> {
+        if data.is_empty() {
+            return Err("CRF学習データが空です".into());
+        }
+        for (example_idx, example) in data.iter().enumerate() {
+            if example.nodes.is_empty() || example.nodes.len() != example.labels.len() {
+                return Err(format!(
+                    "CRF学習データの発話{}: ノード数{}とラベル数{}が一致しません",
+                    example_idx + 1,
+                    example.nodes.len(),
+                    example.labels.len()
+                )
+                .into());
+            }
+            if let Some((position, label)) = example
+                .labels
+                .iter()
+                .enumerate()
+                .find(|(_, label)| usize::from(**label) >= DEFAULT_NUM_LABELS)
+            {
+                return Err(format!(
+                    "CRF学習データの発話{}の位置{}: ラベル{}が範囲外です",
+                    example_idx + 1,
+                    position + 1,
+                    label
+                )
+                .into());
+            }
+        }
+
         let num_labels = DEFAULT_NUM_LABELS;
         let weight_size = num_labels * FEATURE_DIM;
         let mut weights = vec![0.0f32; weight_size];
@@ -531,11 +563,8 @@ impl CrfTrainer {
             let mut epoch_total = 0usize;
 
             for (ex_idx, example) in data.iter().enumerate() {
-                let gold_labels: Vec<usize> = example
-                    .labels
-                    .iter()
-                    .map(|&l| (l as usize).min(num_labels - 1))
-                    .collect();
+                let gold_labels: Vec<usize> =
+                    example.labels.iter().map(|&l| usize::from(l)).collect();
 
                 let all_feats = &all_example_feats[ex_idx];
 
@@ -692,11 +721,11 @@ impl CrfTrainer {
             }
         }
 
-        CrfAccentPredictor {
+        Ok(CrfAccentPredictor {
             weights,
             transition,
             num_labels,
-        }
+        })
     }
 
     /// モデルの重みをバイナリファイルに保存する
@@ -745,6 +774,9 @@ impl CrfTrainer {
                 "Feature dimension mismatch: expected {FEATURE_DIM}, got {num_features}"
             )
             .into());
+        }
+        if !(1..=usize::from(u8::MAX) + 1).contains(&num_labels) {
+            return Err(format!("不正なCRFラベル数: {num_labels}").into());
         }
 
         let weight_count = num_features * num_labels;
@@ -957,13 +989,27 @@ mod tests {
             }
         }
 
-        // Cleanup
+        // 一時ファイルを削除する。
         let _ = std::fs::remove_file(&path);
     }
 
     #[test]
+    fn test_load_weights_rejects_invalid_label_count() {
+        let path =
+            std::env::temp_dir().join(format!("kotonoha-invalid-crf-{}.bin", std::process::id()));
+        for count in [0u32, 257] {
+            let mut header = Vec::new();
+            header.extend_from_slice(&(FEATURE_DIM as u32).to_le_bytes());
+            header.extend_from_slice(&count.to_le_bytes());
+            std::fs::write(&path, header).unwrap();
+            assert!(CrfTrainer::load_weights(&path).is_err(), "{count}");
+        }
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
     fn test_crf_as_accent_predictor() {
-        // Create a zero-weight predictor (will predict label 0 for everything)
+        // 全ての入力にラベル0を返す、重みがゼロの予測器を作る。
         let predictor = CrfAccentPredictor {
             weights: vec![0.0; DEFAULT_NUM_LABELS * FEATURE_DIM],
             transition: vec![vec![0.0; DEFAULT_NUM_LABELS]; DEFAULT_NUM_LABELS],
@@ -977,7 +1023,7 @@ mod tests {
 
         let result = predictor.predict(&nodes);
         assert_eq!(result.len(), 2);
-        // With all-zero weights, all emissions are 0, so label 0 wins (first checked)
+        // 重みがゼロなら全放出スコアが等しく、先頭のラベル0が選ばれる。
         assert_eq!(result[0], 0);
         assert_eq!(result[1], 0);
     }
@@ -1007,11 +1053,35 @@ mod tests {
         };
 
         let trainer = CrfTrainer::new(0.1, 5);
-        let predictor = trainer.train(&[example]);
+        let predictor = trainer.train(&[example]).unwrap();
 
-        // The trained model should have non-zero weights
+        // 学習後にはゼロ以外の重みがある。
         let has_nonzero = predictor.weights.iter().any(|&w| w != 0.0);
         assert!(has_nonzero);
+    }
+
+    #[test]
+    fn test_trainer_rejects_invalid_examples() {
+        let trainer = CrfTrainer::new(0.1, 1);
+        assert!(trainer.train(&[]).is_err());
+
+        let node = make_node("猫", "名詞", "ネコ");
+        assert!(
+            trainer
+                .train(&[TrainingExample {
+                    nodes: vec![node.clone()],
+                    labels: Vec::new(),
+                }])
+                .is_err()
+        );
+        assert!(
+            trainer
+                .train(&[TrainingExample {
+                    nodes: vec![node],
+                    labels: vec![DEFAULT_NUM_LABELS as u8],
+                }])
+                .is_err()
+        );
     }
 
     #[test]

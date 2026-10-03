@@ -83,7 +83,7 @@ impl AccentRuleTable {
             let fields: Vec<&str> = record.iter().collect();
             let (left_pos, right_pos, rule_str) = parse_csv_fields(&fields);
 
-            let rule_type = parse_rule_type(&rule_str);
+            let rule_type = parse_rule_type(&rule_str)?;
             let priority = compute_priority(&left_pos, &right_pos);
 
             table.add_rule(AccentRule {
@@ -312,22 +312,34 @@ fn compute_priority(left: &str, right: &str) -> u8 {
     left_score + right_score
 }
 
-fn parse_rule_type(s: &str) -> AccentRuleType {
+fn parse_rule_type(s: &str) -> Result<AccentRuleType, std::io::Error> {
     match s.trim() {
-        "keep_left" => AccentRuleType::KeepLeft,
-        "keep_right" => AccentRuleType::KeepRight,
-        "flat" => AccentRuleType::Flat,
-        "left_mora" => AccentRuleType::LeftMoraCount,
-        "right_mora" => AccentRuleType::RightMoraCount,
-        s if s.starts_with("fixed:") => {
-            let n = s[6..].parse().unwrap_or(0);
-            AccentRuleType::Fixed(n)
+        "keep_left" => Ok(AccentRuleType::KeepLeft),
+        "keep_right" => Ok(AccentRuleType::KeepRight),
+        "flat" => Ok(AccentRuleType::Flat),
+        "left_mora" => Ok(AccentRuleType::LeftMoraCount),
+        "right_mora" => Ok(AccentRuleType::RightMoraCount),
+        value => {
+            let invalid = || {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("不正なアクセント規則: {value}"),
+                )
+            };
+            if let Some(number) = value.strip_prefix("fixed:") {
+                return number
+                    .parse::<u8>()
+                    .map(AccentRuleType::Fixed)
+                    .map_err(|_| invalid());
+            }
+            if let Some(number) = value.strip_prefix("left_mora+") {
+                return number
+                    .parse::<i8>()
+                    .map(AccentRuleType::LeftMoraCountPlus)
+                    .map_err(|_| invalid());
+            }
+            Err(invalid())
         }
-        s if s.starts_with("left_mora+") => {
-            let n = s[10..].parse().unwrap_or(0);
-            AccentRuleType::LeftMoraCountPlus(n)
-        }
-        _ => AccentRuleType::KeepLeft,
     }
 }
 
@@ -692,9 +704,20 @@ mod tests {
     #[test]
     fn test_parse_rule_type_right_mora() {
         assert_eq!(
-            parse_rule_type("right_mora"),
+            parse_rule_type("right_mora").unwrap(),
             AccentRuleType::RightMoraCount
         );
+    }
+
+    #[test]
+    fn test_from_csv_rejects_invalid_rule() {
+        let path =
+            std::env::temp_dir().join(format!("kotonoha-invalid-rule-{}.csv", std::process::id()));
+        for rule in ["unknown", "fixed:256", "left_mora+invalid"] {
+            std::fs::write(&path, format!("left,right,rule\n名詞,助詞,{rule}\n")).unwrap();
+            assert!(AccentRuleTable::from_csv(&path).is_err(), "{rule}");
+        }
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
