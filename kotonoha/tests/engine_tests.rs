@@ -48,6 +48,24 @@ fn test_engine_default_eq_with_default_rules() {
     assert_eq!(l1, l2);
 }
 
+#[test]
+fn test_accent_dictionary_matches_reading_without_using_another_reading() {
+    let mut engine = Engine::default();
+    let mut dict = kotonoha::accent_dict::AccentDict::new();
+    dict.insert("他", "タ", 1);
+    dict.insert("他", "ホカ", 2);
+    dict.insert("東京", "トウキョウ", 0);
+    engine.set_accent_dict(dict);
+
+    let tokens = [
+        tok("他", "名詞", "ホカ"),
+        tok("他", "名詞", "タ"),
+        tok("他", "名詞", "アダ"),
+        tok_pron("東京", "名詞", "トウキョウ", "トーキョー"),
+    ];
+    assert_eq!(engine.predict_accent_types(&tokens), [2, 1, 0, 0]);
+}
+
 // ============================================================
 // Convenience methods
 // ============================================================

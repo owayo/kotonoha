@@ -266,17 +266,17 @@ fn cmd_tokenize(text: &str, dict_path: &std::path::Path, format: &TokenizeFormat
         }
     };
 
-    let tokens = analyzer.tokenize(text);
+    let tokens = match analyzer.try_tokenize(text) {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            eprintln!("Error tokenizing text: {e}");
+            std::process::exit(1);
+        }
+    };
 
     match format {
         TokenizeFormat::Mecab => {
-            for token in &tokens {
-                println!(
-                    "{}\t{},{},{},{}",
-                    token.surface, token.pos, token.base_form, token.reading, token.pronunciation
-                );
-            }
-            println!("EOS");
+            print!("{}", hasami::analyzer::format_mecab(&tokens));
         }
         TokenizeFormat::Wakachi => {
             let surfaces: Vec<&str> = tokens.iter().map(|t| t.surface.as_ref()).collect();

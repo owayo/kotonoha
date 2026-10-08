@@ -26,6 +26,7 @@ ort = { version = "2.0.0-rc.13", optional = true, default-features = false, feat
 
 [dev-dependencies]
 criterion = { workspace = true }
+hasami = { workspace = true, features = ["build"] }
 
 [[bench]]
 name = "benchmark"

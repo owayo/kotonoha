@@ -113,12 +113,13 @@ impl Engine {
 
     /// トークン列からNjdNode列を構築する
     ///
-    /// アクセント辞書が設定されている場合、見出し語からアクセント型を自動設定する。
+    /// アクセント辞書が設定されている場合、(見出し語, 読み) の完全一致で
+    /// アクセント型を自動設定する。別の読みのアクセントは流用しない。
     pub fn analyze(&self, tokens: &[InputToken]) -> Vec<NjdNode> {
         let mut nodes = njd::build_njd_nodes(tokens);
         if let Some(ref dict) = self.accent_dict {
             for node in &mut nodes {
-                if let Some(accent) = dict.lookup(&node.lemma, Some(&node.reading)) {
+                if let Some(accent) = dict.lookup_exact(&node.lemma, &node.reading) {
                     node.accent_type = accent;
                 }
             }
@@ -284,7 +285,7 @@ impl Engine {
         let mut analyzer = analyzer
             .lock()
             .map_err(|e| format!("Analyzer lock error: {e}"))?;
-        let tokens = analyzer.tokenize(text);
+        let tokens = analyzer.try_tokenize(text)?;
         Ok(tokens.into_iter().map(InputToken::from).collect())
     }
 

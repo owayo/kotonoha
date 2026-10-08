@@ -353,8 +353,16 @@ impl From<hasami::Token> for InputToken {
             pos_detail1,
             pos_detail2,
             pos_detail3,
-            ctype: "*".to_string(),
-            cform: "*".to_string(),
+            ctype: if token.conj_type.is_empty() {
+                "*".to_string()
+            } else {
+                token.conj_type.to_string()
+            },
+            cform: if token.conj_form.is_empty() {
+                "*".to_string()
+            } else {
+                token.conj_form.to_string()
+            },
             lemma: token.base_form.to_string(),
             reading: token.reading.to_string(),
             pronunciation: token.pronunciation.to_string(),
@@ -382,7 +390,9 @@ pub fn build_njd_nodes(tokens: &[InputToken]) -> Vec<NjdNode> {
 /// 「作ろう」「見よう」「だろう」のように 1 トークンになる場合の両方を扱う。
 /// 1 トークンの表層形が意志形かどうかを判定する。
 ///
-/// 終止形なら表層形と原形が一致するので、それが第一の手掛かり。ただし
+/// 辞書に活用形があれば、それを優先する。基本形の「映ろう」や、UniDic で原形が
+/// 漢字になった「まよう（迷う）」を意志形と誤認しない。
+/// 活用形が無いトークンでは表層形と原形の一致を手掛かりにする。ただし
 /// NEologd には活用形をそのまま原形として登録したエントリ（「作ろう」の原形が
 /// 「作ろう」）があり、それでは見分けられない。
 ///
@@ -391,14 +401,20 @@ pub fn build_njd_nodes(tokens: &[InputToken]) -> Vec<NjdNode> {
 /// 逆に「作ろう」「探そう」「ウケよう」は必ずこの形になる。
 /// 語幹まで平仮名の動詞（つくろう、まよう、かよう）は終止形と区別できないので触らない。
 ///
-/// IPAdic でこの規則の反例は「映ろう（うつろう）」1 件だけで、これは意志形の
-/// 「移ろう」と表記が重なるため人間にも区別できない。
+/// 活用形の無い入力では「映ろう（うつろう）」のような基本形を見分けられない。
+/// hasami の辞書にある活用形を保持することで、その入力では表記の推測を避ける。
 ///
-/// 助動詞は語幹の文字種を見ずに常に意志形として扱う。「だろう」「でしょう」
+/// 活用形が無い助動詞は語幹の文字種を見ずに意志形として扱う。「だろう」「でしょう」
 /// 「たろう」「ましょう」はすべて推量・意志で、IPAdic で「オ段 + う」で終わる
 /// 助動詞は他に「とう（たい）」「のう（ない）」だけ。どちらも発音が既に長音なので
 /// この規則では何も変わらない。
-fn is_volitional_surface(surface: &str, lemma: &str, pos: &Pos) -> bool {
+fn is_volitional_surface(node: &NjdNode) -> bool {
+    if node.cform != "*" && !node.cform.is_empty() {
+        return is_volitional_cform(&node.cform);
+    }
+    let surface = &node.surface;
+    let lemma = &node.lemma;
+    let pos = &node.pos;
     if surface != lemma || matches!(pos, Pos::Jodoushi) {
         return true;
     }
@@ -431,6 +447,11 @@ fn is_volitional_surface(surface: &str, lemma: &str, pos: &Pos) -> bool {
     chars.next().is_some_and(|c| !matches!(c, 'ぁ'..='ゖ'))
 }
 
+/// IPAdic の未然ウ接続と UniDic の意志推量形を見分ける。
+fn is_volitional_cform(cform: &str) -> bool {
+    cform == "未然ウ接続" || cform.starts_with("意志推量形")
+}
+
 fn apply_volitional_long_vowel(nodes: &mut [NjdNode]) {
     for i in 0..nodes.len() {
         if !matches!(nodes[i].pos, Pos::Doushi | Pos::Jodoushi) {
@@ -441,7 +462,15 @@ fn apply_volitional_long_vowel(nodes: &mut [NjdNode]) {
         }
         // 独立した助動詞「う」は直前のトークンの末尾の母音を見る
         let preceding_vowel = if nodes[i].surface == "う" {
-            if i == 0 {
+            if i == 0 || nodes[i].pos != Pos::Jodoushi {
+                continue;
+            }
+            let prev = &nodes[i - 1];
+            if !matches!(prev.pos, Pos::Doushi | Pos::Jodoushi)
+                || (prev.cform != "*"
+                    && !prev.cform.is_empty()
+                    && !is_volitional_cform(&prev.cform))
+            {
                 continue;
             }
             nodes[i - 1]
@@ -450,7 +479,7 @@ fn apply_volitional_long_vowel(nodes: &mut [NjdNode]) {
                 .next_back()
                 .and_then(last_vowel_of_kana)
         } else {
-            if !is_volitional_surface(&nodes[i].surface, &nodes[i].lemma, &nodes[i].pos) {
+            if !is_volitional_surface(&nodes[i]) {
                 continue;
             }
             let mut chars = nodes[i].pronunciation.chars().rev();
@@ -693,6 +722,43 @@ mod tests {
         ] {
             let tokens = vec![token_with_lemma(surface, "動詞,自立", surface, pron, pron)];
             assert_eq!(pronunciations(&tokens), [expected], "{surface}");
+        }
+    }
+
+    #[test]
+    fn test_dictionary_cform_precedes_volitional_surface_heuristics() {
+        for (surface, lemma, cform, pron, expected) in [
+            ("映ろう", "映ろう", "基本形", "ウツロウ", "ウツロウ"),
+            ("まよう", "迷う", "終止形-一般", "マヨウ", "マヨウ"),
+            ("まよう", "迷う", "連体形-一般", "マヨウ", "マヨウ"),
+            ("つくろう", "つくろう", "未然ウ接続", "ツクロウ", "ツクロオ"),
+            ("つくろう", "つくろう", "意志推量形", "ツクロウ", "ツクロオ"),
+            ("みよう", "見る", "意志推量形-一般", "ミヨウ", "ミヨオ"),
+        ] {
+            let mut token = token_with_lemma(surface, "動詞", lemma, pron, pron);
+            token.cform = cform.to_string();
+            let nodes = build_njd_nodes(&[token]);
+            assert_eq!(nodes[0].pronunciation, expected, "{surface}: {cform}");
+            assert_eq!(nodes[0].mora_count, mora::count_mora(expected));
+        }
+    }
+
+    #[test]
+    fn test_separate_u_requires_a_volitional_preceding_word() {
+        for (pos, cform, expected) in [
+            ("動詞", "未然ウ接続", "オ"),
+            ("動詞", "意志推量形-一般", "オ"),
+            ("動詞", "基本形", "ウ"),
+            ("名詞", "*", "ウ"),
+        ] {
+            let mut prev = token_with_lemma("つくろ", pos, "つくる", "ツクロ", "ツクロ");
+            prev.cform = cform.to_string();
+            let tokens = [prev, InputToken::new("う", "助動詞", "ウ", "ウ")];
+            assert_eq!(
+                pronunciations(&tokens),
+                ["ツクロ", expected],
+                "{pos}: {cform}"
+            );
         }
     }
 

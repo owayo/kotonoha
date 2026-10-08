@@ -73,6 +73,9 @@ mise exec -- bash scripts/setup_dict.sh
 
 生成先は `data/ipadic.hsd` です。アクセント辞書の CSV は `--accent-dict` で別途指定します。
 
+hasami の配布辞書に加えたユーザ語彙・読み修正を使う場合は、修正後の `.hsd` を指定します。
+hasami の依存更新だけでは、手元の `.hsd` に新しい語彙は追加されません。
+
 ## 使い方
 
 ### Rust API
@@ -93,6 +96,11 @@ let phone_tones = engine.tokens_to_phone_tones(&tokens);
 `AccentPhrase::accent_type` は `usize` です。長い発音やトークン列でも、
 モーラ数とラベル内の位置を保持します。
 
+hasami からの活用型・活用形は `InputToken` と `NjdNode` に保持します。
+意志・推量の長音化では辞書の活用形を優先し、基本形の「映ろう（うつろう）」や
+「まよう（迷う）」の末尾の「う」を長音に変えません。活用情報がない入力では、
+表層形と原形による判定を使います。
+
 アクセント型の予測失敗を検出するには `engine.try_predict_accent_types(&tokens)` を使います。
 推論エラーや予測結果の長さの不一致を `AccentPredictionError` として返します。
 `predict_accent_types` と `tokens_to_*` は、失敗を標準エラーへ記録し、既存のアクセント型で処理を続けます。
@@ -111,6 +119,8 @@ let labels = engine.text_to_labels("今日は良い天気です")?;
 ```
 
 アクセント辞書は [kotonoha-training-data](https://github.com/owayo/kotonoha-training-data) の `data/dicts/` でも管理しています。
+`Engine` は `(lemma, reading)` の完全一致でアクセント型を取得します。
+同じ見出し語でも読みが一致しなければ、別の読みのアクセントを流用せず、予測器による推定または既定値を使います。
 アクセント辞書 CSV の `accent_type` は `u8` の整数、アクセント規則 CSV の規則名と数値は
 有効な値を指定してください。不正な値は読み込み時にエラーになります。
 

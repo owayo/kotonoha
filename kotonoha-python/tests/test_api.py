@@ -69,6 +69,28 @@ class EngineApiTests(unittest.TestCase):
         self.assertEqual(node.mora_count, 2)
         self.assertEqual(token.pronunciation, "キョー")
 
+    def test_conjugation_distinguishes_dictionary_form_and_volitional_u(self):
+        """活用形を渡すと基本形の「う」を長音化せず、意志形だけを長音化する。"""
+        for surface, lemma, cform, reading, expected in (
+            ("まよう", "迷う", "終止形-一般", "マヨウ", "マヨウ"),
+            ("映ろう", "映ろう", "基本形", "ウツロウ", "ウツロウ"),
+            ("つくろう", "つくろう", "意志推量形", "ツクロウ", "ツクロオ"),
+        ):
+            with self.subTest(surface=surface, cform=cform):
+                token = SimpleNamespace(
+                    surface=surface,
+                    pos="動詞",
+                    reading=reading,
+                    lemma=lemma,
+                    cform=cform,
+                )
+                node = self.engine.analyze([token])[0]
+                self.assertEqual(node.pronunciation, expected)
+                self.assertEqual(
+                    [phone for phone, _ in self.engine.phone_tones([token])][-2],
+                    "o" if "意志推量" in cform else "u",
+                )
+
     def test_long_pronunciation_keeps_mora_count(self):
         """256 モーラでも Python API の個数と出力位置を保持する。"""
         reading = "カ" * 256
