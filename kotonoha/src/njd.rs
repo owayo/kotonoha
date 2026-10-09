@@ -221,6 +221,16 @@ fn should_use_surface_pronunciation(token: &InputToken, pos: &Pos) -> bool {
     if token.surface.chars().count() < 2 {
         return false;
     }
+    // 原形と読みが同じ標準カタカナ語へ正規化された表記ゆれは辞書の発音を使う。
+    // 発音だけが異なるエントリや、語末の長音符だけの表記差では表層を優先する。
+    if token.lemma != token.surface
+        && token.reading == token.lemma
+        && is_phonemizable_katakana(&token.lemma)
+        && is_katakana_str(&token.pronunciation)
+        && token.surface.trim_end_matches('ー') != token.lemma.trim_end_matches('ー')
+    {
+        return false;
+    }
     is_phonemizable_katakana(&token.surface)
 }
 

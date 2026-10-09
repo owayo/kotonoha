@@ -107,3 +107,98 @@ fn unknown_halfwidth_kana_is_pronounced_using_hasami_reading() {
         ["sil", "g", "a", "b", "u", "p", "i", "sil"]
     );
 }
+
+#[test]
+fn normalized_katakana_lemma_reaches_pronunciation_and_prosody() {
+    let mut builder = DictBuilder::new();
+    for (surface, lemma, reading, pronunciation) in [
+        ("ストゥリング", "ストリング", "ストリング", "ストリング"),
+        ("クレディット", "クレジット", "クレジット", "クレジット"),
+        ("キンドゥル", "キンドル", "キンドル", "キンドル"),
+        ("イマックス", "イーマックス", "イーマックス", "イーマックス"),
+        ("チャネル", "チャネル", "チャネル", "チャンネル"),
+        ("ユーザ", "ユーザー", "ユーザー", "ユーザー"),
+    ] {
+        builder.add_entry(DictEntry {
+            surface: surface.into(),
+            base_form: lemma.into(),
+            reading: reading.into(),
+            pronunciation: pronunciation.into(),
+            pos: "名詞,一般,*,*".into(),
+            cost: -10000,
+            ..Default::default()
+        });
+    }
+    let mut analyzer = hasami::Analyzer::from_dict(builder.build().unwrap());
+    let engine = Engine::default();
+    for (surface, expected) in [
+        ("ストゥリング", "ストリング"),
+        ("クレディット", "クレジット"),
+        ("キンドゥル", "キンドル"),
+        ("イマックス", "イイマックス"),
+        ("チャネル", "チャネル"),
+        ("ユーザ", "ユウザ"),
+    ] {
+        let tokens: Vec<InputToken> = analyzer
+            .try_tokenize(surface)
+            .unwrap()
+            .into_iter()
+            .map(InputToken::from)
+            .collect();
+        let nodes = engine.analyze(&tokens);
+        assert_eq!(nodes[0].pronunciation, expected, "{surface}");
+        assert_eq!(nodes[0].mora_count, kotonoha::mora::count_mora(expected));
+        let phones: Vec<String> = engine
+            .tokens_to_phone_tones(&tokens)
+            .into_iter()
+            .map(|pt| pt.phone)
+            .collect();
+        let mut canonical = InputToken::new("語", "名詞", expected, expected);
+        canonical.lemma = "語".to_string();
+        assert_eq!(
+            phones,
+            engine
+                .tokens_to_phone_tones(&[canonical])
+                .into_iter()
+                .map(|pt| pt.phone)
+                .collect::<Vec<_>>(),
+            "{surface}"
+        );
+        assert!(!engine.tokens_to_labels(&tokens).is_empty());
+    }
+}
+
+#[test]
+fn numeric_unit_reading_reaches_njd_without_changing_acronyms() {
+    let mut builder = DictBuilder::new();
+    for (surface, pos, reading) in [
+        ("3", "名詞,数,*,*", "サン"),
+        ("mL", "名詞,接尾,助数詞,*", "ミリリットル"),
+        ("ML", "名詞,一般,*,*", "エムエル"),
+    ] {
+        builder.add_entry(DictEntry {
+            surface: surface.into(),
+            base_form: surface.into(),
+            reading: reading.into(),
+            pronunciation: reading.into(),
+            pos: pos.into(),
+            cost: -10000,
+            ..Default::default()
+        });
+    }
+    let mut analyzer = hasami::Analyzer::from_dict(builder.build().unwrap());
+    let engine = Engine::default();
+    for (text, expected) in [("3mL", "ミリリットル"), ("3ML", "エムエル")] {
+        let tokens: Vec<InputToken> = analyzer
+            .try_tokenize(text)
+            .unwrap()
+            .into_iter()
+            .map(InputToken::from)
+            .collect();
+        let nodes = engine.analyze(&tokens);
+        assert_eq!(nodes[1].pronunciation, expected);
+        assert_eq!(nodes[1].mora_count, kotonoha::mora::count_mora(expected));
+        assert!(!engine.tokens_to_phone_tones(&tokens).is_empty());
+        assert!(!engine.tokens_to_labels(&tokens).is_empty());
+    }
+}
