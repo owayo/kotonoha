@@ -14,7 +14,7 @@ readme-languages = ["ja"]
 
 [workspace.dependencies]
 kotonoha = { path = "kotonoha" }
-hasami = { git = "https://github.com/owayo/hasami", rev = "50e8f00b6040772d5188027dc9ab5454a337f694", default-features = false, features = ["analyzer"] }
+hasami = { git = "https://github.com/owayo/hasami", rev = "737df5c764525cbaecb54d8d723f1e280d812c6d", default-features = false, features = ["analyzer"] }
 pyo3 = { version = "0.29.2", features = ["extension-module"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
