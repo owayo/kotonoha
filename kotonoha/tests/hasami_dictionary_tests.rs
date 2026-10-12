@@ -202,3 +202,82 @@ fn numeric_unit_reading_reaches_njd_without_changing_acronyms() {
         assert!(!engine.tokens_to_labels(&tokens).is_empty());
     }
 }
+
+#[test]
+fn quantity_and_counter_readings_reach_pronunciation_and_labels() {
+    let mut builder = DictBuilder::new();
+    for (surface, pos, reading) in [
+        ("0", "名詞,数,*,*", "ゼロ"),
+        ("1", "名詞,数,*,*", "イチ"),
+        ("2", "名詞,数,*,*", "ニ"),
+        ("3", "名詞,数,*,*", "サン"),
+        ("5", "名詞,数,*,*", "ゴ"),
+        ("三", "名詞,数,*,*", "サン"),
+        ("一", "名詞,数,*,*", "イチ"),
+        ("六", "名詞,数,*,*", "ロク"),
+        ("本", "名詞,接尾,助数詞,*", "ホン"),
+        ("分", "名詞,接尾,助数詞,*", "フン"),
+        ("回", "名詞,接尾,助数詞,*", "カイ"),
+        ("円", "名詞,接尾,助数詞,*", "エン"),
+        ("倍", "名詞,接尾,助数詞,*", "バイ"),
+        ("F", "名詞,一般,*,*", "ファラド"),
+        ("ISO", "名詞,固有名詞,一般,*", "アイエスオー"),
+        (",", "記号,読点,*,*", ""),
+        (".", "記号,句点,*,*", ""),
+    ] {
+        builder.add_entry(DictEntry {
+            surface: surface.into(),
+            base_form: surface.into(),
+            reading: reading.into(),
+            pronunciation: reading.into(),
+            pos: pos.into(),
+            cost: -10000,
+            ..Default::default()
+        });
+    }
+    let mut analyzer = hasami::Analyzer::from_dict(builder.build().unwrap());
+    let engine = Engine::default();
+    for (text, expected) in [
+        ("三本", "サンボン"),
+        ("一本", "イッポン"),
+        ("一回", "イッカイ"),
+        ("六分", "ロップン"),
+        ("10分", "ジュップン"),
+        ("1,000円", "センエン"),
+        ("1000本", "センボン"),
+        ("2.5倍", "ニテンゴバイ"),
+        ("3 F", "サンエフ"),
+        ("3\tF", "サンエフ"),
+        ("3F", "サンファラド"),
+        ("ISO 10分", "アイエスオーイチゼロフン"),
+        ("10 分", "イチゼロフン"),
+    ] {
+        let tokens: Vec<InputToken> = analyzer
+            .try_tokenize(text)
+            .unwrap()
+            .into_iter()
+            .map(InputToken::from)
+            .collect();
+        let mut nodes = engine.analyze(&tokens);
+        let canonical = engine.analyze(&[InputToken::new("語", "名詞", expected, expected)]);
+        assert_eq!(
+            nodes
+                .iter()
+                .map(|n| n.pronunciation.as_str())
+                .collect::<String>(),
+            canonical[0].pronunciation,
+            "{text}"
+        );
+        for node in &nodes {
+            assert_eq!(
+                node.mora_count,
+                kotonoha::mora::count_mora(&node.pronunciation)
+            );
+        }
+        let phrases = engine.estimate_accent(&mut nodes);
+        let phones = engine.extract_phone_tones(&nodes, &phrases);
+        let labels = engine.make_label(&nodes, &phrases);
+        assert!(!phrases.is_empty() && phones.len() > 2, "{text}");
+        assert_eq!(phones.len(), labels.len(), "{text}");
+    }
+}
