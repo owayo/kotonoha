@@ -24,7 +24,7 @@ endif
 RUN := $(if $(MISE),$(MISE) exec --,)
 endif
 
-.PHONY: help setup build release run test test-python lint fmt fmt-check check ci install uninstall clean setup-training build-cuda
+.PHONY: help setup build release run test test-python test-release lint fmt fmt-check check ci install uninstall clean setup-training build-cuda
 
 setup: ## ツールチェーン (mise) と依存を取得する
 	@if [ -n "$(MISE)" ]; then "$(MISE)" install; fi
@@ -44,12 +44,15 @@ run: ## デバッグ版を実行する (引数は ARGS="...")
 	$(RUN) cargo run $(CARGO_FLAGS) -p kotonoha-cli -- $(ARGS)
 
 # PyO3 の extension-module は Python からロードしてテストする。
-test: test-python ## テストを実行する
+test: test-python test-release ## テストを実行する
 	$(RUN) cargo test $(CARGO_FLAGS) --workspace --exclude kotonoha-python --no-fail-fast
 	$(RUN) cargo test $(CARGO_FLAGS) -p kotonoha --all-features --no-fail-fast
 
 test-python: ## Python バインディングの公開 API を検査する
 	$(RUN) uv run --locked --project kotonoha-python python -m unittest discover -s kotonoha-python/tests -v
+
+test-release: ## モデル配布物の検証・梱包を検査する
+	$(RUN) python -m unittest discover -s scripts/tests -v
 
 lint: ## clippy を警告ゼロで通す
 	$(RUN) cargo clippy $(CARGO_FLAGS) --workspace --all-targets -- -D warnings

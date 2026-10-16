@@ -1,0 +1,141 @@
+name: Release models
+
+# GitHub の Release 公開時に、同じタグのモデル指定から添付を作る。
+# workflow_dispatch は既存リリースへの添付、または公開せず梱包だけを試すための入口。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (optional for dry run on the selected branch)"
+        type: string
+        default: ""
+      dry_run:
+        description: "Package and verify only; do not upload to a release"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-models-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  models:
+    name: Package models
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+    steps:
+      - name: Resolve the release source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          MODELS_READ_KEY: ${{ secrets.KOTONOHA_MODELS_READ_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MODELS_READ_KEY" ]; then
+            echo "::error::Set KOTONOHA_MODELS_READ_KEY to a read-only deploy key for owayo/kotonoha-models"
+            exit 1
+          fi
+          if [ "$DRY_RUN" != "true" ] && [ -z "$TAG" ]; then
+            echo "::error::An existing release tag is required when dry_run is false"
+            exit 1
+          fi
+          if [ -n "$TAG" ]; then
+            # dry run でも、指定したタグは既存リリースから解決する。
+            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName > "$RUNNER_TEMP/release.json"
+            TAG=$(jq -r .tagName "$RUNNER_TEMP/release.json")
+            echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.source.outputs.ref }}
+          persist-credentials: false
+
+      - name: Read the pinned model source
+        id: models
+        run: |
+          set -euo pipefail
+          lock=.github/model-bundle.json
+          echo "repository=$(jq -r .repository "$lock")" >> "$GITHUB_OUTPUT"
+          echo "revision=$(jq -r .revision "$lock")" >> "$GITHUB_OUTPUT"
+          # 全実験モデルを取得せず、配布する ONNX の LFS オブジェクトだけを取得する。
+          git config --global lfs.fetchinclude "$(jq -r '[.files[].file] | join(",")' "$lock")"
+
+      - name: Checkout the private models with Git LFS
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.models.outputs.repository }}
+          ref: ${{ steps.models.outputs.revision }}
+          path: model-source
+          ssh-key: ${{ secrets.KOTONOHA_MODELS_READ_KEY }}
+          persist-credentials: false
+          lfs: true
+
+      - name: Package and verify models
+        run: |
+          set -euo pipefail
+          python3 scripts/package_models.py --models-dir model-source --source-revision "$(git rev-parse HEAD)"
+          cd target/model-release
+          sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: models
+          path: target/model-release/*
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.source.outputs.tag }}
+          MODEL_REVISION: ${{ steps.models.outputs.revision }}
+        run: |
+          {
+            echo "## Model bundle ${TAG}"
+            echo
+            echo "Source: owayo/kotonoha-models at ${MODEL_REVISION}"
+            echo
+            echo '13 ONNX models, the JSUT dictionary, and a merged accent_dict.csv are in the models artifact.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  attach:
+    name: Attach models to the release
+    needs: models
+    if: ${{ github.event_name == 'release' || !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: models
+          path: release
+
+      - name: Upload and verify the published files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.models.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            kotonoha-models-v66.tar.gz kotonoha-models-v66.tar.gz.sha256
+          # API の応答だけでなく、再ダウンロードした添付の SHA-256 まで照合する。
+          mkdir downloaded
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'kotonoha-models-v66.tar.gz*' --dir downloaded
+          cmp kotonoha-models-v66.tar.gz.sha256 downloaded/kotonoha-models-v66.tar.gz.sha256
+          cd downloaded
+          sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256

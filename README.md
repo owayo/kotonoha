@@ -76,6 +76,22 @@ mise exec -- bash scripts/setup_dict.sh
 hasami の配布辞書に加えたユーザ語彙・読み修正を使う場合は、修正後の `.hsd` を指定します。
 hasami の依存更新だけでは、手元の `.hsd` に新しい語彙は追加されません。
 
+### ONNX モデルの準備
+
+[Releases](https://github.com/owayo/kotonoha/releases) の添付から `kotonoha-models-v66.tar.gz` と
+`kotonoha-models-v66.tar.gz.sha256` を取得し、検証して展開します。
+
+```bash
+sha256sum --check kotonoha-models-v66.tar.gz.sha256
+tar -xzf kotonoha-models-v66.tar.gz
+```
+
+展開先の `kotonoha-models/` を Python API の `model_bundle`、または環境変数
+`KOTONOHA_MODEL_BUNDLE` に指定します。v66 系の推論に必要な 13 個の ONNX、
+`data/accent_dict.csv` に JSUT 辞書を後勝ちでマージした `accent_dict.csv`、
+元の `accent_dict_jsut.csv` を同梱しています。`models.json` には取得元コミットと各ファイルの
+SHA-256 を記録します。ONNX Runtime の共有ライブラリは別途用意し、`ORT_DYLIB_PATH` に指定してください。
+
 ## 使い方
 
 ### Rust API
@@ -207,6 +223,32 @@ make ci
 `make` で全ターゲットを表示します。CI は Linux・macOS で `make setup` と `make ci`、Windows で同じ Rust/Python テストとビルドを実行します。モデルを必要とする推論の一致テストは `ORT_DYLIB_PATH` と `V66_BUNDLE_DIR` がある環境で実行します。
 
 学習環境は通常の `make setup` に含めません。macOS は CPU 版 ONNX Runtime と PyPI の PyTorch、Linux・Windows は GPU 版 ONNX Runtime と CUDA 12.6 向け PyTorch を取得します。学習スクリプトごとの GPU 要件は [training/README.md](training/README.md) を確認してください。
+
+### リリースへのモデル添付
+
+GitHub Release を公開すると、[Release models](.github/workflows/release.yml) がそのタグの
+`.github/model-bundle.json` に固定したモデルを取得・検証し、モデルバンドルとチェックサムを自動添付します。
+取得するファイルが欠けている、Git LFS のポインタのまま、または SHA-256 が一致しない場合は失敗します。
+添付後にも再ダウンロードしてチェックサムを確認します。
+
+初回のみ、非公開の `owayo/kotonoha-models` に読み取り専用の deploy key を登録し、
+その秘密鍵を kotonoha の Actions secret `KOTONOHA_MODELS_READ_KEY` に設定してください。
+モデルを更新するときは `.github/model-bundle.json` のコミット・ファイル一覧・サイズ・SHA-256 も更新します。
+
+Actions の **Release models → Run workflow** から手動実行もできます。
+`dry_run=true`（既定）なら、選んだブランチで梱包・検証し、`models` artifact に保存します。
+`tag` を指定すると既存リリースのタグを使います。既存リリースへ添付する場合は `tag` を指定して
+`dry_run=false` にします。同名のモデル添付は置き換えます。
+リリースのタグと本文は GitHub の **Create a new release** から作成して公開します。
+
+ローカルでも、Git LFS の実体を取得したモデルリポジトリから同じ配布物を作れます。
+
+```bash
+python scripts/package_models.py --models-dir ../kotonoha-models --source-revision "$(git rev-parse HEAD)"
+python -m unittest discover -s scripts/tests -v
+```
+
+生成先は `target/model-release/` です。
 
 ## ライセンス
 

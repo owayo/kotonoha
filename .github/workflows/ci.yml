@@ -50,6 +50,8 @@ jobs:
           minimum_release_age: 14d
           cache: false
       - uses: Swatinem/rust-cache@v2
+      - name: Test model release packaging
+        run: python -m unittest discover -s scripts/tests -v
       # Windows の make は POSIX シェルのレシピと互換性がないため直接実行する。
       - name: Test the Rust API and CLI
         run: cargo test --locked --workspace --exclude kotonoha-python --no-fail-fast
