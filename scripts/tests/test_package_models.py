@@ -22,7 +22,9 @@ class PackageModelsTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.models = self.root / "models"
         self.models.mkdir()
-        (self.models / "test.onnx").write_bytes(b"test model contents")
+        (self.models / "accent_model_v66_split1.onnx").write_bytes(
+            b"test model contents"
+        )
         (self.models / "accent_dict_jsut.csv").write_text(
             "lemma,reading,accent_type\n猫,ネコ,2\n猫,ビョウ,1\n", encoding="utf-8"
         )
@@ -40,6 +42,11 @@ class PackageModelsTests(unittest.TestCase):
                     "files": [
                         {
                             "file": path.name,
+                            **(
+                                {"native_file": "accent.knm"}
+                                if path.suffix == ".onnx"
+                                else {}
+                            ),
                             "size": path.stat().st_size,
                             "sha256": file_digest(path),
                         }
@@ -87,16 +94,18 @@ class PackageModelsTests(unittest.TestCase):
 
     def test_repackaging_is_reproducible(self):
         first = self.package().read_bytes()
-        (self.models / "test.onnx").touch()
+        (self.models / "accent_model_v66_split1.onnx").touch()
         self.assertEqual(self.package().read_bytes(), first)
 
     def test_native_archive_replaces_onnx_and_checks_conversion_manifest(self):
         source = json.loads(self.lock.read_text(encoding="utf-8"))
         original = next(
-            entry for entry in source["files"] if entry["file"] == "test.onnx"
+            entry
+            for entry in source["files"]
+            if entry["file"] == "accent_model_v66_split1.onnx"
         )
         metadata = json.dumps({"source_sha256": original["sha256"]}).encode()
-        native = self.models / "test.knm"
+        native = self.models / "accent.knm"
         native.write_bytes(
             struct.pack("<8sIIQQ", b"KOTONNM\0", 1, len(metadata), 1, 0)
             + metadata
@@ -119,10 +128,11 @@ class PackageModelsTests(unittest.TestCase):
         archive = package_models(
             self.models, self.output, self.lock, self.base, "b" * 40, native=True
         )
+        self.assertEqual(archive.name, "kotonoha-models.tar.gz")
         with tarfile.open(archive) as bundle:
             names = bundle.getnames()
-            self.assertIn("kotonoha-models/test.knm", names)
-            self.assertNotIn("kotonoha-models/test.onnx", names)
+            self.assertIn("kotonoha-models/accent.knm", names)
+            self.assertNotIn("kotonoha-models/accent_model_v66_split1.onnx", names)
         native.write_bytes(native.read_bytes()[:-1] + b"y")
         with self.assertRaisesRegex(ValueError, "conversion manifest"):
             package_models(
@@ -130,7 +140,7 @@ class PackageModelsTests(unittest.TestCase):
             )
 
     def test_missing_corrupt_or_unresolved_lfs_model_is_rejected(self):
-        path = self.models / "test.onnx"
+        path = self.models / "accent_model_v66_split1.onnx"
         original = path.read_bytes()
         for data, message in [
             (None, "Missing model bundle input"),

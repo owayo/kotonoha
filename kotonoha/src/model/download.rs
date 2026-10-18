@@ -73,17 +73,21 @@ pub fn download(dir: Option<&Path>, options: DownloadOptions) -> Result<PathBuf,
     let mut resolved_token = false;
     fs::create_dir_all(&dir)?;
     for file in &MODEL_FILES {
-        let native = dir.join(file.file).with_extension("knm");
-        let is_model = file.file.ends_with(".onnx");
+        let native = dir.join(file.file);
+        let is_model = file.file.ends_with(".knm");
         if is_model && native.exists() && !options.force {
             match super::knm::Weights::load(&native) {
                 Ok(weights) if weights.source_sha256 == file.sha256 => continue,
                 _ => return Err(DownloadError::Existing(native)),
             }
         }
-        let source = dir.join(file.file);
+        let source_file = ModelFile {
+            file: if is_model { file.source } else { file.file },
+            ..*file
+        };
+        let source = dir.join(source_file.file);
         let source_existed = source.exists();
-        let reused = reuse_existing(&source, file, options.force)?;
+        let reused = reuse_existing(&source, &source_file, options.force)?;
         if !reused {
             if options.base_url.is_none() && !resolved_token {
                 token = github_token();
@@ -93,7 +97,7 @@ pub fn download(dir: Option<&Path>, options: DownloadOptions) -> Result<PathBuf,
             install(
                 &mut response.body_mut().as_reader(),
                 &dir,
-                file,
+                &source_file,
                 options.force,
             )?;
         }
@@ -116,15 +120,15 @@ pub fn download(dir: Option<&Path>, options: DownloadOptions) -> Result<PathBuf,
 
 /// 固定版の既存 ONNX をその場で KNM に変換する。通信せず、元ファイルは保持する。
 pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, DownloadError> {
-    for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".onnx")) {
-        let native = dir.join(file.file).with_extension("knm");
+    for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".knm")) {
+        let native = dir.join(file.file);
         if native.exists() && !force {
             match super::knm::Weights::load(&native) {
                 Ok(weights) if weights.source_sha256 == file.sha256 => continue,
                 _ => return Err(DownloadError::Existing(native)),
             }
         }
-        let source = dir.join(file.file);
+        let source = dir.join(file.source);
         if !valid_file(&source, file)? {
             return Err(DownloadError::Integrity(file.file.into()));
         }
@@ -136,14 +140,14 @@ pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, Downloa
         temporary.persist(native).map_err(|e| e.error)?;
     }
     let mut files = Vec::new();
-    for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".onnx")) {
-        let path = dir.join(file.file).with_extension("knm");
+    for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".knm")) {
+        let path = dir.join(file.file);
         let bytes = fs::read(&path)?;
         let digest: String = Sha256::digest(&bytes)
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
-        files.push(serde_json::json!({"file":path.file_name().unwrap().to_string_lossy(),"size":bytes.len(),"sha256":digest}));
+        files.push(serde_json::json!({"file":file.file,"source":file.source,"source_sha256":file.sha256,"size":bytes.len(),"sha256":digest}));
     }
     let mut manifest = tempfile::NamedTempFile::new_in(dir)?;
     serde_json::to_writer_pretty(

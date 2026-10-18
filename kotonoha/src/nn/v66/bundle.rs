@@ -1,4 +1,4 @@
-//! v66 系モデルバンドル
+//! 役割名で読み込む KNM モデルバンドル
 //!
 //! `kotonoha-models/` ディレクトリ配下の 13 KNM + `accent_dict.csv` を
 //! 一括ロードするためのコンテナ。
@@ -7,19 +7,19 @@
 //!
 //! ```text
 //! <bundle_dir>/
-//!   accent_model_v24.knm
-//!   accent_model_v38.knm
-//!   accent_model_v54_split1.knm
-//!   accent_model_v54_split2.knm
-//!   accent_model_v54_split3.knm
-//!   accent_model_v59_fold0.knm
-//!   accent_model_v59_fold1.knm
-//!   accent_model_v59_fold2.knm
-//!   accent_model_v59_fold3.knm
-//!   accent_model_v59_fold4.knm
-//!   accent_model_v61.knm
-//!   accent_model_v63.knm
-//!   accent_model_v66_split1.knm
+//!   teacher.knm
+//!   student-01.knm
+//!   student-02.knm
+//!   student-03.knm
+//!   student-04.knm
+//!   student-05.knm
+//!   student-06.knm
+//!   student-07.knm
+//!   student-08.knm
+//!   student-09.knm
+//!   meta-01.knm
+//!   meta-02.knm
+//!   accent.knm
 //!   accent_dict.csv         (optional; あればロード時に enrich に使う)
 //! ```
 
@@ -33,15 +33,15 @@ use crate::accent_dict::AccentDict;
 ///
 /// 訓練側 `precompute_v66_stacker.py:77-87` の `student_14d_specs` と一致。
 pub const STUDENT_FILENAMES: [&str; 9] = [
-    "accent_model_v38.knm",
-    "accent_model_v54_split1.knm",
-    "accent_model_v54_split2.knm",
-    "accent_model_v54_split3.knm",
-    "accent_model_v59_fold0.knm",
-    "accent_model_v59_fold1.knm",
-    "accent_model_v59_fold2.knm",
-    "accent_model_v59_fold3.knm",
-    "accent_model_v59_fold4.knm",
+    "student-01.knm",
+    "student-02.knm",
+    "student-03.knm",
+    "student-04.knm",
+    "student-05.knm",
+    "student-06.knm",
+    "student-07.knm",
+    "student-08.knm",
+    "student-09.knm",
 ];
 
 /// 不変の専用モデル一式。同時推論にロックは不要。
@@ -93,14 +93,14 @@ impl V66Bundle {
             return Err(BundleError::NotADirectory(models_dir.to_path_buf()));
         }
 
-        let v24 = load_session(&models_dir.join("accent_model_v24.knm"))?;
+        let v24 = load_session(&models_dir.join("teacher.knm"), 11)?;
         let students = STUDENT_FILENAMES
             .iter()
-            .map(|name| load_session(&models_dir.join(name)))
+            .map(|name| load_session(&models_dir.join(name), 14))
             .collect::<Result<Vec<_>, _>>()?;
-        let v61 = load_session(&models_dir.join("accent_model_v61.knm"))?;
-        let v63 = load_session(&models_dir.join("accent_model_v63.knm"))?;
-        let v66_split1 = load_session(&models_dir.join("accent_model_v66_split1.knm"))?;
+        let v61 = load_session(&models_dir.join("meta-01.knm"), 24)?;
+        let v63 = load_session(&models_dir.join("meta-02.knm"), 24)?;
+        let v66_split1 = load_session(&models_dir.join("accent.knm"), 103)?;
 
         let accent_dict = load_accent_dicts(models_dir, accent_dict_paths)?;
 
@@ -149,30 +149,12 @@ fn merge_accent_dict(base: &mut AccentDict, extra: &AccentDict) {
 }
 
 /// 単一 KNM を専用 CPU モデルとしてロードする
-fn load_session(path: &Path) -> Result<NativeModel, BundleError> {
+fn load_session(path: &Path, expected: usize) -> Result<NativeModel, BundleError> {
     if !path.is_file() {
         return Err(BundleError::MissingModel(path.to_path_buf()));
     }
     let model = NativeModel::load(path)
         .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?;
-    let expected = if path
-        .file_name()
-        .is_some_and(|n| n == "accent_model_v24.knm")
-    {
-        11
-    } else if path
-        .file_name()
-        .is_some_and(|n| n == "accent_model_v66_split1.knm")
-    {
-        103
-    } else if path
-        .file_name()
-        .is_some_and(|n| n == "accent_model_v61.knm" || n == "accent_model_v63.knm")
-    {
-        24
-    } else {
-        14
-    };
     if model.input_dim() != expected {
         return Err(BundleError::SessionBuild(
             path.to_path_buf(),

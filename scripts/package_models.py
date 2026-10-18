@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""検証済みの v66 モデルと辞書を GitHub Release 用に梱包する（標準ライブラリのみ）。"""
+"""検証済みの KNM モデルと辞書を GitHub Release 用に梱包する（標準ライブラリのみ）。"""
 
 import argparse
 import csv
@@ -13,7 +13,7 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUNDLE_NAME = "kotonoha-models-v66.tar.gz"
+BUNDLE_NAME = "kotonoha-models.tar.gz"
 
 
 def file_digest(path: Path) -> str:
@@ -118,7 +118,16 @@ def package_models(
         for name in list(sources):
             if not name.endswith(".onnx"):
                 continue
-            path = sources.pop(name).with_suffix(".knm")
+            sources.pop(name)
+            original = next(entry for entry in lock["files"] if entry["file"] == name)
+            native_name = original["native_file"]
+            if (
+                Path(native_name).name != native_name
+                or not native_name.endswith(".knm")
+                or native_name in sources
+            ):
+                raise ValueError(f"Invalid or duplicate KNM filename: {native_name}")
+            path = models_dir / native_name
             if not path.is_file():
                 raise ValueError(
                     f"Missing KNM: {path}; "
@@ -147,7 +156,6 @@ def package_models(
                 ):
                     raise ValueError(f"Invalid KNM header: {path}")
                 metadata = json.loads(stream.read(meta_len))
-            original = next(entry for entry in lock["files"] if entry["file"] == name)
             if metadata.get("source_sha256") != original["sha256"]:
                 raise ValueError(f"KNM source checksum differs: {path}")
             sources[path.name] = path

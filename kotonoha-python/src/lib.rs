@@ -44,11 +44,10 @@ impl KotonohaEngine {
     ///     model_path: 11 次元入力の単一 KNM モデルファイルパス。`model_bundle` が
     ///         指定されない場合のみ使う（環境変数 KOTONOHA_MODEL_PATH をフォールバック）。
     ///     dict_path: 形態素解析辞書（.hsd）ファイルパス（省略時は形態素解析なし）
-    ///     model_bundle: v66 系 13 KNM を含むディレクトリパス
+    ///     model_bundle: 13 KNM を含むディレクトリパス
     ///         （環境変数 KOTONOHA_MODEL_BUNDLE、配置済み共有ディレクトリをフォールバック）。
     ///         指定された場合は `model_path` より優先する。
-    ///     model_variant: 使用する variant 名。デフォルトは bundle なら
-    ///         "v66_split1"、未指定なら "v8"。
+    ///     model_variant: 使用する variant 名。デフォルトは "default"。
     ///     accent_dict_paths: bundle の `accent_dict.csv` を上書きする CSV パスのリスト。
     ///         複数指定時は順にマージし、後の path のエントリが先のエントリを上書きする。
     #[new]
@@ -92,13 +91,7 @@ impl KotonohaEngine {
         });
         let variant = model_variant
             .or_else(|| std::env::var("KOTONOHA_MODEL_VARIANT").ok())
-            .unwrap_or_else(|| {
-                if resolved_bundle.is_some() {
-                    "v66_split1".to_string()
-                } else {
-                    "v8".to_string()
-                }
-            });
+            .unwrap_or_else(|| "default".to_string());
 
         if let Some(ref bundle_dir) = resolved_bundle {
             Self::try_load_v66_pipeline(
@@ -297,9 +290,9 @@ impl KotonohaEngine {
         variant: &str,
         accent_dict_paths: Option<&[String]>,
     ) -> PyResult<()> {
-        if variant != "v66_split1" {
+        if !matches!(variant, "default" | "v66_split1") {
             return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "unknown model_variant '{variant}'; supported: 'v66_split1'"
+                "unknown model_variant '{variant}'; supported: 'default'"
             )));
         }
         let bundle = if let Some(paths) = accent_dict_paths {
@@ -311,7 +304,7 @@ impl KotonohaEngine {
         }
         .map_err(|e| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to load KNM v66 bundle from {}: {e}",
+                "Failed to load KNM bundle from {}: {e}",
                 bundle_dir.display()
             ))
         })?;
@@ -328,7 +321,7 @@ impl KotonohaEngine {
         _accent_dict_paths: Option<&[String]>,
     ) -> PyResult<()> {
         Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            "v66 model_bundle requires the 'neural' feature to be enabled",
+            "KNM model_bundle requires the 'neural' feature to be enabled",
         ))
     }
 }

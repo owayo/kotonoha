@@ -140,13 +140,19 @@ make setup        # 開発用ビルド・インストール
 make test-python  # Python API の回帰テスト
 ```
 
-### v66 系モデルの Python API
+### KNM モデルの Python API
 
 `kotonoha-python/pyproject.toml` は `neural` feature で専用 Rust CPU エンジンを
-ビルドする。13 個の `.knm` (12 students/teachers + v66_split1 stacker) を使い、
+ビルドする。13 個の役割名付き `.knm` (teacher・students・meta predictors・final stacker) を使い、
 ONNX Runtime と `ORT_DYLIB_PATH` は不要。旧 `cuda` feature は `neural` の互換エイリアス。
 GPU 実行は現在実装していない。形式仕様・ベンチマーク・設計判断は
 `../kotonoha-models/docs/knm-format.md` に集約する。
+
+配布アーカイブは `kotonoha-models.tar.gz`、KNM は `accent.knm`、`teacher.knm`、
+`student-01.knm`〜`student-09.knm`、`meta-01.knm`・`meta-02.knm`。
+学習時の版番号を配布名に含めない。対応は `.github/model-bundle.json` の `native_file` と
+Rust マニフェストにそろえ、版の識別は取得元コミットと SHA-256 で行う。
+Python の `model_variant` は `default` が既定値。
 
 既存モデルは `kotonoha model convert --dir <dir>` で通信なしに変換できる。
 `model download` は固定 SHA-256 の既存配布元から取得し、Rust で KNM へ変換する。

@@ -232,7 +232,7 @@ jobs:
           cargo run --locked --release -p kotonoha-cli -- model convert --dir model-source
           python scripts/package_models.py --native --models-dir model-source --source-revision "$(git rev-parse HEAD)"
           cd target/model-release
-          sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
+          sha256sum --check --strict kotonoha-models.tar.gz.sha256
 
       - uses: actions/upload-artifact@v7
         with:
@@ -275,13 +275,13 @@ jobs:
             kotonoha-aarch64-apple-darwin.tar.gz
             kotonoha-x86_64-apple-darwin.tar.gz
             kotonoha-x86_64-pc-windows-msvc.zip
-            kotonoha-models-v66.tar.gz
-            kotonoha-models-v66.tar.gz.sha256
+            kotonoha-models.tar.gz
+            kotonoha-models.tar.gz.sha256
           )
           diff -u <(printf '%s\n' "${expected[@]}" | LC_ALL=C sort) \
             <(find release -type f -printf '%f\n' | LC_ALL=C sort)
           cd release
-          sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
+          sha256sum --check --strict kotonoha-models.tar.gz.sha256
           sha256sum -- * > SHA256SUMS
           cat SHA256SUMS
           echo "assets=$(printf '%s ' *)" >> "$GITHUB_OUTPUT"
@@ -299,7 +299,7 @@ jobs:
 
           ## Models
 
-          Verify `kotonoha-models-v66.tar.gz.sha256` and extract `kotonoha-models-v66.tar.gz`. Set `KOTONOHA_MODEL_BUNDLE` to the extracted `kotonoha-models/` directory.
+          Verify `kotonoha-models.tar.gz.sha256` and extract `kotonoha-models.tar.gz`. Set `KOTONOHA_MODEL_BUNDLE` to the extracted `kotonoha-models/` directory.
 
           The bundle contains 13 losslessly compressed KNM models, a merged `accent_dict.csv`, the source `accent_dict_jsut.csv`, and `models.json` with source revisions and SHA-256 checksums. The CLI uses the dedicated Rust CPU inference engine.
 
@@ -329,7 +329,7 @@ jobs:
           cmp release/SHA256SUMS downloaded/SHA256SUMS
           cd downloaded
           sha256sum --check --strict SHA256SUMS
-          sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
+          sha256sum --check --strict kotonoha-models.tar.gz.sha256
 
   release-summary:
     name: Release summary

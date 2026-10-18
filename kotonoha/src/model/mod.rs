@@ -1,4 +1,4 @@
-//! v66 KNM モデルの共有先、検証付きダウンロードとオフライン変換。
+//! KNM モデルの共有先、検証付きダウンロードとオフライン変換。
 //!
 //! CLI と Python は同じ置き場所を使う。通信は `download` feature を有効にして
 //! `download()` を明示的に呼んだときだけ行う。
@@ -18,16 +18,16 @@ mod download;
 #[cfg(feature = "download")]
 pub use download::{DownloadError, DownloadOptions, convert_legacy_models, download};
 
-/// 配布するモデル・辞書 1 ファイル。サイズと SHA-256 は固定した版の実体に対応する。
+/// 配置名と取得元 1 ファイル。サイズと SHA-256 は固定した取得元の実体に対応する。
 #[derive(Debug, Clone, Copy)]
 pub struct ModelFile {
     /// バンドル内のファイル名
     pub file: &'static str,
     /// 配布元のファイル名
     pub source: &'static str,
-    /// 実体のバイト数（Git LFS ポインタのサイズではない）
+    /// 取得する変換元のバイト数（Git LFS ポインタのサイズではない）
     pub size: u64,
-    /// 実体の SHA-256
+    /// 取得する変換元の SHA-256
     pub sha256: &'static str,
 }
 
@@ -59,8 +59,8 @@ fn model_dir_from(var: impl Fn(&str) -> Option<OsString>, windows: bool) -> Opti
 pub fn is_model_bundle(dir: &Path) -> bool {
     MODEL_FILES
         .iter()
-        .filter(|file| file.file.ends_with(".onnx"))
-        .all(|file| dir.join(file.file).with_extension("knm").is_file())
+        .filter(|file| file.file.ends_with(".knm"))
+        .all(|file| dir.join(file.file).is_file())
 }
 
 /// 共有先に配置済みのバンドルがあれば返す。ダウンロードはしない。

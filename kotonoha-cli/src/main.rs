@@ -137,7 +137,7 @@ enum ModelCommands {
         #[arg(long)]
         force: bool,
     },
-    /// v66 の 13 モデルを取得して KNM へ変換する（外部ランタイム不要）。
+    /// 13 モデルを取得して KNM へ変換する（外部ランタイム不要）。
     Download {
         /// 保存先（省略時は共有ディレクトリ）
         #[arg(long, value_name = "DIR")]
@@ -399,7 +399,7 @@ fn cmd_model(command: ModelCommands) {
             force,
             base_url,
         } => {
-            eprintln!("Preparing v66 model bundle (13 KNM + accent dictionary)...");
+            eprintln!("Preparing model bundle (13 KNM + accent dictionary)...");
             kotonoha::model::download(
                 dir.as_deref(),
                 kotonoha::model::DownloadOptions { force, base_url },

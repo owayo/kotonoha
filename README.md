@@ -180,20 +180,25 @@ hasami の依存更新だけでは、手元の `.hsd` に新しい語彙は追�
 
 ### KNM モデルの準備
 
-[Releases](https://github.com/owayo/kotonoha/releases) の添付から `kotonoha-models-v66.tar.gz` と
-`kotonoha-models-v66.tar.gz.sha256` を取得し、検証して展開します。
+[Releases](https://github.com/owayo/kotonoha/releases) の添付から `kotonoha-models.tar.gz` と
+`kotonoha-models.tar.gz.sha256` を取得し、検証して展開します。
 
 ```bash
-sha256sum --check kotonoha-models-v66.tar.gz.sha256
-tar -xzf kotonoha-models-v66.tar.gz
+sha256sum --check kotonoha-models.tar.gz.sha256
+tar -xzf kotonoha-models.tar.gz
 ```
 
 展開先の `kotonoha-models/` を Python API の `model_bundle`、または環境変数
-`KOTONOHA_MODEL_BUNDLE` に指定します。v66 系の推論に必要な 13 個の KNM、
+`KOTONOHA_MODEL_BUNDLE` に指定します。推論に必要な 13 個の KNM、
 `data/accent_dict.csv` に JSUT 辞書を後勝ちでマージした `accent_dict.csv`、
 元の `accent_dict_jsut.csv` を同梱しています。`models.json` には取得元コミットと各ファイルの
 SHA-256 を記録します。既存の ONNX ディレクトリは、次のコマンドで変換できます。
 元ファイルは保持されます。
+
+KNM は `accent.knm`、`teacher.knm`、`student-01.knm`〜`student-09.knm`、
+`meta-01.knm`・`meta-02.knm` の役割名で配置します。配布名に学習時の版番号は付けず、
+モデルの版は Release タグ、取得元コミットと SHA-256 で識別します。
+Python の `model_variant` は省略するか `"default"` を指定します。
 
 ```bash
 kotonoha model convert --dir /path/to/kotonoha-models
@@ -342,7 +347,7 @@ hasami と同じく次の処理をまとめて行います。
 1. JST の `yy.m.counter` で採番します。同じ年月では連番を増やし、年月が変わると100から始めます。
 2. Rust ワークスペースと Python パッケージの版・lockfile を更新し、コミットと `v<version>` タグを同時に push します。
 3. 同じタグから5ターゲットの CLI をビルドし、モデル配布物を生成します。
-4. バイナリ5個、`kotonoha-models-v66.tar.gz`、その `.sha256`、全添付用の `SHA256SUMS` を Release に添付して公開します。
+4. バイナリ5個、`kotonoha-models.tar.gz`、その `.sha256`、全添付用の `SHA256SUMS` を Release に添付して公開します。
 5. 公開した添付の名前・サイズ・状態を確認し、再ダウンロードして全ファイルの SHA-256 を照合します。
 
 モデル配布物は、そのタグの `.github/model-bundle.json` に固定した学習済み ONNX を Rust で KNM へ変換し、辞書と一緒に梱包します。
