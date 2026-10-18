@@ -387,6 +387,7 @@ HSD 本体は該当する hasami Release から取得します。KNM は固定�
 初回は公開済みモデルに HSD の記録がない場合もビルドします。失敗した生成は処理済みとせず、Actions の失敗ジョブを再実行できます。
 自動の定期再試行はありません。通常の手動 Release は `check_hsd_changes=false`（既定）のままなら毎回ビルドし、
 `hasami_tag` を省くと最新安定版を使います。`dry_run=true` は従来どおり採番・メタデータ更新の確認だけです。
+手動で公開する場合は `dry_run=false`、`check_hsd_changes=false` にします。HSD の変更がなくても CLI と KNM をビルドします。
 
 リポジトリをまたぐ通知用に、初回だけ次を設定します。
 

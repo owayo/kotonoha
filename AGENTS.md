@@ -160,6 +160,8 @@ Python の `model_variant` は `default` が既定値。
 hasami の Release が HSD の公開・検証後に Kotonoha の `release.yml` を直接起動する。定期チェックは使わない。
 通知は `hasami_tag` と `check_hsd_changes=true` を渡し、Kotonoha の Release 実行枠で変更を判定する。
 同じ HSD や古い通知は省き、実行中の Release があればキューで待機する。
+Release の判定ジョブは手動実行時も成功で完了させ、HSD 比較の step だけを条件付きにする。
+判定ジョブそのものを skip すると、手動 Release のビルド・梱包・公開まで needs の skip が伝播する。
 通知の認証は専用 GitHub App（Kotonoha のみにインストール、Actions: read and write）。
 hasami の variable `KOTONOHA_APP_CLIENT_ID` と Secret `KOTONOHA_APP_PRIVATE_KEY` から短命の token を作る。
 比較対象は公開済み Kotonoha Release の `hasami-dictionaries.json`。ビルド前のコミットを処理済み判定に使わない。

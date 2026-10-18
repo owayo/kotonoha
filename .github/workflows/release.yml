@@ -32,23 +32,30 @@ env:
 
 jobs:
   check-hsd:
-    name: Check the HSD notification
-    if: ${{ !inputs.dry_run && inputs.check_hsd_changes }}
+    name: Decide whether to release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      changed: ${{ steps.check.outputs.changed }}
+      changed: ${{ steps.manual.outputs.changed || steps.check.outputs.changed }}
     steps:
+      # ジョブを skip すると needs の後段へ伝播するため、手動時も成功で完了させる。
+      - name: Enable manual releases and dry runs
+        if: ${{ inputs.dry_run || !inputs.check_hsd_changes }}
+        id: manual
+        run: echo 'changed=true' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
+        if: ${{ !inputs.dry_run && inputs.check_hsd_changes }}
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
       - uses: jdx/mise-action@v4
+        if: ${{ !inputs.dry_run && inputs.check_hsd_changes }}
         with:
           minimum_release_age: 14d
           cache: false
           install_args: python
       - name: Compare the published HSD with the last model release
+        if: ${{ !inputs.dry_run && inputs.check_hsd_changes }}
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,7 +71,7 @@ jobs:
   prepare-release:
     name: Prepare release
     needs: check-hsd
-    if: ${{ !cancelled() && (needs.check-hsd.result == 'skipped' || (needs.check-hsd.result == 'success' && needs.check-hsd.outputs.changed == 'true')) }}
+    if: ${{ needs.check-hsd.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
