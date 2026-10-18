@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "kotonoha"
-version = "26.10.100"
+version = "26.10.101"
 dependencies = [
  "criterion",
  "csv",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "kotonoha-cli"
-version = "26.10.100"
+version = "26.10.101"
 dependencies = [
  "clap",
  "hasami",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "kotonoha-python"
-version = "26.10.100"
+version = "26.10.101"
 dependencies = [
  "hasami",
  "kotonoha",
