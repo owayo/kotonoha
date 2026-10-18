@@ -2,6 +2,8 @@
 
 import os
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,7 +16,10 @@ class EngineApiTests(unittest.TestCase):
     def setUp(self):
         """外部モデルの設定を除いてエンジンを用意する。"""
         # 手元のモデル設定が辞書不要のテストに混ざらないようにする。
+        model_data = TemporaryDirectory()
+        self.addCleanup(model_data.cleanup)
         with patch.dict(os.environ):
+            os.environ["XDG_DATA_HOME"] = model_data.name
             for key in (
                 "KOTONOHA_MODEL_PATH",
                 "KOTONOHA_MODEL_BUNDLE",
@@ -68,6 +73,17 @@ class EngineApiTests(unittest.TestCase):
         self.assertEqual(node.pronunciation, "キョオ")
         self.assertEqual(node.mora_count, 2)
         self.assertEqual(token.pronunciation, "キョー")
+
+    def test_predictions_are_integer_lists_including_empty_input(self):
+        """予測結果は bytes ではなく、空入力でも整数のリストで返す。"""
+        self.assertEqual(self.engine.predict_accent_types([]), [])
+        tokens = [
+            SimpleNamespace(surface="猫", pos="名詞", reading="ネコ"),
+            SimpleNamespace(surface="犬", pos="名詞", reading="イヌ"),
+        ]
+        predictions = self.engine.predict_accent_types(tokens)
+        self.assertEqual(predictions, [0, 0])
+        self.assertTrue(all(type(value) is int for value in predictions))
 
     def test_conjugation_distinguishes_dictionary_form_and_volitional_u(self):
         """活用形を渡すと基本形の「う」を長音化せず、意志形だけを長音化する。"""
@@ -133,6 +149,36 @@ class EngineApiTests(unittest.TestCase):
             with self.subTest(method=method):
                 with self.assertRaisesRegex(RuntimeError, "辞書が読み込まれていません"):
                     getattr(self.engine, method)("猫")
+
+
+class ModelApiTests(unittest.TestCase):
+    """共有モデルのパス解決と既存ファイル保護を確認する。"""
+
+    def test_model_dir_uses_shared_override(self):
+        """環境変数の共有先を返し、ディレクトリを勝手に作らない。"""
+        with TemporaryDirectory() as tmp:
+            shared = Path(tmp) / "models"
+            with patch.dict(os.environ, {"KOTONOHA_MODEL_BUNDLE": str(shared)}):
+                self.assertEqual(Path(kotonoha.model_dir()), shared)
+            self.assertFalse(shared.exists())
+
+    def test_model_bundle_accepts_string_and_pathlike(self):
+        """文字列と Path を受け付け、存在しないバンドルはロード時に失敗する。"""
+        with TemporaryDirectory() as tmp:
+            for bundle in (str(Path(tmp) / "missing"), Path(tmp) / "missing"):
+                with self.subTest(bundle=bundle):
+                    with self.assertRaises(RuntimeError):
+                        kotonoha.KotonohaEngine(model_bundle=bundle)
+
+    def test_download_protects_existing_model(self):
+        """既存モデルが異なる場合は通信せず、内容を保持する。"""
+        with TemporaryDirectory() as tmp:
+            model = Path(tmp) / "accent_model_v24.onnx"
+            model.write_bytes(b"existing model")
+            with self.assertRaisesRegex(RuntimeError, "--force"):
+                kotonoha.download_models(dir=tmp, base_url="http://127.0.0.1:1")
+            self.assertEqual(model.read_bytes(), b"existing model")
+            self.assertEqual(len(list(Path(tmp).iterdir())), 1)
 
 
 if __name__ == "__main__":

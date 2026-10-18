@@ -20,8 +20,8 @@ impl KotonohaEngine {
     ///     model_path: legacy v8 ONNX モデルファイルパス。`model_bundle` が
     ///         指定されない場合のみ使う（環境変数 KOTONOHA_MODEL_PATH をフォールバック）。
     ///     dict_path: 形態素解析辞書（.hsd）ファイルパス（省略時は形態素解析なし）
-    ///     model_bundle: v66 系 12 ONNX を含むディレクトリパス
-    ///         （環境変数 KOTONOHA_MODEL_BUNDLE をフォールバック）。
+    ///     model_bundle: v66 系 13 ONNX を含むディレクトリパス
+    ///         （環境変数 KOTONOHA_MODEL_BUNDLE、配置済み共有ディレクトリをフォールバック）。
     ///         指定された場合は `model_path` より優先する。
     ///     model_variant: 使用する variant 名。デフォルトは bundle なら
     ///         "v66_split1"、未指定なら "v8"。
@@ -40,7 +40,7 @@ impl KotonohaEngine {
         accent_rule_path: Option<String>,
         model_path: Option<String>,
         dict_path: Option<String>,
-        model_bundle: Option<String>,
+        model_bundle: Option<PathBuf>,
         model_variant: Option<String>,
         accent_dict_paths: Option<Vec<String>>,
     ) -> PyResult<Self> {
@@ -52,8 +52,20 @@ impl KotonohaEngine {
 
         // 優先順位: model_bundle 引数 → KOTONOHA_MODEL_BUNDLE 環境変数 →
         //          model_path 引数 → KOTONOHA_MODEL_PATH 環境変数
-        let resolved_bundle = model_bundle.or_else(|| std::env::var("KOTONOHA_MODEL_BUNDLE").ok());
+        let resolved_bundle = model_bundle.or_else(|| {
+            std::env::var_os("KOTONOHA_MODEL_BUNDLE")
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
+        });
         let resolved_model_path = model_path.or_else(|| std::env::var("KOTONOHA_MODEL_PATH").ok());
+        // legacy モデルの明示指定は共有ディレクトリの自動検出より優先する。
+        #[cfg(feature = "cuda")]
+        let resolved_bundle = resolved_bundle.or_else(|| {
+            resolved_model_path
+                .is_none()
+                .then(::kotonoha::model::installed_model_dir)
+                .flatten()
+        });
         let variant = model_variant
             .or_else(|| std::env::var("KOTONOHA_MODEL_VARIANT").ok())
             .unwrap_or_else(|| {
@@ -219,11 +231,18 @@ impl KotonohaEngine {
     ///
     /// Raises:
     ///     RuntimeError: 推論が失敗した場合、または予測結果の長さが不正な場合
-    fn predict_accent_types(&self, tokens: Vec<PyToken>) -> PyResult<Vec<u8>> {
+    fn predict_accent_types<'py>(
+        &self,
+        py: Python<'py>,
+        tokens: Vec<PyToken>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyList>> {
         let input_tokens = convert_tokens(tokens);
-        self.inner
+        let predictions = self
+            .inner
             .try_predict_accent_types(&input_tokens)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        // Vec<u8> の既定変換は bytes になるため、整数リストを明示的に構築する。
+        pyo3::types::PyList::new(py, predictions)
     }
 }
 
@@ -250,7 +269,7 @@ impl KotonohaEngine {
     #[cfg(feature = "cuda")]
     fn try_load_v66_pipeline(
         engine: &mut Engine,
-        bundle_dir: &str,
+        bundle_dir: &std::path::Path,
         variant: &str,
         accent_dict_paths: Option<&[String]>,
     ) -> PyResult<()> {
@@ -259,13 +278,12 @@ impl KotonohaEngine {
                 "unknown model_variant '{variant}'; supported: 'v66_split1'"
             )));
         }
-        let dir = PathBuf::from(bundle_dir);
         let bundle = if let Some(paths) = accent_dict_paths {
             let path_bufs: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
             let path_refs: Vec<&std::path::Path> = path_bufs.iter().map(PathBuf::as_path).collect();
-            ::kotonoha::nn::v66::V66Bundle::from_paths(&dir, &path_refs)
+            ::kotonoha::nn::v66::V66Bundle::from_paths(bundle_dir, &path_refs)
         } else {
-            ::kotonoha::nn::v66::V66Bundle::from_dir(&dir)
+            ::kotonoha::nn::v66::V66Bundle::from_dir(bundle_dir)
         }
         .map_err(|e| {
             let dylib_hint = if std::env::var("ORT_DYLIB_PATH").is_err() {
@@ -277,7 +295,8 @@ impl KotonohaEngine {
                 ""
             };
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to load v66 bundle from {bundle_dir}: {e}{dylib_hint}"
+                "Failed to load v66 bundle from {}: {e}{dylib_hint}",
+                bundle_dir.display()
             ))
         })?;
         let pipeline = ::kotonoha::nn::v66::V66Pipeline::new(bundle);
@@ -288,7 +307,7 @@ impl KotonohaEngine {
     #[cfg(not(feature = "cuda"))]
     fn try_load_v66_pipeline(
         _engine: &mut Engine,
-        _bundle_dir: &str,
+        _bundle_dir: &std::path::Path,
         _variant: &str,
         _accent_dict_paths: Option<&[String]>,
     ) -> PyResult<()> {
@@ -390,9 +409,39 @@ fn convert_tokens(tokens: Vec<PyToken>) -> Vec<InputToken> {
         .collect()
 }
 
+/// モデルの共有先を返す。通信やディレクトリの作成は行わない。
+#[pyfunction]
+fn model_dir() -> PyResult<PathBuf> {
+    ::kotonoha::model::default_model_dir().ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err(
+            "Cannot determine model directory; set KOTONOHA_MODEL_BUNDLE",
+        )
+    })
+}
+
+/// モデルを共有先（または dir）へ取得する。推論時には通信しない。
+#[pyfunction]
+#[pyo3(signature = (dir=None, *, force=false, base_url=None))]
+fn download_models(
+    py: Python<'_>,
+    dir: Option<PathBuf>,
+    force: bool,
+    base_url: Option<String>,
+) -> PyResult<PathBuf> {
+    py.detach(move || {
+        ::kotonoha::model::download(
+            dir.as_deref(),
+            ::kotonoha::model::DownloadOptions { force, base_url },
+        )
+    })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 /// kotonoha Python module
 #[pymodule]
 fn kotonoha(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(model_dir, m)?)?;
+    m.add_function(wrap_pyfunction!(download_models, m)?)?;
     m.add_class::<KotonohaEngine>()?;
     m.add_class::<PyNjdNode>()?;
     Ok(())

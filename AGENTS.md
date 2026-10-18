@@ -31,6 +31,7 @@ Cargoワークスペース構成（resolver v2）:
 | `crf` | CRFアクセント予測器（学習・推論） |
 | `label` | HTS Full-Context Label生成 |
 | `mora` | モーラ処理 |
+| `model` | ONNX モデルの共有先解決・検証付きダウンロード |
 | `njd` | NJD（Normalized Japanese Dictionary）ノード処理 |
 | `nn` | ニューラルアクセント予測器（ONNX、`nn/v66/` に v66 パイプライン） |
 | `phoneme` | 音素定義・操作 |
@@ -76,6 +77,8 @@ hasami が文脈に応じて補正した読みを尊重し、同じ見出し語�
 
 アクセント辞書・結合規則の CSV では、不正なアクセント値や規則を平板型・既定規則へ
 置き換えず、読み込みエラーとして返す。入力検証を緩めないこと。
+結合規則の行は左右の品詞と規則の3列以上を必要とし、列不足を読み飛ばさない。
+品詞階層の優先度は `u8` へ変換する前に検証し、255を超える場合はエラーにする。
 CRF 重みファイルのラベル数は 1〜256 に限り、読み込み時に配列を確保する前に検証する。
 `CrfTrainer::train` は `Result` を返す。空データ、ノード数とラベル数の不一致、
 学習対象外のラベルを検出したら学習を始めずにエラーを返す。CLI の学習 CSV も
@@ -161,12 +164,24 @@ engine = kotonoha.KotonohaEngine(
 predictions = engine.predict_accent_types(tokens)    # list[int]
 ```
 
+`predict_accent_types` は空入力でも `list[int]` を返す。PyO3 は `Vec<u8>` を `bytes` へ
+変換するため、バインディング側で Python の整数リストを明示的に構築する。
+
 `accent_dict_paths` は **bundle 同梱の `accent_dict.csv` の上に後勝ちマージ**
 される (上書きしない)。指定しなくても bundle 同梱辞書は常に使われる。
 
 主要環境変数: `KOTONOHA_MODEL_BUNDLE`, `KOTONOHA_MODEL_VARIANT`,
 `KOTONOHA_MODEL_PATH` (legacy v8)、`ORT_DYLIB_PATH` (必須)。詳細は
 `kotonoha/src/nn/v66/`。
+
+### モデルの共有・取得
+
+`kotonoha model download` と Python の `kotonoha.download_models()` は同じ共有先を使う。
+`KOTONOHA_MODEL_BUNDLE`、`XDG_DATA_HOME/kotonoha/models`、Windows の
+`LOCALAPPDATA/kotonoha/models`、`HOME/.local/share/kotonoha/models` の順に解決する。
+ダウンロード機能はコアの `download` feature、CLI 推論は `cuda` feature が必要。
+推論時は配置済みモデルを参照するだけで通信しない。モデルの固定版と検証値は
+`kotonoha/src/model/manifest.rs`、リリース梱包用の指定は `.github/model-bundle.json` にある。
 
 ## 学習済みモデル
 

@@ -33,6 +33,11 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 - テキストの形態素解析には hasami の `.hsd` 辞書が必要です。トークン列を直接渡す処理は辞書なしで使えます
 
 ONNX 推論にはモデルと ONNX Runtime の共有ライブラリも必要です。`ORT_DYLIB_PATH` にライブラリのパスを指定します。CUDA を使う場合は対応する GPU・ドライバ・実行環境を用意してください。
+GPU 版では ONNX Runtime が必要とする CUDA・cuDNN の共有ライブラリも必要です。
+Windows で `cudnn64_9.dll` などが見つからない場合の確認方法は
+[CUDA Execution Provider の公式ドキュメント](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements)を参照してください。
+
+v66 系の各 ONNX セッションはノード内の実行を1スレッドに固定します。順番に呼ぶモデルごとに CPU のスレッドプールを作らず、短い発話でのスレッドの競合を抑えます。
 
 ## インストール
 
@@ -62,6 +67,62 @@ make install
 ```
 
 `make install` は CLI を `/usr/local/bin` に配置します。配置先は `make install INSTALL_PATH="$HOME/.local/bin"` で変更できます。`make setup` は Python バインディングも `kotonoha-python/.venv` にビルドします。
+
+### モデルの取得・共有
+
+hasami の辞書取得と同様に、モデルをプロジェクト外の共有ディレクトリへ取得できます。
+v66_split1 に必要な 13 ONNX（約 245 MB）とアクセント辞書だけを取得します。
+Git や Git LFS、ONNX Runtime はダウンロードには不要です。
+
+```bash
+kotonoha model download
+kotonoha model path
+kotonoha model download --dir /shared/kotonoha/models
+```
+
+既定の保存先は `~/.local/share/kotonoha/models`、Windows は
+`%LOCALAPPDATA%\kotonoha\models` です。`XDG_DATA_HOME` を設定している場合は
+`$XDG_DATA_HOME/kotonoha/models` を使います。`KOTONOHA_MODEL_BUNDLE` を設定すると、
+取得先と推論時の参照先をまとめて変更できます。`--dir` はその取得の保存先だけを変更します。
+
+```powershell
+$env:KOTONOHA_MODEL_BUNDLE = 'C:\shared\kotonoha\models'
+kotonoha model download
+```
+
+配布元 `owayo/kotonoha-models` は非公開のため、アクセス権のある GitHub 認証が必要です。
+`GH_TOKEN`、`GITHUB_TOKEN`、`gh auth login` で保存した github.com の認証の順に使います。
+取得元のコミット・サイズ・SHA-256 は固定し、検証が済んだファイルだけを配置します。
+検証済みのファイルは再取得せず、途中で失敗した場合も再実行で残りを取得できます。
+中身が異なる既存ファイルはエラーになり、`--force` を付けたときだけ置き換えます。
+`--base-url URL` でミラーも使えます（配布元のファイル名を使用、GitHub 認証は送信しません）。
+
+ONNX 推論を使う CLI は `cuda` feature を有効にしてインストールします。
+`ORT_DYLIB_PATH` を指定すると、`analyze` と `label` は配置済みの共有モデルを使います。
+`--model-bundle DIR` で明示したパスは環境変数・既定の共有先より優先します。
+推論時にモデルを自動ダウンロードすることはありません。
+
+```bash
+cargo install --git https://github.com/owayo/kotonoha --locked --features cuda kotonoha-cli
+kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd
+kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd --model-bundle /shared/kotonoha/models
+```
+
+Python も同じ共有先を使います。`model_bundle`、`KOTONOHA_MODEL_BUNDLE` が未指定で、
+legacy の `model_path` / `KOTONOHA_MODEL_PATH` もなければ、配置済みの共有モデルを検出します。
+独自の保存先を使う場合は、戻り値を `model_bundle` に渡せます。
+
+```python
+import kotonoha
+
+print(kotonoha.model_dir())
+bundle = kotonoha.download_models()  # dir=..., force=True, base_url=... も指定可
+engine = kotonoha.KotonohaEngine(model_bundle=bundle)
+```
+
+Rust から取得する場合は `download` feature を有効にし、
+`kotonoha::model::download(None, Default::default())` を呼びます。
+`default_model_dir()` / `installed_model_dir()` により同じ共有先を参照できます。
 
 ### 辞書の準備
 
@@ -139,6 +200,7 @@ let labels = engine.text_to_labels("今日は良い天気です")?;
 同じ見出し語でも読みが一致しなければ、別の読みのアクセントを流用せず、予測器による推定または既定値を使います。
 アクセント辞書 CSV の `accent_type` は `u8` の整数、アクセント規則 CSV の規則名と数値は
 有効な値を指定してください。不正な値は読み込み時にエラーになります。
+結合規則 CSV の列不足や、品詞階層から計算する優先度が255を超える場合もエラーとして返します。
 
 ### CLI
 
@@ -174,6 +236,7 @@ phone_tones = engine.phone_tones(tokens)
 
 `engine.predict_accent_types(tokens)` は、推論失敗や予測結果の長さの不一致で `RuntimeError` を返します。
 評価処理で辞書値へのフォールバックをモデルの予測として数えないための仕様です。
+戻り値は整数のリスト（`list[int]`）で、空入力では `[]` を返します。
 
 ## クレート構成
 

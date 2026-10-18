@@ -1,8 +1,8 @@
 # 開発と CI で同じツールチェーンを使う。
 [tools]
-rust = { version = "1.98.1", profile = "minimal", components = ["rustfmt", "clippy"] }
+rust = { version = "1.99.0", profile = "minimal", components = ["rustfmt", "clippy"] }
 python = "3.14.7"
-uv = "0.12.19"
+uv = "0.13.0"
 
 [env]
 UV_PYTHON_PREFERENCE = "only-system"
