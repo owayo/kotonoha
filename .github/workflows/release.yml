@@ -189,7 +189,7 @@ jobs:
           if-no-files-found: error
 
   models:
-    name: Package models
+    name: Build and package KNM models
     needs: prepare-release
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
@@ -226,10 +226,12 @@ jobs:
           persist-credentials: false
           lfs: true
 
-      - name: Package and verify models
+      - name: Build KNM models from the pinned source
+        run: cargo run --locked --release -p kotonoha-cli -- model convert --dir model-source --force
+
+      - name: Package and verify the generated KNM models
         run: |
           set -euo pipefail
-          cargo run --locked --release -p kotonoha-cli -- model convert --dir model-source
           python scripts/package_models.py --native --models-dir model-source --source-revision "$(git rev-parse HEAD)"
           cd target/model-release
           sha256sum --check --strict kotonoha-models.tar.gz.sha256
@@ -237,7 +239,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: models
-          path: target/model-release/*
+          path: |
+            target/model-release/kotonoha-models.tar.gz
+            target/model-release/kotonoha-models.tar.gz.sha256
           compression-level: 0
           if-no-files-found: error
 
