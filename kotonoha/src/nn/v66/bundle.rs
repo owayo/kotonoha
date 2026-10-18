@@ -157,6 +157,8 @@ fn load_session(path: &Path) -> Result<Session, BundleError> {
     }
     let session = Session::builder()
         .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?
+        .with_intra_threads(1)
+        .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?
         .with_execution_providers([CUDA::default().build()])
         .map_err(|e| BundleError::SessionBuild(path.to_path_buf(), e.to_string()))?
         .commit_from_file(path)

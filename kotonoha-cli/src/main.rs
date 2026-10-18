@@ -18,6 +18,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// 共有ディレクトリの ONNX モデルを管理する。
+    Model {
+        #[command(subcommand)]
+        command: ModelCommands,
+    },
+
     /// テキストから形態素解析・ラベル生成・韻律抽出まで実行する。
     Analyze {
         /// 解析するテキスト
@@ -30,6 +36,10 @@ enum Commands {
         /// アクセント辞書（CSV）のパス
         #[arg(long)]
         accent_dict: Option<PathBuf>,
+
+        /// ONNX バンドルのパス（環境変数 KOTONOHA_MODEL_BUNDLE、共有先も参照）
+        #[arg(long, value_name = "DIR")]
+        model_bundle: Option<PathBuf>,
 
         /// 出力形式
         #[arg(long, value_enum, default_value_t = AnalyzeFormat::Labels)]
@@ -58,6 +68,10 @@ enum Commands {
     Label {
         /// トークンの JSON 配列（省略時は標準入力から読む）
         tokens_json: Option<String>,
+
+        /// ONNX バンドルのパス（環境変数 KOTONOHA_MODEL_BUNDLE、共有先も参照）
+        #[arg(long, value_name = "DIR")]
+        model_bundle: Option<PathBuf>,
 
         /// 出力形式
         #[arg(long, value_enum, default_value_t = LabelFormat::Labels)]
@@ -114,6 +128,27 @@ enum Commands {
     },
 }
 
+#[derive(Subcommand)]
+enum ModelCommands {
+    /// v66 の 13 ONNX とアクセント辞書を取得する（ONNX Runtime は不要）。
+    Download {
+        /// 保存先（省略時は共有ディレクトリ）
+        #[arg(long, value_name = "DIR")]
+        dir: Option<PathBuf>,
+        /// 既存ファイルも取り直す
+        #[arg(long)]
+        force: bool,
+        /// 配布元ファイルを置いたミラー URL
+        #[arg(long, value_name = "URL")]
+        base_url: Option<String>,
+    },
+    /// モデルの共有先を表示する（通信・作成はしない）。
+    Path {
+        #[arg(long, value_name = "DIR")]
+        dir: Option<PathBuf>,
+    },
+}
+
 #[derive(Clone, ValueEnum)]
 enum AnalyzeFormat {
     Labels,
@@ -140,10 +175,12 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Model { command } => cmd_model(command),
         Commands::Analyze {
             text,
             dict,
             accent_dict,
+            model_bundle,
             format,
             tokens: show_tokens,
         } => cmd_analyze(
@@ -152,12 +189,14 @@ fn main() {
             accent_dict.as_deref(),
             &format,
             show_tokens,
+            model_bundle.as_deref(),
         ),
         Commands::Tokenize { text, dict, format } => cmd_tokenize(&text, &dict, &format),
         Commands::Label {
             tokens_json,
+            model_bundle,
             format,
-        } => cmd_label(tokens_json.as_deref(), &format),
+        } => cmd_label(tokens_json.as_deref(), &format, model_bundle.as_deref()),
         Commands::Bench => cmd_bench(),
         Commands::TrainCrf {
             data,
@@ -182,8 +221,10 @@ fn cmd_analyze(
     accent_dict_path: Option<&std::path::Path>,
     format: &AnalyzeFormat,
     show_tokens: bool,
+    model_bundle: Option<&std::path::Path>,
 ) {
     let mut engine = kotonoha::Engine::with_default_rules();
+    load_model_bundle(&mut engine, model_bundle);
 
     if let Some(path) = dict_path
         && let Err(e) = engine.load_dictionary(path)
@@ -290,7 +331,11 @@ fn cmd_tokenize(text: &str, dict_path: &std::path::Path, format: &TokenizeFormat
     }
 }
 
-fn cmd_label(tokens_json: Option<&str>, format: &LabelFormat) {
+fn cmd_label(
+    tokens_json: Option<&str>,
+    format: &LabelFormat,
+    model_bundle: Option<&std::path::Path>,
+) {
     let json_str = if let Some(json) = tokens_json {
         json.to_string()
     } else {
@@ -311,7 +356,8 @@ fn cmd_label(tokens_json: Option<&str>, format: &LabelFormat) {
         }
     };
 
-    let engine = kotonoha::Engine::with_default_rules();
+    let mut engine = kotonoha::Engine::with_default_rules();
+    load_model_bundle(&mut engine, model_bundle);
 
     match format {
         LabelFormat::Labels => {
@@ -330,6 +376,60 @@ fn cmd_label(tokens_json: Option<&str>, format: &LabelFormat) {
             let symbols = engine.tokens_to_prosody_symbols(&tokens);
             println!("{}", symbols.join(""));
         }
+    }
+}
+
+fn cmd_model(command: ModelCommands) {
+    let result = match command {
+        ModelCommands::Path { dir } => dir
+            .or_else(kotonoha::model::default_model_dir)
+            .ok_or(kotonoha::model::DownloadError::NoDirectory),
+        ModelCommands::Download {
+            dir,
+            force,
+            base_url,
+        } => {
+            eprintln!("Preparing v66 model bundle (13 ONNX + accent dictionary)...");
+            kotonoha::model::download(
+                dir.as_deref(),
+                kotonoha::model::DownloadOptions { force, base_url },
+            )
+        }
+    };
+    match result {
+        Ok(dir) => println!("{}", dir.display()),
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn load_model_bundle(engine: &mut kotonoha::Engine, explicit: Option<&std::path::Path>) {
+    let dir = explicit.map(std::path::Path::to_path_buf).or_else(|| {
+        std::env::var_os("KOTONOHA_MODEL_BUNDLE")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    });
+    #[cfg(feature = "cuda")]
+    let dir = dir.or_else(kotonoha::model::installed_model_dir);
+    let Some(dir) = dir else {
+        return;
+    };
+    #[cfg(feature = "cuda")]
+    {
+        let bundle = kotonoha::nn::v66::V66Bundle::from_dir(&dir).unwrap_or_else(|e| {
+            eprintln!("Error loading model bundle: {e}");
+            std::process::exit(1);
+        });
+        engine
+            .set_contextual_accent_predictor(Box::new(kotonoha::nn::v66::V66Pipeline::new(bundle)));
+    }
+    #[cfg(not(feature = "cuda"))]
+    {
+        let _ = (engine, dir);
+        eprintln!("ONNX inference requires building kotonoha-cli with --features cuda");
+        std::process::exit(1);
     }
 }
 

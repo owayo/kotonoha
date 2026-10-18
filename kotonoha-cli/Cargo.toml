@@ -9,8 +9,15 @@ license.workspace = true
 name = "kotonoha"
 path = "src/main.rs"
 
+[features]
+default = []
+cuda = ["kotonoha/cuda"]
+
 [dependencies]
-kotonoha = { workspace = true }
+kotonoha = { workspace = true, features = ["download"] }
 hasami = { workspace = true, features = ["build"] }
 clap = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.27.0"

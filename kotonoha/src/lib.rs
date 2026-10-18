@@ -6,6 +6,7 @@ pub mod accent_dict;
 pub mod accent_rule;
 pub mod crf;
 pub mod label;
+pub mod model;
 pub mod mora;
 pub mod njd;
 pub mod nn;

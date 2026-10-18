@@ -16,7 +16,7 @@ default = []
 cuda = ["kotonoha/cuda"]
 
 [dependencies]
-kotonoha = { workspace = true }
+kotonoha = { workspace = true, features = ["download"] }
 hasami = { workspace = true }
 pyo3 = { workspace = true }
 
