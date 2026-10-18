@@ -15,7 +15,7 @@ default = []
 # 旧 feature 名を維持する。実行時は外部ランタイム不要の専用 CPU 推論。
 cuda = ["neural"]
 neural = ["dep:matrixmultiply", "dep:libm", "dep:wide"]
-download = ["dep:ureq", "dep:tempfile", "dep:base64"]
+download = ["dep:ureq", "dep:tempfile", "dep:flate2", "dep:tar"]
 
 [dependencies]
 hasami = { workspace = true }
@@ -28,7 +28,8 @@ once_cell = { workspace = true }
 ureq = { version = "3.4.2", optional = true, default-features = false, features = ["rustls", "platform-verifier", "json"] }
 sha2 = { version = "0.11.0" }
 tempfile = { version = "3.27.0", optional = true }
-base64 = { version = "0.23.1", optional = true }
+flate2 = { version = "1.1.10", optional = true }
+tar = { version = "0.4.46", optional = true, default-features = false }
 matrixmultiply = { version = "0.3.11", optional = true }
 libm = { version = "0.2.16", optional = true }
 wide = { version = "1.7.1", optional = true }

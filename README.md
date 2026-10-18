@@ -110,9 +110,8 @@ make install
 ### モデルの取得・共有
 
 hasami の辞書取得と同様に、モデルをプロジェクト外の共有ディレクトリへ取得できます。
-固定版の学習済みモデルを検証して取得し、13 KNM（約 204.5 MB）とアクセント辞書を配置します。
-配布元の固定版 ONNX を一時取得して Rust でオフライン変換するため、初回転送量は約 245 MB です。
-この処理で取得した ONNX 中間ファイルは変換後に除きます。既存の ONNX は保持します。
+Kotonoha の最新安定版 Release から `kotonoha-models.tar.gz` を直接取得し、
+13 KNM（約 204.5 MB）とアクセント辞書を配置します。ONNX の取得・変換は行いません。
 Git や Git LFS、ONNX Runtime はダウンロードには不要です。
 
 ```bash
@@ -131,12 +130,16 @@ $env:KOTONOHA_MODEL_BUNDLE = 'C:\shared\kotonoha\models'
 kotonoha model download
 ```
 
-配布元 `owayo/kotonoha-models` は非公開のため、アクセス権のある GitHub 認証が必要です。
-`GH_TOKEN`、`GITHUB_TOKEN`、`gh auth login` で保存した github.com の認証の順に使います。
-取得元のコミット・サイズ・SHA-256 は固定し、検証が済んだファイルだけを配置します。
-検証済みのファイルは再取得せず、途中で失敗した場合も再実行で残りを取得できます。
-中身が異なる既存ファイルはエラーになり、`--force` を付けたときだけ置き換えます。
-`--base-url URL` でミラーも使えます（配布元のファイル名を使用、GitHub 認証は送信しません）。
+呼び出すたびに最新 Release を確認します。同じアーカイブを配置済みで、全ファイルの整合性も
+確認できた場合はアーカイブの再転送を省きます。正常な管理済み旧版は自動更新し、
+手動で配置・変更したファイルの上書きは `--force` で指定します。
+アーカイブの SHA-256、各ファイルのサイズ・SHA-256、KNM と辞書の読み込みを検証してから置き換えます。
+通信・検証に失敗した場合は既存モデルを保護し、配置途中の失敗では元に戻します。
+
+公開 Release の取得に認証は不要です。API の認証には `GH_TOKEN`、`GITHUB_TOKEN`、
+`gh auth login` の順に利用可能な認証を使えます。添付の取得やミラーへ認証は送りません。
+`--base-url URL` のミラーには `kotonoha-models.tar.gz` と同名の `.sha256` を配置します。
+最新 Release に KNM がなければエラーを返します。既存の ONNX は `model convert` で通信なしに変換できます。
 
 KNM 推論を使う CLI は `neural` feature を有効にしてインストールします。
 `analyze` と `label` は配置済みの共有モデルを使います。

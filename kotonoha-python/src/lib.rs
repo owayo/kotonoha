@@ -428,7 +428,7 @@ fn model_dir() -> PyResult<PathBuf> {
     })
 }
 
-/// モデルを共有先（または dir）へ取得する。推論時には通信しない。
+/// 最新 Release の KNM を共有先（または dir）へ取得・更新する。推論時には通信しない。
 #[pyfunction]
 #[pyo3(signature = (dir=None, *, force=false, base_url=None))]
 fn download_models(

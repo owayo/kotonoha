@@ -41,7 +41,7 @@ fn path_uses_shared_directory_and_explicit_override_without_creating_it() {
 #[test]
 fn download_refuses_to_overwrite_existing_different_model_without_network() {
     let dir = tempfile::tempdir().unwrap();
-    let model = dir.path().join("accent_model_v24.onnx");
+    let model = dir.path().join("teacher.knm");
     std::fs::write(&model, b"existing model").unwrap();
     let output = cli()
         .args(["model", "download", "--dir"])

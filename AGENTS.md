@@ -160,7 +160,9 @@ Release は HSD の公開タグ・サイズ・SHA-256 を固定し、実際の H
 HSD 更新時も KNM の重みは固定した学習元から生成する。辞書の発音補正とニューラルモデルの再学習を混同しない。
 
 既存モデルは `kotonoha model convert --dir <dir>` で通信なしに変換できる。
-`model download` は固定 SHA-256 の既存配布元から取得し、Rust で KNM へ変換する。
+`model download` は Kotonoha の最新安定版 Release から KNM アーカイブを直接取得する。
+毎回最新版を確認し、アーカイブ・マニフェスト・各ファイルを検証する。正常な管理済み旧版は自動更新し、
+手動の変更は `--force` がない限り保護する。ONNX のネットワーク取得へ戻さないこと。
 推論時は KNM の重みだけを読む。ONNX をグラフ実行に使うコードを戻さないこと。
 
 ```python
@@ -191,8 +193,9 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 `KOTONOHA_MODEL_BUNDLE`、`XDG_DATA_HOME/kotonoha/models`、Windows の
 `LOCALAPPDATA/kotonoha/models`、`HOME/.local/share/kotonoha/models` の順に解決する。
 ダウンロード機能はコアの `download` feature、CLI 推論は `neural` feature が必要。
-推論時は配置済みモデルを参照するだけで通信しない。モデルの固定版と検証値は
-`kotonoha/src/model/manifest.rs`、リリース梱包用の指定は `.github/model-bundle.json` にある。
+推論時は配置済みモデルを参照するだけで通信しない。最新 Release の取得は
+`kotonoha/src/model/download/release.rs`、オフライン変換元の固定値は `kotonoha/src/model/manifest.rs`、
+リリース梱包用の指定は `.github/model-bundle.json` にある。
 
 ## 学習済みモデル
 

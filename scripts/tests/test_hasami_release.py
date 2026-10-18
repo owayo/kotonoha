@@ -15,7 +15,12 @@ import hasami_release as hsd
 
 
 def snapshot():
-    """公開資料や私的な入力を使わない、小さい HSD 目録を作る。"""
+    """独立に作成した小さい HSD 目録を作る。
+
+    Returns:
+        検証に使う公開記録の形式を持つ辞書。
+
+    """
     return {
         "schema_version": 1,
         "repository": hsd.UPSTREAM,

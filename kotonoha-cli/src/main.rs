@@ -137,7 +137,7 @@ enum ModelCommands {
         #[arg(long)]
         force: bool,
     },
-    /// 13 モデルを取得して KNM へ変換する（外部ランタイム不要）。
+    /// 最新 Release の KNM を取得・更新する（外部ランタイム不要）。
     Download {
         /// 保存先（省略時は共有ディレクトリ）
         #[arg(long, value_name = "DIR")]
@@ -145,7 +145,7 @@ enum ModelCommands {
         /// 既存ファイルも取り直す
         #[arg(long)]
         force: bool,
-        /// 配布元ファイルを置いたミラー URL
+        /// KNM アーカイブとチェックサムを置いたミラー URL
         #[arg(long, value_name = "URL")]
         base_url: Option<String>,
     },
@@ -399,7 +399,7 @@ fn cmd_model(command: ModelCommands) {
             force,
             base_url,
         } => {
-            eprintln!("Preparing model bundle (13 KNM + accent dictionary)...");
+            eprintln!("Downloading the latest KNM release (13 models + accent dictionary)...");
             kotonoha::model::download(
                 dir.as_deref(),
                 kotonoha::model::DownloadOptions { force, base_url },

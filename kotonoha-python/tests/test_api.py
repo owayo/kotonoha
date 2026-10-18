@@ -185,7 +185,7 @@ class ModelApiTests(unittest.TestCase):
     def test_download_protects_existing_model(self):
         """既存モデルが異なる場合は通信せず、内容を保持する。"""
         with TemporaryDirectory() as tmp:
-            model = Path(tmp) / "accent_model_v24.onnx"
+            model = Path(tmp) / "teacher.knm"
             model.write_bytes(b"existing model")
             with self.assertRaisesRegex(RuntimeError, "--force"):
                 kotonoha.download_models(dir=tmp, base_url="http://127.0.0.1:1")

@@ -28,7 +28,15 @@ MODEL_RELEASE_ASSETS = {
 
 
 def gh_json(endpoint: str, *, missing_ok: bool = False):
-    """GitHub API の JSON を取得する。未公開の Release の 404 だけを許容できる。"""
+    """GitHub API の JSON を取得する。
+
+    Returns:
+        応答 JSON。許容した 404 は None。
+
+    Raises:
+        ValueError: 404 以外の通信・認証エラー。
+
+    """
     result = subprocess.run(["gh", "api", endpoint], capture_output=True, check=False)
     if result.returncode:
         if missing_ok and b"HTTP 404" in result.stderr:
@@ -38,7 +46,15 @@ def gh_json(endpoint: str, *, missing_ok: bool = False):
 
 
 def metadata_asset(repository: str, asset: dict) -> bytes:
-    """小さい公開添付を取得し、サイズと GitHub の SHA-256 を検証する。"""
+    """小さい公開添付を取得して検証する。
+
+    Returns:
+        検証した添付のバイト列。
+
+    Raises:
+        ValueError: 添付が未完成、過大、サイズ・ハッシュ不一致の場合。
+
+    """
     if not 0 < asset["size"] <= MAX_METADATA_BYTES or asset["state"] != "uploaded":
         raise ValueError("Invalid or incomplete metadata asset")
     result = subprocess.run(
@@ -64,7 +80,15 @@ def metadata_asset(repository: str, asset: dict) -> bytes:
 
 
 def validate_snapshot(snapshot: dict) -> dict:
-    """版・ファイル名・ハッシュを検証し、HSD の公開目録を返す。通信は行わない。"""
+    """版・ファイル名・ハッシュを通信せずに検証する。
+
+    Returns:
+        検証した HSD の公開目録。
+
+    Raises:
+        ValueError: 公開版、ファイル名、サイズ、ハッシュが不正な場合。
+
+    """
     tag = snapshot["tag"]
     if (
         snapshot["schema_version"] != 1
@@ -96,7 +120,15 @@ def validate_snapshot(snapshot: dict) -> dict:
 
 
 def published_snapshot(tag: str = "") -> dict:
-    """hasami の安定版 Release と公開済みの HSD 添付を照合して固定する。"""
+    """Hasami の安定版 Release と公開済みの HSD 添付を照合する。
+
+    Returns:
+        公開タグ、目録とその SHA-256 を固定した記録。
+
+    Raises:
+        ValueError: タグが不正、未公開、目録と添付が不一致の場合。
+
+    """
     if tag and not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
         raise ValueError("Invalid hasami tag")
     endpoint = f"repos/{UPSTREAM}/releases/" + (f"tags/{tag}" if tag else "latest")
@@ -125,7 +157,12 @@ def published_snapshot(tag: str = "") -> dict:
 
 
 def dictionary_identity(snapshot: dict) -> tuple:
-    """公開タグや圧縮方法が変わっても、同じ HSD を重複公開しないための識別値。"""
+    """HSD の内容に基づく識別値を作る。
+
+    Returns:
+        形式、推奨辞書、各辞書のサイズ・SHA-256 の組。
+
+    """
     catalog = validate_snapshot(snapshot)
     return (
         catalog["format_version"],
@@ -137,13 +174,26 @@ def dictionary_identity(snapshot: dict) -> tuple:
 
 
 def rebuild_required(candidate: dict, released: dict | None) -> bool:
-    """最後に公開できたモデルとの比較で、失敗したビルドは次回も再試行する。"""
+    """最後に公開できたモデルと比較する。
+
+    Returns:
+        初回または HSD に変更がある場合は True。失敗したビルドは処理済みにしない。
+
+    """
     identity = dictionary_identity(candidate)
     return released is None or identity != dictionary_identity(released)
 
 
 def last_model_snapshot(repository: str) -> dict | None:
-    """Kotonoha の最新公開 Release に添付した HSD の記録を読む。"""
+    """Kotonoha の最新公開 Release に添付した HSD の記録を読む。
+
+    Returns:
+        全添付が揃った Release の記録。初回・添付途中は None。
+
+    Raises:
+        ValueError: リポジトリ名または公開記録が不正な場合。
+
+    """
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Invalid model repository")
     release = gh_json(f"repos/{repository}/releases/latest", missing_ok=True)
@@ -163,7 +213,12 @@ def last_model_snapshot(repository: str) -> dict | None:
 
 
 def verify_dictionary(path: Path, entry: dict) -> bool:
-    """辞書の実体を公開目録のサイズ・SHA-256 と照合する。"""
+    """辞書の実体を公開目録と照合する。
+
+    Returns:
+        サイズ・SHA-256 が一致するファイルがあれば True。
+
+    """
     if not path.is_file() or path.stat().st_size != entry["size"]:
         return False
     with path.open("rb") as stream:
@@ -171,7 +226,15 @@ def verify_dictionary(path: Path, entry: dict) -> bool:
 
 
 def download_dictionary(snapshot: dict, output: Path) -> Path:
-    """推奨 HSD を固定タグから取得して検証する。既存の異なるファイルは保護する。"""
+    """推奨 HSD を固定タグから取得して検証する。
+
+    Returns:
+        取得または再利用した検証済み HSD のパス。
+
+    Raises:
+        ValueError: 既存ファイルが異なる、取得物の検証が失敗した場合。
+
+    """
     catalog = validate_snapshot(snapshot)
     entry = next(
         e for e in catalog["dictionaries"] if e["name"] == catalog["recommended"]
