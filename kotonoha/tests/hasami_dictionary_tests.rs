@@ -4,6 +4,63 @@ use hasami::dict::{DictBuilder, DictEntry};
 use kotonoha::Engine;
 use kotonoha::njd::InputToken;
 
+#[test]
+#[ignore = "KOTONOHA_TEST_DICT に監査済みの配布辞書を指定する"]
+fn distributed_kana_boundaries_reach_pronunciation_and_labels() {
+    let path = std::env::var("KOTONOHA_TEST_DICT").expect("KOTONOHA_TEST_DICT is required");
+    let mut engine = Engine::default();
+    engine.load_dictionary(std::path::Path::new(&path)).unwrap();
+    for (text, expected) in [
+        ("髙", "タカ"),
+        ("進化形", "シンカケイ"),
+        ("もうすでに", "モオスデニ"),
+        ("くがつよっか", "クガツヨッカ"),
+        ("くがつはつか", "クガツハツカ"),
+        ("みっか", "ミッカ"),
+        ("むいか", "ムイカ"),
+        ("三がつついたちから", "サンガツツイタチカラ"),
+        ("塩はつかわない", "シオワツカワナイ"),
+        ("いっかいは", "イッカイワ"),
+        ("よじ", "ヨジ"),
+        ("二かい", "ニカイ"),
+        ("十二こ", "ジュウニコ"),
+    ] {
+        let mut nodes = engine.text_to_analyze(text).unwrap();
+        assert_eq!(
+            nodes
+                .iter()
+                .map(|n| n.pronunciation.as_str())
+                .collect::<String>(),
+            expected,
+            "{text}"
+        );
+        for node in &nodes {
+            assert_eq!(
+                node.mora_count,
+                kotonoha::mora::parse_mora(&node.pronunciation).len(),
+                "{text}"
+            );
+        }
+        let phrases = engine.estimate_accent(&mut nodes);
+        assert_eq!(
+            phrases.iter().map(|p| p.mora_count).sum::<usize>(),
+            kotonoha::mora::count_mora(expected)
+        );
+        let phones = engine.extract_phone_tones(&nodes, &phrases);
+        let labels = engine.make_label(&nodes, &phrases);
+        assert_eq!(phones.len(), labels.len(), "{text}");
+        assert_eq!(
+            phones
+                .iter()
+                .filter(|p| !matches!(p.phone.as_str(), "sil" | "pau"))
+                .map(|p| p.phone.as_str())
+                .collect::<Vec<_>>(),
+            kotonoha::phoneme::katakana_to_phonemes(expected)
+        );
+        assert!(!engine.text_to_prosody_symbols(text).unwrap().is_empty());
+    }
+}
+
 fn analyzer() -> hasami::Analyzer {
     let mut builder = DictBuilder::new();
     for (surface, lemma, reading, ctype, cform, pos) in [
