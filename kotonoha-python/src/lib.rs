@@ -2,8 +2,32 @@
 
 use ::kotonoha::Engine;
 use ::kotonoha::njd::{InputToken, NjdNode};
+use ::kotonoha::normalizer::DictionaryNormalizer as RustDictionaryNormalizer;
 use pyo3::prelude::*;
 use std::path::PathBuf;
+
+/// 辞書にある記号付き語を発音表記へ写す。モデルは読み込まない。
+#[pyclass]
+struct DictionaryNormalizer {
+    inner: RustDictionaryNormalizer,
+}
+
+#[pymethods]
+impl DictionaryNormalizer {
+    #[new]
+    fn new(dict_path: PathBuf, symbols: &str) -> PyResult<Self> {
+        RustDictionaryNormalizer::load(dict_path, symbols)
+            .map(|inner| Self { inner })
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// 既知の記号付き語だけを辞書の発音で置換し、括弧と他の入力を保持する。
+    fn normalize(&mut self, text: &str) -> PyResult<String> {
+        self.inner
+            .normalize(text)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+}
 
 /// Python用エンジンラッパー
 #[pyclass]
@@ -443,6 +467,7 @@ fn kotonoha(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(model_dir, m)?)?;
     m.add_function(wrap_pyfunction!(download_models, m)?)?;
     m.add_class::<KotonohaEngine>()?;
+    m.add_class::<DictionaryNormalizer>()?;
     m.add_class::<PyNjdNode>()?;
     Ok(())
 }

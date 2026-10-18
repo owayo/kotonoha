@@ -151,6 +151,18 @@ class EngineApiTests(unittest.TestCase):
                     getattr(self.engine, method)("猫")
 
 
+class DictionaryNormalizerApiTests(unittest.TestCase):
+    """モデルを起動せず辞書読み込みの失敗を明示する。"""
+
+    def test_missing_dictionary_is_an_error(self):
+        """文字列と Path のどちらも読み込みエラーを返す。"""
+        with TemporaryDirectory() as tmp:
+            for path in (str(Path(tmp) / "missing.hsd"), Path(tmp) / "missing.hsd"):
+                with self.subTest(path=path):
+                    with self.assertRaises(RuntimeError):
+                        kotonoha.DictionaryNormalizer(path, symbols="+#")
+
+
 class ModelApiTests(unittest.TestCase):
     """共有モデルのパス解決と既存ファイル保護を確認する。"""
 

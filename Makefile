@@ -51,7 +51,7 @@ test: test-python test-release ## テストを実行する
 test-python: ## Python バインディングの公開 API を検査する
 	$(RUN) uv run --locked --project kotonoha-python python -m unittest discover -s kotonoha-python/tests -v
 
-test-release: ## モデル配布物の検証・梱包を検査する
+test-release: ## リリースの採番・モデル配布物を検査する
 	$(RUN) python -m unittest discover -s scripts/tests -v
 
 lint: ## clippy を警告ゼロで通す

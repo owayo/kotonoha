@@ -49,7 +49,42 @@ v66 系の各 ONNX セッションはノード内の実行を1スレッドに固
 cargo add kotonoha --git https://github.com/owayo/kotonoha
 ```
 
+### 記号付きの既知語を前処理から保護する
+
+記号を算術の読みへ変えたり削除したりする前に、`normalizer::DictionaryNormalizer` を使えます。
+記号を含む既知語だけを hasami 辞書の発音へ写し、未知語・数式・識別子内部・数字から始まる語は変更しません。
+利用側が変換・削除する記号を `symbols` に指定します。指定外の記号語は変更せず、
+括弧を含まない原形へ正規化された記号注記は、指定にかかわらず辞書の読みで保護します。
+単なる顔文字の分類名などを読み上げへ展開しないため、括弧のままの原形は対象にしません。
+外側の丸括弧・角括弧は残します。語の読みはコードに列挙せず、指定した `.hsd` に従います。
+数字・字幅・句読点の正規化や、注記を省略するなどの演出は行いません。
+`Engine::text_to_*` へは元のテキストを渡せるため、この処理は利用側の前処理が必要な場合だけ使います。
+
+```python
+from kotonoha import DictionaryNormalizer
+
+normalizer = DictionaryNormalizer("ipadic-neologd-sudachi.hsd", symbols="+#")
+text = normalizer.normalize("C++とC#")
+```
+
+ONNX モデルや ONNX Runtime は不要です。Rust では `DictionaryNormalizer::load(path, symbols)`、
+メモリ上の辞書では `DictionaryNormalizer::from_dictionary(dictionary, symbols)` を使います。
+
 ### CLI
+
+[Releases](https://github.com/owayo/kotonoha/releases) から OS・CPU に対応するアーカイブを取得し、
+展開した `kotonoha`（Windows は `kotonoha.exe`）を PATH の通った場所に配置します。
+`SHA256SUMS` で各添付の SHA-256 を検証できます。配布 CLI は ONNX 推論に対応しています。
+
+| OS | CPU | 添付ファイル |
+|---|---|---|
+| Linux | x64 | `kotonoha-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux | ARM64 | `kotonoha-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS | Apple Silicon | `kotonoha-aarch64-apple-darwin.tar.gz` |
+| macOS | Intel | `kotonoha-x86_64-apple-darwin.tar.gz` |
+| Windows | x64 | `kotonoha-x86_64-pc-windows-msvc.zip` |
+
+Cargo からインストールする場合は次を実行します。ONNX 推論も使う場合は `--features cuda` を付けます。
 
 ```bash
 cargo install --git https://github.com/owayo/kotonoha --locked kotonoha-cli
@@ -283,26 +318,37 @@ make ci
 | `make fmt` / `make fmt-check` | 整形 / 書き換えずに整形を確認 |
 | `make setup-training` | 学習・評価用 Python 依存を取得 |
 
-`make` で全ターゲットを表示します。CI は Linux・macOS で `make setup` と `make ci`、Windows で同じ Rust/Python テストとビルドを実行します。モデルを必要とする推論の一致テストは `ORT_DYLIB_PATH` と `V66_BUNDLE_DIR` がある環境で実行します。
+`make` で全ターゲットを表示します。CI は Linux・macOS で `make setup` と `make ci`、Windows で同じ Rust/Python テストを実行し、配布する5ターゲットの CLI を ONNX 推論を有効にしてビルドします。モデルを必要とする推論の一致テストは `ORT_DYLIB_PATH` と `V66_BUNDLE_DIR` がある環境で実行します。
 
 学習環境は通常の `make setup` に含めません。macOS は CPU 版 ONNX Runtime と PyPI の PyTorch、Linux・Windows は GPU 版 ONNX Runtime と CUDA 12.6 向け PyTorch を取得します。学習スクリプトごとの GPU 要件は [training/README.md](training/README.md) を確認してください。
 
-### リリースへのモデル添付
+### リリース
 
-GitHub Release を公開すると、[Release models](.github/workflows/release.yml) がそのタグの
-`.github/model-bundle.json` に固定したモデルを取得・検証し、モデルバンドルとチェックサムを自動添付します。
-取得するファイルが欠けている、Git LFS のポインタのまま、または SHA-256 が一致しない場合は失敗します。
-添付後にも再ダウンロードしてチェックサムを確認します。
+Actions の [Release](.github/workflows/release.yml) → **Run workflow** を既定ブランチから実行すると、
+hasami と同じく次の処理をまとめて行います。
+
+1. JST の `yy.m.counter` で採番します。同じ年月では連番を増やし、年月が変わると100から始めます。
+2. Rust ワークスペースと Python パッケージの版・lockfile を更新し、コミットと `v<version>` タグを同時に push します。
+3. 同じタグから5ターゲットの CLI をビルドし、モデル配布物を生成します。
+4. バイナリ5個、`kotonoha-models-v66.tar.gz`、その `.sha256`、全添付用の `SHA256SUMS` を Release に添付して公開します。
+5. 公開した添付の名前・サイズ・状態を確認し、再ダウンロードして全ファイルの SHA-256 を照合します。
+
+モデル配布物は、そのタグの `.github/model-bundle.json` に固定した学習済み ONNX と辞書から作ります。
+学習はリリース処理に含みません。入力の欠損・Git LFS ポインタ・SHA-256 不一致を検出すると失敗します。
+CLI とモデルは並列に生成し、すべて成功してから Release を作成します。各ジョブの結果は Actions の Summary に残ります。
 
 初回のみ、非公開の `owayo/kotonoha-models` に読み取り専用の deploy key を登録し、
 その秘密鍵を kotonoha の Actions secret `KOTONOHA_MODELS_READ_KEY` に設定してください。
 モデルを更新するときは `.github/model-bundle.json` のコミット・ファイル一覧・サイズ・SHA-256 も更新します。
 
-Actions の **Release models → Run workflow** から手動実行もできます。
-`dry_run=true`（既定）なら、選んだブランチで梱包・検証し、`models` artifact に保存します。
-`tag` を指定すると既存リリースのタグを使います。既存リリースへ添付する場合は `tag` を指定して
-`dry_run=false` にします。同名のモデル添付は置き換えます。
-リリースのタグと本文は GitHub の **Create a new release** から作成して公開します。
+Actions には、既定ブランチへのコミット・タグの push と Release 作成ができる `GITHUB_TOKEN` の権限が必要です。
+ブランチ保護で bot の push を制限している場合は、リポジトリのルールで許可してください。
+
+`dry_run=true` を選ぶと、任意のブランチで採番・メタデータ更新・タグの重複確認だけを試せます。
+コミット・push・タグ・バイナリ・モデル配布物・Release は作りません。モデル取得用の秘密鍵も不要です。
+通常の実行（`dry_run=false`、既定）は既定ブランチに限定しています。
+ビルド・モデル生成・添付の検証が失敗した場合は、同じ実行の失敗したジョブを再実行できます。
+添付を再実行するときは、同じタグの Release にある同名ファイルを置き換えます。
 
 ローカルでも、Git LFS の実体を取得したモデルリポジトリから同じ配布物を作れます。
 

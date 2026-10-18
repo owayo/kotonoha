@@ -1,67 +1,210 @@
-name: Release models
+# Run workflow 1 回で、採番・タグ作成、CLI のビルド、モデル配布物の生成、Release 公開を行う。
+# dry_run は採番とメタデータ更新の確認だけを行い、コミット・タグ・配布物を作らない。
+name: Release
 
-# GitHub の Release 公開時に、同じタグのモデル指定から添付を作る。
-# workflow_dispatch は既存リリースへの添付、または公開せず梱包だけを試すための入口。
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Existing release tag (optional for dry run on the selected branch)"
-        type: string
-        default: ""
       dry_run:
-        description: "Package and verify only; do not upload to a release"
+        description: "Dry run (compute the next version only; no commit, tag or release)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-models-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  group: release
   cancel-in-progress: false
 
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: kotonoha
+
 jobs:
-  models:
-    name: Package models
+  prepare-release:
+    name: Prepare release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    permissions:
+      contents: write
     outputs:
-      tag: ${{ steps.source.outputs.tag }}
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
     steps:
-      - name: Resolve the release source
-        id: source
+      - name: Check release prerequisites
+        if: ${{ !inputs.dry_run }}
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name || inputs.tag }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           MODELS_READ_KEY: ${{ secrets.KOTONOHA_MODELS_READ_KEY }}
         run: |
           set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::Run the release from $DEFAULT_BRANCH (this run is on $GITHUB_REF)"
+            exit 1
+          fi
           if [ -z "$MODELS_READ_KEY" ]; then
             echo "::error::Set KOTONOHA_MODELS_READ_KEY to a read-only deploy key for owayo/kotonoha-models"
             exit 1
           fi
-          if [ "$DRY_RUN" != "true" ] && [ -z "$TAG" ]; then
-            echo "::error::An existing release tag is required when dry_run is false"
-            exit 1
-          fi
-          if [ -n "$TAG" ]; then
-            # dry run でも、指定したタグは既存リリースから解決する。
-            gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName > "$RUNNER_TEMP/release.json"
-            TAG=$(jq -r .tagName "$RUNNER_TEMP/release.json")
-            echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v7
         with:
-          ref: ${{ steps.source.outputs.ref }}
+          ref: ${{ github.sha }}
+
+      - uses: jdx/mise-action@v4
+        with:
+          minimum_release_age: 14d
+          cache: false
+          install_args: rust python uv
+
+      - name: Test release preparation and model packaging
+        run: python -m unittest discover -s scripts/tests -v
+
+      - name: Bump the version
+        id: bump
+        run: |
+          set -euo pipefail
+          python scripts/prepare_release.py >> "$GITHUB_OUTPUT"
+          # 依存を全更新せず、ワークスペースと Python プロジェクトの版だけを追従する。
+          cargo update --workspace
+          uv lock --project kotonoha-python
+          git diff --stat
+
+      - name: Check the tag is unused
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          status=0
+          git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "::error::Tag $TAG already exists. Check the version in Cargo.toml"
+            exit 1
+          elif [ "$status" -ne 2 ]; then
+            echo "::error::Failed to check the remote tags"
+            exit "$status"
+          fi
+
+      - name: Commit and tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock kotonoha-python/pyproject.toml kotonoha-python/uv.lock
+          git commit -m "Release $TAG"
+          git tag -a "$TAG" -m "Release $TAG"
+          # 既定ブランチが進んでいたら、タグも含めて push 全体を失敗させる。
+          git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$TAG"
+
+      - name: Dry run
+        if: ${{ inputs.dry_run }}
+        env:
+          TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          echo "Dry run: would release $TAG (no commit, tag or release)"
+          git diff -- Cargo.toml Cargo.lock kotonoha-python/pyproject.toml kotonoha-python/uv.lock
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: prepare-release
+    if: ${{ !inputs.dry_run }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # ci.yml の build と同じ組。Linux ARM64 はネイティブでビルドする。
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - name: Keep LF line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
           persist-credentials: false
+
+      # 配布物にはビルドキャッシュを使わない。ツールの版は mise.toml に合わせる。
+      - uses: jdx/mise-action@v4
+        with:
+          minimum_release_age: 14d
+          cache: false
+          install_args: rust
+
+      - name: Add the Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build with ONNX inference
+        run: cargo build --release --locked -p kotonoha-cli --features cuda --target ${{ matrix.target }}
+
+      - name: Smoke test and package
+        id: package
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          binary="$BINARY_NAME"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            binary="$binary.exe"
+          fi
+          # クロスビルドした macOS x64 以外は、配布する実体で起動と版を確認する。
+          if [ "$(rustc -vV | sed -n 's/^host: //p')" = "$TARGET" ]; then
+            "target/$TARGET/release/$binary" --version | grep -Fx "$BINARY_NAME $VERSION"
+            "target/$TARGET/release/$binary" --help
+          fi
+          mkdir package
+          cp "target/$TARGET/release/$binary" LICENSE package/
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            asset="$BINARY_NAME-$TARGET.zip"
+            (cd package && 7z a "../$asset" "$binary" LICENSE)
+          else
+            asset="$BINARY_NAME-$TARGET.tar.gz"
+            tar -czf "$asset" -C package "$binary" LICENSE
+          fi
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      # artifact 自体の ZIP と配布用アーカイブを分け、Windows の ZIP も保持する。
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.target }}
+          path: ${{ steps.package.outputs.asset }}
+          compression-level: 0
+          if-no-files-found: error
+
+  models:
+    name: Package models
+    needs: prepare-release
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
+          persist-credentials: false
+
+      - uses: jdx/mise-action@v4
+        with:
+          minimum_release_age: 14d
+          cache: false
+          install_args: python
 
       - name: Read the pinned model source
         id: models
@@ -70,7 +213,7 @@ jobs:
           lock=.github/model-bundle.json
           echo "repository=$(jq -r .repository "$lock")" >> "$GITHUB_OUTPUT"
           echo "revision=$(jq -r .revision "$lock")" >> "$GITHUB_OUTPUT"
-          # 全実験モデルを取得せず、配布する ONNX の LFS オブジェクトだけを取得する。
+          # 全実験モデルではなく、配布する ONNX の LFS オブジェクトだけを取得する。
           git config --global lfs.fetchinclude "$(jq -r '[.files[].file] | join(",")' "$lock")"
 
       - name: Checkout the private models with Git LFS
@@ -86,7 +229,7 @@ jobs:
       - name: Package and verify models
         run: |
           set -euo pipefail
-          python3 scripts/package_models.py --models-dir model-source --source-revision "$(git rev-parse HEAD)"
+          python scripts/package_models.py --models-dir model-source --source-revision "$(git rev-parse HEAD)"
           cd target/model-release
           sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
 
@@ -97,45 +240,133 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-      - name: Summary
-        env:
-          TAG: ${{ steps.source.outputs.tag }}
-          MODEL_REVISION: ${{ steps.models.outputs.revision }}
-        run: |
-          {
-            echo "## Model bundle ${TAG}"
-            echo
-            echo "Source: owayo/kotonoha-models at ${MODEL_REVISION}"
-            echo
-            echo '13 ONNX models, the JSUT dictionary, and a merged accent_dict.csv are in the models artifact.'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  attach:
-    name: Attach models to the release
-    needs: models
-    if: ${{ github.event_name == 'release' || !inputs.dry_run }}
+  release:
+    name: Release
+    needs: [prepare-release, build, models]
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
+    outputs:
+      assets: ${{ steps.files.outputs.assets }}
     steps:
-      - uses: actions/download-artifact@v8
+      - name: Download binary archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: release
+          merge-multiple: true
+
+      - name: Download models
+        uses: actions/download-artifact@v8
         with:
           name: models
           path: release
 
-      - name: Upload and verify the published files
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.models.outputs.tag }}
+      - name: Verify and checksum the release files
+        id: files
         run: |
           set -euo pipefail
+          expected=(
+            kotonoha-x86_64-unknown-linux-gnu.tar.gz
+            kotonoha-aarch64-unknown-linux-gnu.tar.gz
+            kotonoha-aarch64-apple-darwin.tar.gz
+            kotonoha-x86_64-apple-darwin.tar.gz
+            kotonoha-x86_64-pc-windows-msvc.zip
+            kotonoha-models-v66.tar.gz
+            kotonoha-models-v66.tar.gz.sha256
+          )
+          diff -u <(printf '%s\n' "${expected[@]}" | LC_ALL=C sort) \
+            <(find release -type f -printf '%f\n' | LC_ALL=C sort)
           cd release
           sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
-            kotonoha-models-v66.tar.gz kotonoha-models-v66.tar.gz.sha256
-          # API の応答だけでなく、再ダウンロードした添付の SHA-256 まで照合する。
-          mkdir downloaded
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'kotonoha-models-v66.tar.gz*' --dir downloaded
-          cmp kotonoha-models-v66.tar.gz.sha256 downloaded/kotonoha-models-v66.tar.gz.sha256
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          echo "assets=$(printf '%s ' *)" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          ## CLI
+
+          Download `kotonoha-<target>.tar.gz` for your platform (`.zip` on Windows), extract it and put `kotonoha` on your PATH. All binaries support ONNX inference. `SHA256SUMS` lists the checksums of the release assets.
+
+          ## Models
+
+          Verify `kotonoha-models-v66.tar.gz.sha256` and extract `kotonoha-models-v66.tar.gz`. Set `KOTONOHA_MODEL_BUNDLE` to the extracted `kotonoha-models/` directory.
+
+          The bundle contains 13 trained ONNX models, a merged `accent_dict.csv`, the source `accent_dict_jsut.csv`, and `models.json` with source revisions and SHA-256 checksums.
+
+          Install ONNX Runtime separately and set `ORT_DYLIB_PATH` to its shared library. Text analysis also requires a hasami `.hsd` dictionary, supplied with `--dict`.
+          EOF
+          # 添付や公開後の検証で失敗したジョブも、同じタグで再実行できるようにする。
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber release/*
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "$TAG" --generate-notes --notes-file "$RUNNER_TEMP/release-notes.md" release/*
+          fi
+
+      - name: Verify the published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets > "$RUNNER_TEMP/assets.json"
+          find release -type f -printf '%f %s uploaded\n' | LC_ALL=C sort > "$RUNNER_TEMP/expected.txt"
+          jq -r '.assets[] | "\(.name) \(.size) \(.state)"' "$RUNNER_TEMP/assets.json" \
+            | LC_ALL=C sort > "$RUNNER_TEMP/published.txt"
+          diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/published.txt"
+          # 公開した実体を再取得し、モデルだけでなくバイナリも SHA-256 で照合する。
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir downloaded
+          cmp release/SHA256SUMS downloaded/SHA256SUMS
           cd downloaded
+          sha256sum --check --strict SHA256SUMS
           sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
+
+  release-summary:
+    name: Release summary
+    needs: [prepare-release, build, models, release]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the summary
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+          PREPARE_RESULT: ${{ needs.prepare-release.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          MODELS_RESULT: ${{ needs.models.result }}
+          RELEASE_RESULT: ${{ needs.release.result }}
+          ASSETS: ${{ needs.release.outputs.assets }}
+        run: |
+          {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "## Dry run: ${TAG:-no version}"
+              echo
+              echo "prepare-release: $PREPARE_RESULT. Nothing was committed, tagged or released; builds and model packaging were skipped."
+            else
+              echo "## ${TAG:-no version}"
+              echo
+              echo '| Job | Result |'
+              echo '|---|---|'
+              echo "| prepare-release | $PREPARE_RESULT |"
+              echo "| build | $BUILD_RESULT |"
+              echo "| models | $MODELS_RESULT |"
+              echo "| release | $RELEASE_RESULT |"
+              if [ -n "$ASSETS" ]; then
+                echo
+                echo "Assets: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+                read -r -a assets <<< "$ASSETS"
+                for asset in "${assets[@]}"; do
+                  printf -- '- `%s`\n' "$asset"
+                done
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

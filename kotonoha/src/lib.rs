@@ -10,6 +10,7 @@ pub mod model;
 pub mod mora;
 pub mod njd;
 pub mod nn;
+pub mod normalizer;
 pub mod phoneme;
 pub mod prosody;
 
