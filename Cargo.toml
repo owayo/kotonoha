@@ -15,14 +15,14 @@ readme-languages = ["ja"]
 [workspace.dependencies]
 kotonoha = { path = "kotonoha" }
 hasami = { git = "https://github.com/owayo/hasami", rev = "b86ea350936172e2bc9745f735b4a7960fc32d3c", default-features = false, features = ["analyzer"] }
-pyo3 = { version = "0.29.2", features = ["extension-module"] }
+pyo3 = { version = "0.29.3", features = ["extension-module"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = "1.0.152"
 csv = "1.4.0"
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 rayon = "1.12.0"
 once_cell = "1.21.4"
-encoding_rs = "0.8.41"
+encoding_rs = "0.8.42"
 glob = "0.3.4"
 memmap2 = "0.9.11"
 bytemuck = { version = "1.25.2", features = ["derive"] }
