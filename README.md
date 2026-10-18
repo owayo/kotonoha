@@ -27,7 +27,7 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 
 ## 動作環境
 
-- Rust 1.98 以上と、OS に対応する C/C++ ビルドツール
+- ソースからのビルドには Rust 1.98 以上と、OS に対応する C/C++ ビルドツールが必要です
 - 開発用ツールの管理には [mise](https://mise.jdx.dev/)。Rust・Python・uv の版は `mise.toml` に固定しています
 - Python バインディングは Python 3.9 以上。通常の開発・CI は Python 3.14 を使います
 - テキストの形態素解析には hasami の `.hsd` 辞書が必要です。トークン列を直接渡す処理は辞書なしで使えます
@@ -78,7 +78,7 @@ ONNX モデルや ONNX Runtime は不要です。Rust では `DictionaryNormaliz
 
 [Releases](https://github.com/owayo/kotonoha/releases) から OS・CPU に対応するアーカイブを取得し、
 展開した `kotonoha`（Windows は `kotonoha.exe`）を PATH の通った場所に配置します。
-`SHA256SUMS` で各添付の SHA-256 を検証できます。配布 CLI は専用 KNM 推論に対応しています。
+`SHA256SUMS` で各添付の SHA-256 を検証できます。KNM 対応版の配布 CLI は専用 CPU 推論を有効にしてビルドしています。
 
 | OS | CPU | 添付ファイル |
 |---|---|---|
@@ -88,11 +88,13 @@ ONNX モデルや ONNX Runtime は不要です。Rust では `DictionaryNormaliz
 | macOS | Intel | `kotonoha-x86_64-apple-darwin.tar.gz` |
 | Windows | x64 | `kotonoha-x86_64-pc-windows-msvc.zip` |
 
-Cargo からインストールする場合は次を実行します。専用ニューラル推論も使う場合は `--features neural` を付けます。
+Cargo から KNM 推論に対応する CLI をインストールする場合は次を実行します。
 
 ```bash
-cargo install --git https://github.com/owayo/kotonoha --locked kotonoha-cli
+cargo install --git https://github.com/owayo/kotonoha --locked --features neural kotonoha-cli
 ```
+
+ルール処理だけを使う場合は `--features neural` を省けます。モデルの取得はどちらのビルドでも使えます。
 
 ### ソースから
 
@@ -105,7 +107,10 @@ make setup
 make install
 ```
 
-`make install` は CLI を `/usr/local/bin` に配置します。配置先は `make install INSTALL_PATH="$HOME/.local/bin"` で変更できます。`make setup` は Python バインディングも `kotonoha-python/.venv` にビルドします。
+`make install` はルール処理用 CLI を `/usr/local/bin` に配置します。配置先は `make install INSTALL_PATH="$HOME/.local/bin"` で変更できます。
+KNM 推論用の CLI は `make build-neural` で生成した `target/release/kotonoha` を使うか、上記の Cargo インストールを使います。
+`make setup` は KNM 推論を有効にした Python バインディングも `kotonoha-python/.venv` にビルドします。
+Makefile は POSIX シェル用です。Windows では Cargo のコマンドを直接実行できます。
 
 ### モデルの取得・共有
 
@@ -170,7 +175,19 @@ Rust から取得する場合は `download` feature を有効にし、
 
 ### 辞書の準備
 
-hasami で作成した `.hsd` 辞書を `--dict` に指定できます。IPAdic から作る場合は、同梱のスクリプトを使います。
+テキスト解析には hasami の `.hsd` 辞書を `--dict`（Python は `dict_path`）へ指定します。
+モデル Release に添付・同梱された `hasami-dictionaries.json` に、検証した hasami のタグ、
+推奨辞書、各辞書のサイズ・SHA-256 を記録しています。
+そのタグの [hasami Release](https://github.com/owayo/hasami/releases) から対応する `.hsd` を取得してください。
+HSD 本体は KNM アーカイブには含まれず、`model download` でも取得しません。
+
+ソースのチェックアウトから、記録済みの推奨 HSD を取得・検証する場合は次を使えます（Python 3.12 以上と GitHub CLI が必要）。
+
+```bash
+python scripts/hasami_release.py download --snapshot .github/hasami-dictionaries.json --output-dir target/hsd-release
+```
+
+IPAdic だけの辞書を自分で作る場合は、同梱のスクリプトを使います。
 
 ```bash
 mise exec -- bash scripts/setup_dict.sh
@@ -195,17 +212,22 @@ tar -xzf kotonoha-models.tar.gz
 `KOTONOHA_MODEL_BUNDLE` に指定します。推論に必要な 13 個の KNM、
 `data/accent_dict.csv` に JSUT 辞書を後勝ちでマージした `accent_dict.csv`、
 元の `accent_dict_jsut.csv` を同梱しています。`models.json` には取得元コミットと各ファイルの
-SHA-256 を記録します。既存の ONNX ディレクトリは、次のコマンドで変換できます。
-元ファイルは保持されます。
+サイズ・SHA-256、`hasami-dictionaries.json` には検証した HSD の情報を記録します。
 
 KNM は `accent.knm`、`teacher.knm`、`student-01.knm`〜`student-09.knm`、
 `meta-01.knm`・`meta-02.knm` の役割名で配置します。配布名に学習時の版番号は付けず、
 モデルの版は Release タグ、取得元コミットと SHA-256 で識別します。
 Python の `model_variant` は省略するか `"default"` を指定します。
 
+固定版の既存 ONNX を通信なしで変換する場合は、次を実行します。元ファイルは保持されます。
+
 ```bash
 kotonoha model convert --dir /path/to/kotonoha-models
 ```
+
+変換元の固定値は `.github/model-bundle.json` と `kotonoha/src/model/manifest.rs` にあります。
+`model convert` は重みと `knm-manifest.json` を生成する処理で、Release 用のアクセント辞書のマージは行いません。
+配布と同じ辞書を含む構成は、後述の [ローカル梱包](#ローカルでのモデル梱包)で作れます。
 
 ## 使い方
 
@@ -286,7 +308,9 @@ labels = engine.make_label(tokens)
 phone_tones = engine.phone_tones(tokens)
 ```
 
-`dict_path` をコンストラクタへ渡すと、`text_to_labels()` などでテキストを直接解析できます。`model_bundle` による KNM 推論や学習・評価の手順は [training/README.md](training/README.md) を参照してください。
+`dict_path` をコンストラクタへ渡すと、`text_to_labels()` などでテキストを直接解析できます。
+KNM の取得・`model_bundle` の指定は [モデルの取得・共有](#モデルの取得共有)、
+学習環境と過去の評価記録は [training/README.md](training/README.md) を参照してください。
 
 `engine.predict_accent_types(tokens)` は、推論失敗や予測結果の長さの不一致で `RuntimeError` を返します。
 評価処理で辞書値へのフォールバックをモデルの予測として数えないための仕様です。
@@ -310,15 +334,13 @@ phone_tones = engine.phone_tones(tokens)
 
 ## パフォーマンス
 
-5 トークン文の計測値です。モデルや辞書、実行環境によって処理時間は変わります。
+`cargo run --release --locked -p kotonoha-cli -- bench` で内部ベンチマークを実行できます。
+固定の5トークンを渡し、ルールによるアクセント処理・ラベル生成・韻律抽出などを測定します。
+HSD の形態素解析、KNM の読込・ニューラル推論は含みません。
 
-| パイプライン | 処理時間 (5 トークン文) |
-|---|---|
-| フルパイプライン (analyze → accent → label) | 約 25 μs |
-| 韻律抽出 | 約 5 μs |
-| スループット | 約 40,000 文/秒 |
-
-`make run ARGS="bench"` で内部ベンチマークを実行できます。
+KNM と ONNX Runtime の容量・読込・推論の比較は
+[kotonoha-models の測定記録](https://github.com/owayo/kotonoha-models/blob/main/docs/benchmark.md)
+を参照してください。測定した環境・並列数・入力ごとの結果を記録しており、すべての入力での速度優位を示すものではありません。
 
 ## 開発
 
@@ -369,7 +391,7 @@ CLI とモデルは並列に生成し、すべて成功してから Release を�
 成功した場合だけモデルを梱包・公開します。HSD の記録はアーカイブ内にも含めます。
 HSD 本体は該当する hasami Release から取得します。KNM は固定した学習済み重みから再ビルドし、再学習は行いません。
 
-同じ HSD の再公開では Release を増やしません。実行中の Release があれば待ち、
+同じ HSD の再公開では Release を増やしません。実行中の Release があればその回の確認をスキップし、
 失敗したビルドは次の定期確認で再試行します。初回は公開済みモデルに HSD の記録がない場合も対象です。
 このワークフローを既定ブランチへ反映すると定期確認が有効になります。GitHub Actions の定期実行には遅延がありえます。
 手動の `dry_run=true` は更新確認だけを行います。通常の Release では `hasami_tag` を省くと最新安定版を使います。
@@ -387,14 +409,21 @@ Actions には、既定ブランチへのコミット・タグの push と Relea
 ビルド・モデル生成・添付の検証が失敗した場合は、同じ実行の失敗したジョブを再実行できます。
 添付を再実行するときは、同じタグの Release にある同名ファイルを置き換えます。
 
-ローカルでも、Git LFS の実体を取得したモデルリポジトリから同じ配布物を作れます。
+#### ローカルでのモデル梱包
+
+Git LFS の実体を取得したモデルリポジトリと Python 3.12 以上を用意し、Kotonoha リポジトリで実行します。
+固定版の ONNX から KNM を生成してから、辞書と HSD の記録を梱包します。
 
 ```bash
-python scripts/package_models.py --models-dir ../kotonoha-models --source-revision "$(git rev-parse HEAD)"
+cargo run --release --locked -p kotonoha-cli --features neural -- model convert --dir ../kotonoha-models --force
+python scripts/package_models.py --native --models-dir ../kotonoha-models --source-revision "$(git rev-parse HEAD)" --hasami-release .github/hasami-dictionaries.json
 python -m unittest discover -s scripts/tests -v
 ```
 
-生成先は `target/model-release/` です。
+Windows の PowerShell では `$(git rev-parse HEAD)` をダブルクォートの中でそのまま使えます。
+生成先は `target/model-release/` で、アーカイブ・`.sha256`・`hasami-dictionaries.json` を出力します。
+梱包スクリプト自体は HSD を取得・検証しません。Release ワークフローでは別途、記録した推奨 HSD と
+生成した KNM を使う結合テストと CLI 解析を通してから梱包します。
 
 ## ライセンス
 

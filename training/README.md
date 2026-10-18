@@ -2,9 +2,42 @@
 
 BiLSTM + Self-Attention によるアクセント型予測モデルの学習パイプライン。
 
-## 現在の本番モデル
+## 現在の配布・推論と学習環境
 
-**`accent_model_v54_split1.onnx`** (val_split=0 上 **86.47%**) を本番モデルとして採用。
+現在の Kotonoha は **13個の KNM と専用 Rust CPU エンジン**を使用する。
+配布名は `teacher.knm`、`student-01.knm`〜`student-09.knm`、`meta-01.knm`・`meta-02.knm`、`accent.knm`。
+`accent.knm` は最終段で、ほかの12モデルが計算した特徴量を必要とする。
+利用者は `kotonoha model download` または Python の `kotonoha.download_models()` で最新安定版 Release を取得できる。
+推論時に ONNX Runtime・CUDA・`ORT_DYLIB_PATH` は不要。
+
+- [モデルの取得・共有](../README.md#モデルの取得共有) / [Python API](../README.md#python-api)
+- [KNM の仕様・変換元との対応・Release 手順](https://github.com/owayo/kotonoha-models/blob/main/docs/knm-format.md)
+- [容量・読込・推論の測定結果](https://github.com/owayo/kotonoha-models/blob/main/docs/benchmark.md)
+
+学習・参照評価には引き続き ONNX を使う。`accent_model_v{N}.onnx` の名前は実験の識別子として残し、
+配布ファイル名には使わない。KNM のビルドは固定した学習済み重みの変換で、再学習や発音補正は行わない。
+
+リポジトリのルートで次を実行する。
+
+```bash
+make setup-training
+mise exec -- uv run --locked --project training python training/train_onnx_v66.py --help
+```
+
+依存は [pyproject.toml](pyproject.toml) と `uv.lock` に定義する（Python 3.12 以上）。
+macOS は CPU 版 ONNX Runtime と PyPI の PyTorch、Linux・Windows は GPU 版 ONNX Runtime と
+CUDA 12.6 向け PyTorch を取得する。各スクリプトの実行条件は `--help` とソースを確認する。
+Windows で Makefile を使わない場合は `mise exec -- uv sync --locked --project training` を実行する。
+
+## 過去の学習・評価記録（2026-04）
+
+以下は実験時の記録であり、現在のインストール手順や未知データでの精度保証ではない。
+評価集合が学習集合と重なる値、補助モデル経由の重複、`utterance_id` を使う参照キャッシュを含む。
+95〜100% の値を本番の汎化精度として扱わない。KNM 移行時の予測一致はモデルの再現性の検証であり、正解率の再評価ではない。
+
+### v54_split1 を採用していた時点の記録
+
+**`accent_model_v54_split1.onnx`** (val_split=0 上 **86.47%**) は当時の採用モデル。現在の配布構成は上記を参照。
 
 ### 採用根拠と注意事項
 
@@ -12,11 +45,10 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 - val_split_seed=0 評価値 **86.47%** は、val_split=0 を **deployment evaluation の固定 test set** として
   扱った場合の精度。
 - v54_split1 の train data には val_split=0 の val 500 utts のうち約 450 (90%) が含まれるため、
-  **未知データに対する真の generalization は ~77.44%** (val_split=1 上の評価) に近い。
-- 本番デプロイ環境が JSUT 分布に近い場合は 86% 程度の精度が期待できる。
-  完全に未知の data distribution では generalization 精度は劣る可能性。
+  val_split=1 上の評価値は **77.44%**。補助モデルの学習条件も含めて評価の重複を確認する必要がある。
+- 学習・評価の重複を含む86.47%から、JSUT に似た未知データでの精度は推定できない。
 
-### TODO: 真の 85% (no leak) 達成へ
+### 当時の TODO: 真の 85% (no leak) 達成へ
 
 現在の **真の generalization 精度 = 79.69%** (v56 5-seed + v38 weighted ensemble、val_split=0 で
 学習・評価、leak なし)。85% まで +5.3% 不足。これを達成するための残された approach:
@@ -263,7 +295,7 @@ v54_split1 と同じ "leak-augmented" approach を v66 アーキで適用 (`v66_
 - **Ordinal auxiliary head (v62: -0.42%)**: ord_alpha=0.3 で過剰正則化。
   α=0.1 や warmup での検討余地あり
 
-#### 残タスク
+#### 当時の残タスク
 
 - 85% まで残り **+1.65%**
 - multi-seed v63 (seeds 1, 2) で +0.5-1.5% 期待

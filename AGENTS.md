@@ -181,7 +181,8 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 変換するため、バインディング側で Python の整数リストを明示的に構築する。
 
 `accent_dict_paths` は **bundle 同梱の `accent_dict.csv` の上に後勝ちマージ**
-される (上書きしない)。指定しなくても bundle 同梱辞書は常に使われる。
+される。同じ `(lemma, reading)` の値は追加辞書で上書きし、同梱辞書だけにある項目は保持する。
+指定しなくても bundle 同梱辞書は常に使われる。
 
 主要環境変数: `KOTONOHA_MODEL_BUNDLE`, `KOTONOHA_MODEL_VARIANT`,
 `KOTONOHA_MODEL_PATH` (11 次元入力の単一 KNM)。詳細は
@@ -197,15 +198,18 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 `kotonoha/src/model/download/release.rs`、オフライン変換元の固定値は `kotonoha/src/model/manifest.rs`、
 リリース梱包用の指定は `.github/model-bundle.json` にある。
 
-## 学習済みモデル
+## 学習済みモデルの変換元と過去の評価
 
-ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
+現在の配布・推論は上記の13個の KNM を使う。`accent.knm` は最終段であり、単独では全パイプラインを実行しない。
+形式仕様・圧縮と性能の根拠は `kotonoha-models/docs/`、現在の利用手順は `README.md` にある。
+以下は2026年4月の学習・評価記録。ONNX の名前と評価値を、現在の配布名・未知データでの精度と混同しない。
 
-ファイル名規則: `accent_model_v{N}.onnx` (例: `accent_model_v11.onnx`)
+学習時の ONNX 出力先は sibling の `kotonoha-models/`（Windows: `C:/GitHub/kotonoha-models/`、WSL: `/mnt/c/GitHub/kotonoha-models/`）。
+研究用のファイル名規則 `accent_model_v{N}.onnx` は変換元の追跡のために残す。
 
-### 現在の本番モデル
+### 学習時のモデル比較（2026-04）
 
-**単一 ONNX (deployment-friendly)**:
+**最終段が単一 ONNX の構成（補助モデルも必要）**:
 - **`accent_model_v63.onnx`** (val_split=0 評価で **83.35%**, no-leak by README convention)
   - v38 setting + 9-student OOF stacking (5 dim) + token reweight
   - 入力 `[seq_len, 24]` float32 (推論時 v24 + 9-student の前計算が必要)
@@ -220,7 +224,7 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
   - v66 = full-logit stacker (84 dim per token, codex #1)、FEATURE_DIM=103
   - val_split=1 で学習 → val_split=0 の val 500 utts の ~90% を train memorize
   - v54_split1 (86.47%) を 9% 上回る
-  - 注意: deployment が val_split=0 分布に近い場合の精度。新規データでは v66 (84.46%) 圏
+  - 学習データとの重複を含む評価であり、新規データでの精度を示さない。別条件の v66 評価値は84.46%
 
 **比較用** (legacy/leak 込み):
 - `accent_model_v54_split1.onnx` (val_split=0 評価で 86.47% leak / 77.44% valid) — 旧本番
@@ -234,7 +238,7 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
 - ✅ **99% 達成 (2026-04-29)**: v66_split1 + exact-memory override (utt_id cache) で **99.91%**
 - ✅ **100% 達成 (2026-04-29)**: bank=union(split 1,2,3,4,5) で完全 lookup
 - 詳細: `training/v66_exact_memory.py`、`training/README.md`
-- ⚠️ **真の no-leak (新規データ generalization)** は 84% 圏 (v66 strict no-leak)。99-100% は val_split=0 utts を train に含む leak augmented evaluation
+- ⚠️ 当時 `strict no-leak` と呼んだ v66 の評価は84%圏。最終段だけでなく補助モデルの学習集合との重複も確認する必要がある。99-100%は学習データとの重複を含む評価で、未知データの精度を示さない
 - ⏭️ さらなる improvement の方向性 (88%+ など):
   - JSUT 全体の manual label review + cleaning
   - 大規模新データ収集 + 自動 annotation pipeline
@@ -243,7 +247,7 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
 ### Rust ランタイムへの組込み (2026-04-30)
 
 - ✅ **v66_split1 推論パイプラインを Rust 化** (`kotonoha/src/nn/v66/`)
-  - 12 ONNX オーケストレーション (`pipeline.rs`)、特徴抽出 (`features.rs`)、
+  - 当時の13 ONNX オーケストレーション (`pipeline.rs`)、特徴抽出 (`features.rs`)、
     バンドルローダ (`bundle.rs`)、accent_dict enrich (`enrich.rs`)
   - Python 訓練コード `train_onnx_v60.py` と数値完全一致 (50 utts feat13 比較
     パス、20 utts pipeline argmax 100% 一致)
@@ -251,10 +255,13 @@ ONNXアクセントモデルの出力先: `/mnt/c/GitHub/kotonoha-models/`
   能。`KOTONOHA_MODEL_BUNDLE` 環境変数対応、`predict_accent_types` 追加
 - ⚠️ **lookup-only 推論精度**: val_split=0 で **92.98%** (Python の 95.47%
   より 2.5 pt 低い)。差分は per-utterance な UniDic aType / corpus_lookup を
-  集約 dict で完全再現できないため。production の deployment 値として現実的
+  集約 dict で完全再現できないため。この値も当時の評価集合での結果であり、未知データの精度保証ではない
 - 📦 **`accent_dict_jsut.csv`** (`kotonoha-models/`、11790 entries) を bundle
   に同梱。JSUT v3 + corpus_converted を `_enrich_utterances` 後に集約した
   `(lemma, reading) → dict_accent_type` マップ (`build_jsut_accent_dict.py`)
 - ⏭️ **Phase 2 (形態素 key exact-memory) は不採用**: 単独 91.10%、neural
   92.98% を 1.88 pt 下回るため (`v66_exact_memory.py --bank-val-splits 1..5`)。
   utt_id key 方式の 99-100% は本番で再現不能 (任意テキストに utt_id が無い)。
+
+2026-10-18 に上記パイプラインを専用 Rust CPU 推論へ移行した。重みは KNM に可逆変換し、
+ONNX Runtime は使わない。移行時の実発話20件・323語は最終予測が一致した。
