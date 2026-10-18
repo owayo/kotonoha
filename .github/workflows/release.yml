@@ -295,11 +295,12 @@ jobs:
         env:
           HSD_PATH: ${{ steps.hsd.outputs.dictionary_path }}
           KOTONOHA_RELEASE_HSD: ${{ steps.hsd.outputs.dictionary_path }}
-          KOTONOHA_RELEASE_MODELS: model-source
+          # cargo test の作業ディレクトリはクレート直下なので絶対パスを渡す。
+          KOTONOHA_RELEASE_MODELS: ${{ github.workspace }}/model-source
         run: |
           set -euo pipefail
           cargo test --locked --release -p kotonoha --features neural --test hsd_knm_release -- --ignored
-          target/release/kotonoha analyze '今日は良い天気です' --dict "$HSD_PATH" --model-bundle model-source --format phone-tones
+          target/release/kotonoha analyze '今日は良い天気です' --dict "$HSD_PATH" --model-bundle "$KOTONOHA_RELEASE_MODELS" --format phone-tones
 
       - name: Package and verify the generated KNM models
         run: |
