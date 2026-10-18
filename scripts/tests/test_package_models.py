@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import struct
 import sys
 import tarfile
 import tempfile
@@ -51,7 +52,9 @@ class PackageModelsTests(unittest.TestCase):
         self.output = self.root / "output"
 
     def package(self):
-        return package_models(self.models, self.output, self.lock, self.base, "b" * 40)
+        return package_models(
+            self.models, self.output, self.lock, self.base, "b" * 40, native=False
+        )
 
     def test_archive_loadable_dictionary_provenance_and_checksums(self):
         archive_path = self.package()
@@ -86,6 +89,45 @@ class PackageModelsTests(unittest.TestCase):
         first = self.package().read_bytes()
         (self.models / "test.onnx").touch()
         self.assertEqual(self.package().read_bytes(), first)
+
+    def test_native_archive_replaces_onnx_and_checks_conversion_manifest(self):
+        source = json.loads(self.lock.read_text(encoding="utf-8"))
+        original = next(
+            entry for entry in source["files"] if entry["file"] == "test.onnx"
+        )
+        metadata = json.dumps({"source_sha256": original["sha256"]}).encode()
+        native = self.models / "test.knm"
+        native.write_bytes(
+            struct.pack("<8sIIQQ", b"KOTONNM\0", 1, len(metadata), 1, 0)
+            + metadata
+            + b"x"
+        )
+        (self.models / "knm-manifest.json").write_text(
+            json.dumps(
+                {
+                    "files": [
+                        {
+                            "file": native.name,
+                            "size": native.stat().st_size,
+                            "sha256": file_digest(native),
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        archive = package_models(
+            self.models, self.output, self.lock, self.base, "b" * 40, native=True
+        )
+        with tarfile.open(archive) as bundle:
+            names = bundle.getnames()
+            self.assertIn("kotonoha-models/test.knm", names)
+            self.assertNotIn("kotonoha-models/test.onnx", names)
+        native.write_bytes(native.read_bytes()[:-1] + b"y")
+        with self.assertRaisesRegex(ValueError, "conversion manifest"):
+            package_models(
+                self.models, self.output, self.lock, self.base, "b" * 40, native=True
+            )
 
     def test_missing_corrupt_or_unresolved_lfs_model_is_rejected(self):
         path = self.models / "test.onnx"

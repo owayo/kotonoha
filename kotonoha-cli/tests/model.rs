@@ -67,8 +67,8 @@ fn label_reports_explicit_model_loading_errors() {
         .unwrap();
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    #[cfg(feature = "cuda")]
+    #[cfg(feature = "neural")]
     assert!(stderr.contains(missing.to_str().unwrap()), "{stderr}");
-    #[cfg(not(feature = "cuda"))]
-    assert!(stderr.contains("--features cuda"), "{stderr}");
+    #[cfg(not(feature = "neural"))]
+    assert!(stderr.contains("--features neural"), "{stderr}");
 }

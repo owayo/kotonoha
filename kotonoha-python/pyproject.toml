@@ -41,5 +41,5 @@ cache-keys = [
 ]
 
 [tool.maturin]
-features = ["pyo3/extension-module", "cuda"]
+features = ["pyo3/extension-module", "neural"]
 module-name = "kotonoha"

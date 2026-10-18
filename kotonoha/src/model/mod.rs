@@ -1,4 +1,4 @@
-//! v66 モデルの共有ディレクトリと、検証付きダウンロード。
+//! v66 KNM モデルの共有先、検証付きダウンロードとオフライン変換。
 //!
 //! CLI と Python は同じ置き場所を使う。通信は `download` feature を有効にして
 //! `download()` を明示的に呼んだときだけ行う。
@@ -6,13 +6,17 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+mod fingerprints;
+pub mod knm;
+#[cfg(feature = "download")]
+mod legacy;
 mod manifest;
 pub use manifest::{MODEL_FILES, MODEL_REVISION};
 
 #[cfg(feature = "download")]
 mod download;
 #[cfg(feature = "download")]
-pub use download::{DownloadError, DownloadOptions, download};
+pub use download::{DownloadError, DownloadOptions, convert_legacy_models, download};
 
 /// 配布するモデル・辞書 1 ファイル。サイズと SHA-256 は固定した版の実体に対応する。
 #[derive(Debug, Clone, Copy)]
@@ -50,13 +54,13 @@ fn model_dir_from(var: impl Fn(&str) -> Option<OsString>, windows: bool) -> Opti
     var("HOME").map(|dir| dir.join(".local/share/kotonoha/models"))
 }
 
-/// 必須の ONNX がすべてあるかを通信なしで調べる。任意のアクセント辞書は条件に含めない。
+/// 必須の KNM がすべてあるかを通信なしで調べる。任意のアクセント辞書は条件に含めない。
 /// ダウンロード時のサイズ・ハッシュ検証とは別に、手動配置したバンドルも受け付ける。
 pub fn is_model_bundle(dir: &Path) -> bool {
     MODEL_FILES
         .iter()
         .filter(|file| file.file.ends_with(".onnx"))
-        .all(|file| dir.join(file.file).is_file())
+        .all(|file| dir.join(file.file).with_extension("knm").is_file())
 }
 
 /// 共有先に配置済みのバンドルがあれば返す。ダウンロードはしない。

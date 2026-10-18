@@ -1,11 +1,10 @@
 //! V66Pipeline (Rust) ↔ Python `dump_v66_pipeline_fixture.py` argmax 一致テスト
 //!
 //! 環境要求 (満たさない場合スキップ):
-//! - `ORT_DYLIB_PATH`: libonnxruntime.so の絶対パス
 //! - `V66_BUNDLE_DIR` (省略時 `/mnt/c/GitHub/kotonoha-models`)
 //! - fixture: `tests/fixtures/v66_pipeline.json`
 
-#![cfg(feature = "cuda")]
+#![cfg(feature = "neural")]
 
 use std::path::{Path, PathBuf};
 
@@ -55,10 +54,6 @@ fn skip_with(reason: &str) {
 
 #[test]
 fn pipeline_argmax_matches_python() {
-    if std::env::var("ORT_DYLIB_PATH").is_err() {
-        skip_with("ORT_DYLIB_PATH not set");
-        return;
-    }
     let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -85,13 +80,7 @@ fn pipeline_argmax_matches_python() {
     if dict2.exists() {
         dict_paths.push(&dict2);
     }
-    let bundle = match V66Bundle::from_paths(&bundle_dir, &dict_paths) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("v66_pipeline_match: SKIP — bundle load failed: {e}");
-            return;
-        }
-    };
+    let bundle = V66Bundle::from_paths(&bundle_dir, &dict_paths).expect("load native KNM bundle");
     let pipeline = V66Pipeline::new(bundle);
 
     let json = std::fs::read_to_string(&fixture_path).expect("read fixture");

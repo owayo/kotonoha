@@ -1,12 +1,14 @@
 //! ニューラルネットワーク推論モジュール
 //!
 //! アクセント予測のためのトレイトと実装を提供する。
-//! `cuda` featureを有効にすると、ONNX Runtimeを使ったGPU推論が利用可能になる。
+//! `neural` feature で外部ランタイム不要の専用 CPU 推論が利用可能になる。
 
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 use crate::njd::Pos;
 use crate::njd::{InputToken, NjdNode};
 
+#[cfg(feature = "neural")]
+pub mod native;
 pub mod v66;
 
 /// アクセント予測トレイト（NjdNodeのみ）
@@ -69,7 +71,7 @@ impl AccentPredictor for RuleBasedPredictor {
 ///   <unk>=0, 名詞=1, 助詞=2, 動詞=3, 助動詞=4, 接尾辞=5,
 ///   形容詞=6, 代名詞=7, 副詞=8, 形状詞=9, 連体詞=10,
 ///   接頭辞=11, 接続詞=12, 感動詞=13, 記号=14
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn pos_to_id(pos: &Pos) -> u32 {
     match pos {
         Pos::Meishi => 1,
@@ -89,7 +91,7 @@ fn pos_to_id(pos: &Pos) -> u32 {
 }
 
 /// pos_detail1を数値IDにエンコードする
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn pos_detail1_to_id(detail: &str) -> u32 {
     match detail {
         "*" => 1,
@@ -117,7 +119,7 @@ fn pos_detail1_to_id(detail: &str) -> u32 {
 }
 
 /// pos_detail2を数値IDにエンコードする
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn pos_detail2_to_id(detail: &str) -> u32 {
     match detail {
         "*" => 1,
@@ -135,7 +137,7 @@ fn pos_detail2_to_id(detail: &str) -> u32 {
 }
 
 /// 活用型をグループIDにエンコードする
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn conj_type_to_id(ctype: &str) -> u32 {
     if ctype == "*" {
         return 0;
@@ -168,7 +170,7 @@ fn conj_type_to_id(ctype: &str) -> u32 {
 }
 
 /// 活用形をグループIDにエンコードする
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn conj_form_to_id(cform: &str) -> u32 {
     if cform == "*" {
         return 0;
@@ -204,7 +206,7 @@ fn conj_form_to_id(cform: &str) -> u32 {
 }
 
 /// 読みの簡易ハッシュ（特徴量として使用、正規化済み）
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn reading_hash(reading: &str) -> f32 {
     let mut hash: u32 = 5381;
     for c in reading.chars() {
@@ -214,7 +216,7 @@ fn reading_hash(reading: &str) -> f32 {
 }
 
 /// 文字の簡易ハッシュ（正規化済み）
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn char_hash(ch: char) -> f32 {
     let mut hash: u32 = 5381;
     hash = hash.wrapping_mul(33).wrapping_add(ch as u32);
@@ -222,7 +224,7 @@ fn char_hash(ch: char) -> f32 {
 }
 
 /// v2特徴量の次元数
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 const FEATURE_DIM: usize = 11;
 
 /// NjdNodeからv2特徴量ベクトルを抽出する
@@ -230,7 +232,7 @@ const FEATURE_DIM: usize = 11;
 /// 特徴量順序: [pos_id, pd1_id, pd2_id, ct_id, cf_id,
 ///              mora_count, reading_hash, first_char_hash,
 ///              last_char_hash, position, dict_accent_type]
-#[cfg(any(feature = "cuda", test))]
+#[cfg(any(feature = "neural", test))]
 fn extract_features_v2(node: &NjdNode, position: f32) -> [f32; FEATURE_DIM] {
     let first_ch = node.surface.chars().next().map_or(0.0, char_hash);
     let last_ch = node.surface.chars().last().map_or(0.0, char_hash);
@@ -254,26 +256,21 @@ fn extract_features_v2(node: &NjdNode, position: f32) -> [f32; FEATURE_DIM] {
     ]
 }
 
-/// ONNX Runtimeを使ったアクセント予測器（CUDA対応）
-#[cfg(feature = "cuda")]
-pub struct OnnxPredictor {
-    session: std::sync::Mutex<ort::session::Session>,
+/// KNM の単一モデルを使ったアクセント予測器。
+#[cfg(feature = "neural")]
+pub struct NativePredictor {
+    model: native::NativeModel,
 }
 
-#[cfg(feature = "cuda")]
-impl OnnxPredictor {
-    /// ONNXモデルファイルからOnnxPredictorを構築する
-    ///
-    /// CUDAが利用可能な場合はGPU実行プロバイダを使用し、
-    /// 利用不可の場合はCPUにフォールバックする。
+#[cfg(feature = "neural")]
+impl NativePredictor {
+    /// legacy v8 と同じ 11 次元入力の KNM モデルをロードする。
     pub fn new(model_path: &std::path::Path) -> Result<Self, Box<dyn std::error::Error>> {
-        let session = ort::session::Session::builder()?
-            .with_execution_providers([ort::ep::CUDA::default().build()])?
-            .commit_from_file(model_path)?;
-
-        Ok(Self {
-            session: std::sync::Mutex::new(session),
-        })
+        let model = native::NativeModel::load(model_path)?;
+        if model.input_dim() != FEATURE_DIM {
+            return Err("single model requires 11 input features".into());
+        }
+        Ok(Self { model })
     }
 
     /// 特徴量テンソルを構築し推論を実行する（v2: 11次元特徴量）
@@ -296,15 +293,7 @@ impl OnnxPredictor {
             input_data[offset..offset + FEATURE_DIM].copy_from_slice(&features);
         }
 
-        let input_tensor = ort::value::Tensor::from_array((
-            vec![node_count as i64, FEATURE_DIM as i64],
-            input_data,
-        ))?;
-
-        let mut session = self.session.lock().map_err(|e| e.to_string())?;
-        let outputs = session.run(ort::inputs!["input" => input_tensor])?;
-
-        let (_shape, output_data) = outputs[0].try_extract_tensor::<f32>()?;
+        let output_data = self.model.predict(&input_data, node_count)?;
 
         // 各ノードの出力からアクセント型を取得（argmaxまたは丸め）
         let mut accent_types = Vec::with_capacity(node_count);
@@ -336,11 +325,11 @@ impl OnnxPredictor {
     }
 }
 
-#[cfg(feature = "cuda")]
-impl AccentPredictor for OnnxPredictor {
+#[cfg(feature = "neural")]
+impl AccentPredictor for NativePredictor {
     fn predict(&self, nodes: &[NjdNode]) -> Vec<u8> {
         self.try_predict(nodes).unwrap_or_else(|e| {
-            eprintln!("kotonoha: ONNX predictor failed ({e}); keeping existing accent_type");
+            eprintln!("kotonoha: KNM predictor failed ({e}); keeping existing accent_type");
             // 推論失敗時はルールベースにフォールバック
             RuleBasedPredictor.predict(nodes)
         })

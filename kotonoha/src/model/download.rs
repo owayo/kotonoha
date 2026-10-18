@@ -41,9 +41,12 @@ pub enum DownloadError {
     /// 既存ファイルを保護した。
     #[error("existing model differs: {0}; use --force to replace it")]
     Existing(PathBuf),
+    /// 検証済み既存形式の変換に失敗した。
+    #[error("model conversion: {0}")]
+    Conversion(#[from] super::knm::KnmError),
 }
 
-/// 13 ONNX とアクセント辞書を取得する。`dir` を省くと [`default_model_dir`] を使う。
+/// 13 ONNX と辞書を検証して取得し、専用 KNM へオフライン変換する。`dir` を省くと [`default_model_dir`] を使う。
 ///
 /// 正しい既存ファイルは通信せず再利用する。一時ファイルでサイズと SHA-256 を確かめてから
 /// 配置するため、通信失敗で既存ファイルは壊れない。認証は `GH_TOKEN`、`GITHUB_TOKEN`、
@@ -70,22 +73,90 @@ pub fn download(dir: Option<&Path>, options: DownloadOptions) -> Result<PathBuf,
     let mut resolved_token = false;
     fs::create_dir_all(&dir)?;
     for file in &MODEL_FILES {
-        if reuse_existing(&dir.join(file.file), file, options.force)? {
-            continue;
+        let native = dir.join(file.file).with_extension("knm");
+        let is_model = file.file.ends_with(".onnx");
+        if is_model && native.exists() && !options.force {
+            match super::knm::Weights::load(&native) {
+                Ok(weights) if weights.source_sha256 == file.sha256 => continue,
+                _ => return Err(DownloadError::Existing(native)),
+            }
         }
-        if options.base_url.is_none() && !resolved_token {
-            token = github_token();
-            resolved_token = true;
+        let source = dir.join(file.file);
+        let source_existed = source.exists();
+        let reused = reuse_existing(&source, file, options.force)?;
+        if !reused {
+            if options.base_url.is_none() && !resolved_token {
+                token = github_token();
+                resolved_token = true;
+            }
+            let mut response = fetch(&agent, file, options.base_url.as_deref(), token.as_deref())?;
+            install(
+                &mut response.body_mut().as_reader(),
+                &dir,
+                file,
+                options.force,
+            )?;
         }
-        let mut response = fetch(&agent, file, options.base_url.as_deref(), token.as_deref())?;
-        install(
-            &mut response.body_mut().as_reader(),
-            &dir,
-            file,
-            options.force,
-        )?;
+        if is_model {
+            let weights = super::legacy::convert(&fs::read(&source)?, file.sha256)?;
+            let mut temporary = tempfile::NamedTempFile::new_in(&dir)?;
+            weights.write(&mut temporary, file.sha256)?;
+            temporary.as_file().sync_all()?;
+            // 書き込み後も、ランタイムと同じ読込器で検証してから公開する。
+            super::knm::Weights::load(temporary.path())?;
+            temporary.persist(&native).map_err(|e| e.error)?;
+            // この呼び出しで取得した中間ファイルだけを除く。既存の ONNX は保護する。
+            if !reused && !source_existed {
+                fs::remove_file(source)?;
+            }
+        }
     }
     Ok(dir)
+}
+
+/// 固定版の既存 ONNX をその場で KNM に変換する。通信せず、元ファイルは保持する。
+pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, DownloadError> {
+    for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".onnx")) {
+        let native = dir.join(file.file).with_extension("knm");
+        if native.exists() && !force {
+            match super::knm::Weights::load(&native) {
+                Ok(weights) if weights.source_sha256 == file.sha256 => continue,
+                _ => return Err(DownloadError::Existing(native)),
+            }
+        }
+        let source = dir.join(file.file);
+        if !valid_file(&source, file)? {
+            return Err(DownloadError::Integrity(file.file.into()));
+        }
+        let weights = super::legacy::convert(&fs::read(&source)?, file.sha256)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(dir)?;
+        weights.write(&mut temporary, file.sha256)?;
+        temporary.as_file().sync_all()?;
+        super::knm::Weights::load(temporary.path())?;
+        temporary.persist(native).map_err(|e| e.error)?;
+    }
+    let mut files = Vec::new();
+    for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".onnx")) {
+        let path = dir.join(file.file).with_extension("knm");
+        let bytes = fs::read(&path)?;
+        let digest: String = Sha256::digest(&bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        files.push(serde_json::json!({"file":path.file_name().unwrap().to_string_lossy(),"size":bytes.len(),"sha256":digest}));
+    }
+    let mut manifest = tempfile::NamedTempFile::new_in(dir)?;
+    serde_json::to_writer_pretty(
+        &mut manifest,
+        &serde_json::json!({"format_version":1,"source_revision":MODEL_REVISION,"files":files}),
+    )
+    .map_err(io::Error::other)?;
+    manifest.write_all(b"\n")?;
+    manifest.as_file().sync_all()?;
+    manifest
+        .persist(dir.join("knm-manifest.json"))
+        .map_err(|e| e.error)?;
+    Ok(dir.to_path_buf())
 }
 
 fn github_token() -> Option<String> {

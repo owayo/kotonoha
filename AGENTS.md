@@ -31,9 +31,9 @@ Cargoワークスペース構成（resolver v2）:
 | `crf` | CRFアクセント予測器（学習・推論） |
 | `label` | HTS Full-Context Label生成 |
 | `mora` | モーラ処理 |
-| `model` | ONNX モデルの共有先解決・検証付きダウンロード |
+| `model` | KNM の読込・共有先・検証付き取得と ONNX からのオフライン変換 |
 | `njd` | NJD（Normalized Japanese Dictionary）ノード処理 |
-| `nn` | ニューラルアクセント予測器（ONNX、`nn/v66/` に v66 パイプライン） |
+| `nn` | 専用 Rust CPU 推論（`native.rs`、`nn/v66/` の v66 パイプライン） |
 | `phoneme` | 音素定義・操作 |
 | `prosody` | PhoneTone（韻律情報）生成 |
 
@@ -142,20 +142,20 @@ make test-python  # Python API の回帰テスト
 
 ### v66 系モデルの Python API
 
-`kotonoha-python/pyproject.toml` は CUDA feature を有効にしてビルドする。`make setup` で v66
-系の 13 ONNX 推論パイプライン (12 students/teachers + v66_split1 stacker) が
-利用可能になる。
+`kotonoha-python/pyproject.toml` は `neural` feature で専用 Rust CPU エンジンを
+ビルドする。13 個の `.knm` (12 students/teachers + v66_split1 stacker) を使い、
+ONNX Runtime と `ORT_DYLIB_PATH` は不要。旧 `cuda` feature は `neural` の互換エイリアス。
+GPU 実行は現在実装していない。形式仕様・ベンチマーク・設計判断は
+`../kotonoha-models/docs/knm-format.md` に集約する。
 
-**前提**: `ort` クレートを `load-dynamic` でビルドしているため、起動前に
-`ORT_DYLIB_PATH` 環境変数で libonnxruntime.so の絶対パスを指定する必要がある。
-未設定だと `KotonohaEngine` 構築時に分かりやすいエラーメッセージで失敗する。
+既存モデルは `kotonoha model convert --dir <dir>` で通信なしに変換できる。
+`model download` は固定 SHA-256 の既存配布元から取得し、Rust で KNM へ変換する。
+推論時は KNM の重みだけを読む。ONNX をグラフ実行に使うコードを戻さないこと。
 
 ```python
-import os
-os.environ["ORT_DYLIB_PATH"] = "/path/to/libonnxruntime.so"  # 必須
 import kotonoha
 engine = kotonoha.KotonohaEngine(
-    model_bundle="/mnt/c/GitHub/kotonoha-models",   # 13 ONNX を含む dir
+    model_bundle="/mnt/c/GitHub/kotonoha-models",   # 13 KNM を含む dir
     accent_dict_paths=[                              # 追加辞書 (任意、後勝ちマージ)
         "/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv",
     ],
@@ -171,7 +171,7 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 される (上書きしない)。指定しなくても bundle 同梱辞書は常に使われる。
 
 主要環境変数: `KOTONOHA_MODEL_BUNDLE`, `KOTONOHA_MODEL_VARIANT`,
-`KOTONOHA_MODEL_PATH` (legacy v8)、`ORT_DYLIB_PATH` (必須)。詳細は
+`KOTONOHA_MODEL_PATH` (11 次元入力の単一 KNM)。詳細は
 `kotonoha/src/nn/v66/`。
 
 ### モデルの共有・取得
@@ -179,7 +179,7 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 `kotonoha model download` と Python の `kotonoha.download_models()` は同じ共有先を使う。
 `KOTONOHA_MODEL_BUNDLE`、`XDG_DATA_HOME/kotonoha/models`、Windows の
 `LOCALAPPDATA/kotonoha/models`、`HOME/.local/share/kotonoha/models` の順に解決する。
-ダウンロード機能はコアの `download` feature、CLI 推論は `cuda` feature が必要。
+ダウンロード機能はコアの `download` feature、CLI 推論は `neural` feature が必要。
 推論時は配置済みモデルを参照するだけで通信しない。モデルの固定版と検証値は
 `kotonoha/src/model/manifest.rs`、リリース梱包用の指定は `.github/model-bundle.json` にある。
 

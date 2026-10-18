@@ -55,7 +55,7 @@ jobs:
       # Windows の make は POSIX シェルのレシピと互換性がないため直接実行する。
       - name: Test the Rust API and CLI
         run: cargo test --locked --workspace --exclude kotonoha-python --no-fail-fast
-      - name: Test optional ONNX features
+      - name: Test optional native inference features
         run: cargo test --locked --workspace --exclude kotonoha-python --all-features --no-fail-fast
       - name: Test Python bindings
         run: uv run --locked --project kotonoha-python python -m unittest discover -s kotonoha-python/tests -v
@@ -95,5 +95,5 @@ jobs:
           key: release-${{ matrix.target }}
       - name: Add the Rust target
         run: rustup target add ${{ matrix.target }}
-      - name: Build with ONNX inference
-        run: cargo build --release --locked -p kotonoha-cli --features cuda --target ${{ matrix.target }}
+      - name: Build with native inference
+        run: cargo build --release --locked -p kotonoha-cli --features neural --target ${{ matrix.target }}

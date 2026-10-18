@@ -20,10 +20,10 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 ## 機能
 
 - **形態素解析**: [hasami](https://github.com/owayo/hasami) の辞書を使ったテキスト解析
-- **アクセント推定**: アクセント句境界の検出と、ルール・CRF・ONNX によるアクセント型の推定
+- **アクセント推定**: アクセント句境界の検出と、ルール・CRF・専用ニューラル推論によるアクセント型の推定
 - **ラベル生成**: HTS Full-Context Label の出力
 - **韻律抽出**: PhoneTone、句読点を保持した PhoneTone、韻律記号列の出力
-- **ニューラル推論**: オプションの `cuda` feature による ONNX モデルの利用
+- **ニューラル推論**: `neural` feature による KNM モデルの専用 CPU 推論
 
 ## 動作環境
 
@@ -32,12 +32,16 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 - Python バインディングは Python 3.9 以上。通常の開発・CI は Python 3.14 を使います
 - テキストの形態素解析には hasami の `.hsd` 辞書が必要です。トークン列を直接渡す処理は辞書なしで使えます
 
-ONNX 推論にはモデルと ONNX Runtime の共有ライブラリも必要です。`ORT_DYLIB_PATH` にライブラリのパスを指定します。CUDA を使う場合は対応する GPU・ドライバ・実行環境を用意してください。
-GPU 版では ONNX Runtime が必要とする CUDA・cuDNN の共有ライブラリも必要です。
-Windows で `cudnn64_9.dll` などが見つからない場合の確認方法は
-[CUDA Execution Provider の公式ドキュメント](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements)を参照してください。
+ニューラル推論は独自形式 **KNM** と専用 Rust CPU エンジンを使用します。ONNX Runtime、
+`ORT_DYLIB_PATH`、CUDA/cuDNN の導入は不要です。`neural` feature で有効にします。
+旧 `cuda` feature は `neural` の互換エイリアスであり、現在のエンジンは CPU 実装です。
+AVX2/FMA を実行時に検出し、9 students と 2 meta models を Rayon で並列実行します。
+スレッド数は `RAYON_NUM_THREADS` で調整できます。
 
-v66 系の各 ONNX セッションはノード内の実行を1スレッドに固定します。順番に呼ぶモデルごとに CPU のスレッドプールを作らず、短い発話でのスレッドの競合を抑えます。
+重みは FP32 のまま可逆圧縮し、本番 13 モデルで約 245 MB → 204.5 MB。
+形式仕様、圧縮方式の比較、実測値と再現手順は
+[kotonoha-models/docs/knm-format.md](https://github.com/owayo/kotonoha-models/blob/main/docs/knm-format.md)
+に集約しています。
 
 ## インストール
 
@@ -74,7 +78,7 @@ ONNX モデルや ONNX Runtime は不要です。Rust では `DictionaryNormaliz
 
 [Releases](https://github.com/owayo/kotonoha/releases) から OS・CPU に対応するアーカイブを取得し、
 展開した `kotonoha`（Windows は `kotonoha.exe`）を PATH の通った場所に配置します。
-`SHA256SUMS` で各添付の SHA-256 を検証できます。配布 CLI は ONNX 推論に対応しています。
+`SHA256SUMS` で各添付の SHA-256 を検証できます。配布 CLI は専用 KNM 推論に対応しています。
 
 | OS | CPU | 添付ファイル |
 |---|---|---|
@@ -84,7 +88,7 @@ ONNX モデルや ONNX Runtime は不要です。Rust では `DictionaryNormaliz
 | macOS | Intel | `kotonoha-x86_64-apple-darwin.tar.gz` |
 | Windows | x64 | `kotonoha-x86_64-pc-windows-msvc.zip` |
 
-Cargo からインストールする場合は次を実行します。ONNX 推論も使う場合は `--features cuda` を付けます。
+Cargo からインストールする場合は次を実行します。専用ニューラル推論も使う場合は `--features neural` を付けます。
 
 ```bash
 cargo install --git https://github.com/owayo/kotonoha --locked kotonoha-cli
@@ -106,7 +110,9 @@ make install
 ### モデルの取得・共有
 
 hasami の辞書取得と同様に、モデルをプロジェクト外の共有ディレクトリへ取得できます。
-v66_split1 に必要な 13 ONNX（約 245 MB）とアクセント辞書だけを取得します。
+固定版の学習済みモデルを検証して取得し、13 KNM（約 204.5 MB）とアクセント辞書を配置します。
+配布元の固定版 ONNX を一時取得して Rust でオフライン変換するため、初回転送量は約 245 MB です。
+この処理で取得した ONNX 中間ファイルは変換後に除きます。既存の ONNX は保持します。
 Git や Git LFS、ONNX Runtime はダウンロードには不要です。
 
 ```bash
@@ -132,13 +138,13 @@ kotonoha model download
 中身が異なる既存ファイルはエラーになり、`--force` を付けたときだけ置き換えます。
 `--base-url URL` でミラーも使えます（配布元のファイル名を使用、GitHub 認証は送信しません）。
 
-ONNX 推論を使う CLI は `cuda` feature を有効にしてインストールします。
-`ORT_DYLIB_PATH` を指定すると、`analyze` と `label` は配置済みの共有モデルを使います。
+KNM 推論を使う CLI は `neural` feature を有効にしてインストールします。
+`analyze` と `label` は配置済みの共有モデルを使います。
 `--model-bundle DIR` で明示したパスは環境変数・既定の共有先より優先します。
 推論時にモデルを自動ダウンロードすることはありません。
 
 ```bash
-cargo install --git https://github.com/owayo/kotonoha --locked --features cuda kotonoha-cli
+cargo install --git https://github.com/owayo/kotonoha --locked --features neural kotonoha-cli
 kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd
 kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd --model-bundle /shared/kotonoha/models
 ```
@@ -172,7 +178,7 @@ mise exec -- bash scripts/setup_dict.sh
 hasami の配布辞書に加えたユーザ語彙・読み修正を使う場合は、修正後の `.hsd` を指定します。
 hasami の依存更新だけでは、手元の `.hsd` に新しい語彙は追加されません。
 
-### ONNX モデルの準備
+### KNM モデルの準備
 
 [Releases](https://github.com/owayo/kotonoha/releases) の添付から `kotonoha-models-v66.tar.gz` と
 `kotonoha-models-v66.tar.gz.sha256` を取得し、検証して展開します。
@@ -183,10 +189,15 @@ tar -xzf kotonoha-models-v66.tar.gz
 ```
 
 展開先の `kotonoha-models/` を Python API の `model_bundle`、または環境変数
-`KOTONOHA_MODEL_BUNDLE` に指定します。v66 系の推論に必要な 13 個の ONNX、
+`KOTONOHA_MODEL_BUNDLE` に指定します。v66 系の推論に必要な 13 個の KNM、
 `data/accent_dict.csv` に JSUT 辞書を後勝ちでマージした `accent_dict.csv`、
 元の `accent_dict_jsut.csv` を同梱しています。`models.json` には取得元コミットと各ファイルの
-SHA-256 を記録します。ONNX Runtime の共有ライブラリは別途用意し、`ORT_DYLIB_PATH` に指定してください。
+SHA-256 を記録します。既存の ONNX ディレクトリは、次のコマンドで変換できます。
+元ファイルは保持されます。
+
+```bash
+kotonoha model convert --dir /path/to/kotonoha-models
+```
 
 ## 使い方
 
@@ -267,7 +278,7 @@ labels = engine.make_label(tokens)
 phone_tones = engine.phone_tones(tokens)
 ```
 
-`dict_path` をコンストラクタへ渡すと、`text_to_labels()` などでテキストを直接解析できます。`model_bundle` による ONNX 推論や学習・評価の手順は [training/README.md](training/README.md) を参照してください。
+`dict_path` をコンストラクタへ渡すと、`text_to_labels()` などでテキストを直接解析できます。`model_bundle` による KNM 推論や学習・評価の手順は [training/README.md](training/README.md) を参照してください。
 
 `engine.predict_accent_types(tokens)` は、推論失敗や予測結果の長さの不一致で `RuntimeError` を返します。
 評価処理で辞書値へのフォールバックをモデルの予測として数えないための仕様です。
@@ -285,7 +296,7 @@ phone_tones = engine.phone_tones(tokens)
 
 | リポジトリ | 説明 |
 |---|---|
-| [kotonoha-models](https://github.com/owayo/kotonoha-models) | ONNX アクセント予測モデル (Git LFS) |
+| [kotonoha-models](https://github.com/owayo/kotonoha-models) | KNM 配布モデル、ONNX 学習元、形式仕様・ベンチマーク (Git LFS) |
 | [kotonoha-training-data](https://github.com/owayo/kotonoha-training-data) | 訓練データ・辞書・LLM データ生成ツール |
 | [hasami](https://github.com/owayo/hasami) | 形態素解析エンジン |
 
@@ -311,14 +322,15 @@ make ci
 | コマンド | 内容 |
 |---|---|
 | `make build` / `make release` | ワークスペースのデバッグ版 / リリース版をビルド |
-| `make build-cuda` | ONNX 推論を有効にしてリリース版をビルド |
+| `make build-neural` | 専用 CPU 推論を有効にしてリリース版をビルド |
+| `make build-cuda` | `make build-neural` の互換エイリアス |
 | `make run ARGS="--help"` | CLI の起動 |
 | `make test` / `make test-python` | Rust と Python のテスト / Python API のテスト |
 | `make lint` | 既定 feature と全 feature の clippy 検査 |
 | `make fmt` / `make fmt-check` | 整形 / 書き換えずに整形を確認 |
 | `make setup-training` | 学習・評価用 Python 依存を取得 |
 
-`make` で全ターゲットを表示します。CI は Linux・macOS で `make setup` と `make ci`、Windows で同じ Rust/Python テストを実行し、配布する5ターゲットの CLI を ONNX 推論を有効にしてビルドします。モデルを必要とする推論の一致テストは `ORT_DYLIB_PATH` と `V66_BUNDLE_DIR` がある環境で実行します。
+`make` で全ターゲットを表示します。CI は Linux・macOS で `make setup` と `make ci`、Windows で同じ Rust/Python テストを実行し、配布する5ターゲットの CLI を専用ニューラル推論を有効にしてビルドします。モデルを必要とする一致テストは KNM を配置した `V66_BUNDLE_DIR` がある環境で実行します。
 
 学習環境は通常の `make setup` に含めません。macOS は CPU 版 ONNX Runtime と PyPI の PyTorch、Linux・Windows は GPU 版 ONNX Runtime と CUDA 12.6 向け PyTorch を取得します。学習スクリプトごとの GPU 要件は [training/README.md](training/README.md) を確認してください。
 
@@ -333,7 +345,7 @@ hasami と同じく次の処理をまとめて行います。
 4. バイナリ5個、`kotonoha-models-v66.tar.gz`、その `.sha256`、全添付用の `SHA256SUMS` を Release に添付して公開します。
 5. 公開した添付の名前・サイズ・状態を確認し、再ダウンロードして全ファイルの SHA-256 を照合します。
 
-モデル配布物は、そのタグの `.github/model-bundle.json` に固定した学習済み ONNX と辞書から作ります。
+モデル配布物は、そのタグの `.github/model-bundle.json` に固定した学習済み ONNX を Rust で KNM へ変換し、辞書と一緒に梱包します。
 学習はリリース処理に含みません。入力の欠損・Git LFS ポインタ・SHA-256 不一致を検出すると失敗します。
 CLI とモデルは並列に生成し、すべて成功してから Release を作成します。各ジョブの結果は Actions の Summary に残ります。
 

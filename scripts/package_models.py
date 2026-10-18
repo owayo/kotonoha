@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import re
+import struct
 import tarfile
 from pathlib import Path
 
@@ -76,6 +77,7 @@ def package_models(
     lock_path: Path,
     base_dictionary: Path,
     source_revision: str,
+    native: bool = True,
 ) -> Path:
     """固定した SHA-256 を検証してから、モデルと辞書を再現可能な形で梱包する。
 
@@ -106,6 +108,50 @@ def package_models(
             raise ValueError(f"Model bundle input differs from {lock_path}: {path}")
         sources[name] = path
 
+    if native:
+        converted_manifest = json.loads(
+            (models_dir / "knm-manifest.json").read_text(encoding="utf-8")
+        )
+        converted_files = {
+            entry["file"]: entry for entry in converted_manifest["files"]
+        }
+        for name in list(sources):
+            if not name.endswith(".onnx"):
+                continue
+            path = sources.pop(name).with_suffix(".knm")
+            if not path.is_file():
+                raise ValueError(
+                    f"Missing KNM: {path}; "
+                    f"run kotonoha model convert --dir {models_dir}"
+                )
+            pinned = converted_files.get(path.name)
+            if (
+                not pinned
+                or path.stat().st_size != pinned["size"]
+                or file_digest(path) != pinned["sha256"]
+            ):
+                raise ValueError(f"KNM differs from conversion manifest: {path}")
+            with path.open("rb") as stream:
+                header = stream.read(32)
+                if len(header) != 32:
+                    raise ValueError(f"Invalid KNM header: {path}")
+                magic, version, meta_len, payload_len, reserved = struct.unpack(
+                    "<8sIIQQ", header
+                )
+                if (
+                    magic != b"KOTONNM\0"
+                    or version != 1
+                    or reserved
+                    or meta_len > 65536
+                    or path.stat().st_size != 32 + meta_len + payload_len
+                ):
+                    raise ValueError(f"Invalid KNM header: {path}")
+                metadata = json.loads(stream.read(meta_len))
+            original = next(entry for entry in lock["files"] if entry["file"] == name)
+            if metadata.get("source_sha256") != original["sha256"]:
+                raise ValueError(f"KNM source checksum differs: {path}")
+            sources[path.name] = path
+
     generated = {
         "accent_dict.csv": merge_dictionaries(
             [base_dictionary, sources["accent_dict_jsut.csv"]]
@@ -113,6 +159,7 @@ def package_models(
     }
     manifest = {
         "schema_version": 1,
+        "model_format": "knm-v1" if native else "onnx",
         "kotonoha_revision": source_revision,
         "source": lock,
         "base_dictionary_sha256": file_digest(base_dictionary),
@@ -171,6 +218,18 @@ def main():
         "--base-dictionary", type=Path, default=ROOT / "data/accent_dict.csv"
     )
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument(
+        "--native",
+        action="store_true",
+        default=True,
+        help="Package converted KNM models (default)",
+    )
+    parser.add_argument(
+        "--legacy-onnx",
+        action="store_false",
+        dest="native",
+        help="Package legacy ONNX for comparison",
+    )
     args = parser.parse_args()
     try:
         archive = package_models(
@@ -179,6 +238,7 @@ def main():
             args.lock,
             args.base_dictionary,
             args.source_revision,
+            native=args.native,
         )
     except (OSError, ValueError, KeyError, csv.Error) as error:
         parser.exit(1, f"Model packaging failed: {error}\n")

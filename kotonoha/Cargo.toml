@@ -12,8 +12,10 @@ categories = ["text-processing", "science"]
 
 [features]
 default = []
-cuda = ["ort"]
-download = ["dep:ureq", "dep:sha2", "dep:tempfile", "dep:base64"]
+# 旧 feature 名を維持する。実行時は外部ランタイム不要の専用 CPU 推論。
+cuda = ["neural"]
+neural = ["dep:matrixmultiply", "dep:libm", "dep:wide"]
+download = ["dep:ureq", "dep:tempfile", "dep:base64"]
 
 [dependencies]
 hasami = { workspace = true }
@@ -24,15 +26,27 @@ thiserror = { workspace = true }
 rayon = { workspace = true }
 once_cell = { workspace = true }
 ureq = { version = "3.4.2", optional = true, default-features = false, features = ["rustls", "platform-verifier", "json"] }
-sha2 = { version = "0.11.0", optional = true }
+sha2 = { version = "0.11.0" }
 tempfile = { version = "3.27.0", optional = true }
 base64 = { version = "0.23.1", optional = true }
-ort = { version = "2.0.0-rc.13", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "load-dynamic", "api-24", "cuda"] }
+matrixmultiply = { version = "0.3.11", optional = true }
+libm = { version = "0.2.16", optional = true }
+wide = { version = "1.7.1", optional = true }
+zstd = { version = "0.13.3", default-features = false }
 
 [dev-dependencies]
 criterion = { workspace = true }
 hasami = { workspace = true, features = ["build"] }
+tempfile = "3.27.0"
 
 [[bench]]
 name = "benchmark"
 harness = false
+
+[[example]]
+name = "knm_probe"
+required-features = ["neural"]
+
+[[example]]
+name = "knm_pipeline_probe"
+required-features = ["neural"]

@@ -109,14 +109,19 @@ fn manifest_covers_runtime_bundle() {
         13
     );
     assert!(MODEL_FILES.iter().any(|f| f.file == "accent_dict.csv"));
-    #[cfg(feature = "cuda")]
+    #[cfg(feature = "neural")]
     for student in crate::nn::v66::bundle::STUDENT_FILENAMES {
-        assert!(MODEL_FILES.iter().any(|f| f.file == student));
+        assert!(
+            MODEL_FILES
+                .iter()
+                .any(|f| std::path::Path::new(f.file).with_extension("knm")
+                    == std::path::Path::new(student))
+        );
     }
     let dir = tempfile::tempdir().unwrap();
     assert!(!super::super::is_model_bundle(dir.path()));
     for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".onnx")) {
-        File::create(dir.path().join(file.file)).unwrap();
+        File::create(dir.path().join(file.file).with_extension("knm")).unwrap();
     }
     assert!(super::super::is_model_bundle(dir.path()));
 }

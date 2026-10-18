@@ -41,10 +41,10 @@ impl KotonohaEngine {
     ///
     /// Args:
     ///     accent_rule_path: アクセント規則CSVファイルパス（省略時はデフォルト規則）
-    ///     model_path: legacy v8 ONNX モデルファイルパス。`model_bundle` が
+    ///     model_path: 11 次元入力の単一 KNM モデルファイルパス。`model_bundle` が
     ///         指定されない場合のみ使う（環境変数 KOTONOHA_MODEL_PATH をフォールバック）。
     ///     dict_path: 形態素解析辞書（.hsd）ファイルパス（省略時は形態素解析なし）
-    ///     model_bundle: v66 系 13 ONNX を含むディレクトリパス
+    ///     model_bundle: v66 系 13 KNM を含むディレクトリパス
     ///         （環境変数 KOTONOHA_MODEL_BUNDLE、配置済み共有ディレクトリをフォールバック）。
     ///         指定された場合は `model_path` より優先する。
     ///     model_variant: 使用する variant 名。デフォルトは bundle なら
@@ -83,7 +83,7 @@ impl KotonohaEngine {
         });
         let resolved_model_path = model_path.or_else(|| std::env::var("KOTONOHA_MODEL_PATH").ok());
         // legacy モデルの明示指定は共有ディレクトリの自動検出より優先する。
-        #[cfg(feature = "cuda")]
+        #[cfg(feature = "neural")]
         let resolved_bundle = resolved_bundle.or_else(|| {
             resolved_model_path
                 .is_none()
@@ -108,7 +108,7 @@ impl KotonohaEngine {
                 accent_dict_paths.as_deref(),
             )?;
         } else if let Some(ref path) = resolved_model_path {
-            Self::try_load_onnx_predictor(&mut inner, path)?;
+            Self::try_load_native_predictor(&mut inner, path)?;
         }
 
         if let Some(ref path) = dict_path {
@@ -271,26 +271,26 @@ impl KotonohaEngine {
 }
 
 impl KotonohaEngine {
-    #[cfg(feature = "cuda")]
-    fn try_load_onnx_predictor(engine: &mut Engine, path: &str) -> PyResult<()> {
-        let predictor =
-            ::kotonoha::nn::OnnxPredictor::new(PathBuf::from(path).as_path()).map_err(|e| {
+    #[cfg(feature = "neural")]
+    fn try_load_native_predictor(engine: &mut Engine, path: &str) -> PyResult<()> {
+        let predictor = ::kotonoha::nn::NativePredictor::new(PathBuf::from(path).as_path())
+            .map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                    "Failed to load ONNX model: {e}"
+                    "Failed to load KNM model: {e}"
                 ))
             })?;
         engine.set_accent_predictor(Box::new(predictor));
         Ok(())
     }
 
-    #[cfg(not(feature = "cuda"))]
-    fn try_load_onnx_predictor(_engine: &mut Engine, _path: &str) -> PyResult<()> {
+    #[cfg(not(feature = "neural"))]
+    fn try_load_native_predictor(_engine: &mut Engine, _path: &str) -> PyResult<()> {
         Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            "ONNX support requires the 'cuda' feature to be enabled",
+            "KNM support requires the 'neural' feature to be enabled",
         ))
     }
 
-    #[cfg(feature = "cuda")]
+    #[cfg(feature = "neural")]
     fn try_load_v66_pipeline(
         engine: &mut Engine,
         bundle_dir: &std::path::Path,
@@ -310,16 +310,8 @@ impl KotonohaEngine {
             ::kotonoha::nn::v66::V66Bundle::from_dir(bundle_dir)
         }
         .map_err(|e| {
-            let dylib_hint = if std::env::var("ORT_DYLIB_PATH").is_err() {
-                "\nHint: ORT_DYLIB_PATH 環境変数が未設定です。\
-                 kotonoha は ort を load-dynamic でビルドしているため、libonnxruntime.so の \
-                 絶対パスを ORT_DYLIB_PATH に設定する必要があります \
-                 (例: /path/to/site-packages/onnxruntime/capi/libonnxruntime.so.1.24.3)。"
-            } else {
-                ""
-            };
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to load v66 bundle from {}: {e}{dylib_hint}",
+                "Failed to load KNM v66 bundle from {}: {e}",
                 bundle_dir.display()
             ))
         })?;
@@ -328,7 +320,7 @@ impl KotonohaEngine {
         Ok(())
     }
 
-    #[cfg(not(feature = "cuda"))]
+    #[cfg(not(feature = "neural"))]
     fn try_load_v66_pipeline(
         _engine: &mut Engine,
         _bundle_dir: &std::path::Path,
@@ -336,7 +328,7 @@ impl KotonohaEngine {
         _accent_dict_paths: Option<&[String]>,
     ) -> PyResult<()> {
         Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            "v66 model_bundle requires the 'cuda' feature to be enabled",
+            "v66 model_bundle requires the 'neural' feature to be enabled",
         ))
     }
 }

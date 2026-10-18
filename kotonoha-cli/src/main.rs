@@ -18,7 +18,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// 共有ディレクトリの ONNX モデルを管理する。
+    /// 共有ディレクトリの KNM モデルを管理する。
     Model {
         #[command(subcommand)]
         command: ModelCommands,
@@ -37,7 +37,7 @@ enum Commands {
         #[arg(long)]
         accent_dict: Option<PathBuf>,
 
-        /// ONNX バンドルのパス（環境変数 KOTONOHA_MODEL_BUNDLE、共有先も参照）
+        /// KNM バンドルのパス（環境変数 KOTONOHA_MODEL_BUNDLE、共有先も参照）
         #[arg(long, value_name = "DIR")]
         model_bundle: Option<PathBuf>,
 
@@ -69,7 +69,7 @@ enum Commands {
         /// トークンの JSON 配列（省略時は標準入力から読む）
         tokens_json: Option<String>,
 
-        /// ONNX バンドルのパス（環境変数 KOTONOHA_MODEL_BUNDLE、共有先も参照）
+        /// KNM バンドルのパス（環境変数 KOTONOHA_MODEL_BUNDLE、共有先も参照）
         #[arg(long, value_name = "DIR")]
         model_bundle: Option<PathBuf>,
 
@@ -130,7 +130,14 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ModelCommands {
-    /// v66 の 13 ONNX とアクセント辞書を取得する（ONNX Runtime は不要）。
+    /// 配置済みの固定版 ONNX を KNM へ変換する（通信なし、元ファイルは保持）。
+    Convert {
+        #[arg(long, value_name = "DIR")]
+        dir: PathBuf,
+        #[arg(long)]
+        force: bool,
+    },
+    /// v66 の 13 モデルを取得して KNM へ変換する（外部ランタイム不要）。
     Download {
         /// 保存先（省略時は共有ディレクトリ）
         #[arg(long, value_name = "DIR")]
@@ -381,6 +388,9 @@ fn cmd_label(
 
 fn cmd_model(command: ModelCommands) {
     let result = match command {
+        ModelCommands::Convert { dir, force } => {
+            kotonoha::model::convert_legacy_models(&dir, force)
+        }
         ModelCommands::Path { dir } => dir
             .or_else(kotonoha::model::default_model_dir)
             .ok_or(kotonoha::model::DownloadError::NoDirectory),
@@ -389,7 +399,7 @@ fn cmd_model(command: ModelCommands) {
             force,
             base_url,
         } => {
-            eprintln!("Preparing v66 model bundle (13 ONNX + accent dictionary)...");
+            eprintln!("Preparing v66 model bundle (13 KNM + accent dictionary)...");
             kotonoha::model::download(
                 dir.as_deref(),
                 kotonoha::model::DownloadOptions { force, base_url },
@@ -411,12 +421,12 @@ fn load_model_bundle(engine: &mut kotonoha::Engine, explicit: Option<&std::path:
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     });
-    #[cfg(feature = "cuda")]
+    #[cfg(feature = "neural")]
     let dir = dir.or_else(kotonoha::model::installed_model_dir);
     let Some(dir) = dir else {
         return;
     };
-    #[cfg(feature = "cuda")]
+    #[cfg(feature = "neural")]
     {
         let bundle = kotonoha::nn::v66::V66Bundle::from_dir(&dir).unwrap_or_else(|e| {
             eprintln!("Error loading model bundle: {e}");
@@ -425,10 +435,10 @@ fn load_model_bundle(engine: &mut kotonoha::Engine, explicit: Option<&std::path:
         engine
             .set_contextual_accent_predictor(Box::new(kotonoha::nn::v66::V66Pipeline::new(bundle)));
     }
-    #[cfg(not(feature = "cuda"))]
+    #[cfg(not(feature = "neural"))]
     {
         let _ = (engine, dir);
-        eprintln!("ONNX inference requires building kotonoha-cli with --features cuda");
+        eprintln!("KNM inference requires building kotonoha-cli with --features neural");
         std::process::exit(1);
     }
 }

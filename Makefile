@@ -24,7 +24,7 @@ endif
 RUN := $(if $(MISE),$(MISE) exec --,)
 endif
 
-.PHONY: help setup build release run test test-python test-release lint fmt fmt-check check ci install uninstall clean setup-training build-cuda
+.PHONY: help setup build release run test test-python test-release lint fmt fmt-check check ci install uninstall clean setup-training build-neural build-cuda
 
 setup: ## ツールチェーン (mise) と依存を取得する
 	@if [ -n "$(MISE)" ]; then "$(MISE)" install; fi
@@ -37,8 +37,10 @@ build: ## デバッグ版をビルドする
 release: ## リリース版をビルドする
 	$(RUN) cargo build --release $(CARGO_FLAGS) --workspace
 
-build-cuda: ## ONNX 推論を有効にしてリリース版をビルドする
-	$(RUN) cargo build --release $(CARGO_FLAGS) --workspace --all-features
+build-neural: ## 専用 CPU 推論を有効にしてリリース版をビルドする
+	$(RUN) cargo build --release $(CARGO_FLAGS) --workspace --features neural
+
+build-cuda: build-neural ## build-neural の互換エイリアス（GPU 実行はしない）
 
 run: ## デバッグ版を実行する (引数は ARGS="...")
 	$(RUN) cargo run $(CARGO_FLAGS) -p kotonoha-cli -- $(ARGS)

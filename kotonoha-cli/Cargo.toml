@@ -11,7 +11,8 @@ path = "src/main.rs"
 
 [features]
 default = []
-cuda = ["kotonoha/cuda"]
+cuda = ["neural"]
+neural = ["kotonoha/neural"]
 
 [dependencies]
 kotonoha = { workspace = true, features = ["download"] }

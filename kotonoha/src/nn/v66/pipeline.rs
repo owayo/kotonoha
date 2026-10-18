@@ -1,4 +1,4 @@
-//! v66 系の 12 ONNX 推論パイプライン
+//! v66 系の 13 KNM 推論パイプライン
 //!
 //! 訓練側 `precompute_v66_stacker.py:99-164` と
 //! `v66_exact_memory.py:227-253` を Rust に移植したもの。
@@ -19,10 +19,10 @@
 //!    ([seq, 103])
 //! 10. v66_split1(`feat103`) → argmax がアクセント類予測
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use ort::session::Session;
-use ort::value::TensorRef;
+use crate::nn::native::NativeModel;
+use rayon::prelude::*;
 
 use super::bundle::{STUDENT_FILENAMES, V66Bundle};
 use super::enrich::resolve_one;
@@ -39,7 +39,7 @@ const NUM_STUDENTS: usize = STUDENT_FILENAMES.len();
 
 /// v66 系推論パイプライン
 ///
-/// `V66Bundle` を共有所有し、各 ONNX セッションへ排他アクセスして推論する。
+/// `V66Bundle` を共有所有し、不変の専用モデルを並列に呼んで推論する。
 /// 単一 instance を多スレッドから呼び出し可能 (`Send + Sync`)。
 pub struct V66Pipeline {
     bundle: Arc<V66Bundle>,
@@ -131,14 +131,18 @@ impl V66Pipeline {
         }
         // 9 student の softmax を [9, seq, NUM_CLASSES] で保持。同じ feat14 を
         // 9 セッションへ流すが、`run_session` がスライス借用なので clone 不要。
-        let mut student_sm = vec![0f32; NUM_STUDENTS * seq_len * NUM_CLASSES];
-        for (s_idx, sess) in self.bundle.models.students.iter().enumerate() {
-            let logits = run_session(sess, &feat14, seq_len, FEATURE14_DIM)?;
-            for i in 0..seq_len {
-                let src = &logits[i * NUM_CLASSES..(i + 1) * NUM_CLASSES];
-                let sm = softmax(src);
-                let dst_off = s_idx * seq_len * NUM_CLASSES + i * NUM_CLASSES;
-                student_sm[dst_off..dst_off + NUM_CLASSES].copy_from_slice(&sm);
+        let student_outputs: Result<Vec<_>, _> = self
+            .bundle
+            .models
+            .students
+            .par_iter()
+            .map(|model| run_session(model, &feat14, seq_len, FEATURE14_DIM))
+            .collect();
+        let mut student_sm = Vec::with_capacity(NUM_STUDENTS * seq_len * NUM_CLASSES);
+        // indexed parallel iterator は元のモデル順を保つ。
+        for logits in student_outputs? {
+            for row in logits.as_chunks::<NUM_CLASSES>().0.iter() {
+                student_sm.extend_from_slice(&softmax(row));
             }
         }
 
@@ -164,8 +168,11 @@ impl V66Pipeline {
             dst[14..19].copy_from_slice(&teacher_stats[i * 5..(i + 1) * 5]);
             dst[19..24].copy_from_slice(&meta9[i * 5..(i + 1) * 5]);
         }
-        let v61_logits = run_session(&self.bundle.models.v61, &feat24, seq_len, FEATURE24_DIM)?;
-        let v63_logits = run_session(&self.bundle.models.v63, &feat24, seq_len, FEATURE24_DIM)?;
+        let (v61_logits, v63_logits) = rayon::join(
+            || run_session(&self.bundle.models.v61, &feat24, seq_len, FEATURE24_DIM),
+            || run_session(&self.bundle.models.v63, &feat24, seq_len, FEATURE24_DIM),
+        );
+        let (v61_logits, v63_logits) = (v61_logits?, v63_logits?);
         let mut v61_sm = vec![0f32; seq_len * NUM_CLASSES];
         let mut v63_sm = vec![0f32; seq_len * NUM_CLASSES];
         for i in 0..seq_len {
@@ -320,14 +327,14 @@ impl ContextualAccentPredictor for V66Pipeline {
     }
 }
 
-/// 単一 ONNX セッションを `[seq_len, dim]` 入力で実行し、`[seq_len, NUM_CLASSES]`
+/// 単一専用モデルを `[seq_len, dim]` 入力で実行し、`[seq_len, NUM_CLASSES]`
 /// の出力を行優先 `Vec<f32>` で返す。
 ///
 /// 入力データはスライス借用なので clone 不要。同じ入力を複数セッションへ流す
 /// (9 student) ケースでアロケーションが発生しない。
 /// 入力長 / 出力形状を release でも検証し、不整合時は `V66PredictError::Shape` を返す。
 fn run_session(
-    session: &Mutex<Session>,
+    session: &NativeModel,
     input_data: &[f32],
     seq_len: usize,
     dim: usize,
@@ -344,23 +351,16 @@ fn run_session(
             expected_input_len
         )));
     }
-    let tensor = TensorRef::from_array_view(([seq_len, dim], input_data))
-        .map_err(|e| V66PredictError::Tensor(e.to_string()))?;
-    let mut sess = session
-        .lock()
-        .map_err(|e| V66PredictError::Mutex(e.to_string()))?;
-    let outputs = sess
-        .run(ort::inputs!["input" => tensor])
+    if dim != session.input_dim() {
+        return Err(V66PredictError::Shape(
+            "model feature dimension mismatch".into(),
+        ));
+    }
+    let output = session
+        .predict(input_data, seq_len)
         .map_err(|e| V66PredictError::Run(e.to_string()))?;
-    let output = outputs
-        .values()
-        .next()
-        .ok_or_else(|| V66PredictError::Extract("session returned no outputs".to_string()))?;
-    let (shape, data) = output
-        .try_extract_tensor::<f32>()
-        .map_err(|e| V66PredictError::Extract(e.to_string()))?;
-    validate_output_shape(shape, data.len(), seq_len)?;
-    Ok(data.to_vec())
+    validate_output_shape(&[seq_len as i64, NUM_CLASSES as i64], output.len(), seq_len)?;
+    Ok(output)
 }
 
 /// 推論時のエラー

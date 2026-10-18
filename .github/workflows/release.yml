@@ -149,8 +149,8 @@ jobs:
       - name: Add the Rust target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Build with ONNX inference
-        run: cargo build --release --locked -p kotonoha-cli --features cuda --target ${{ matrix.target }}
+      - name: Build with native inference
+        run: cargo build --release --locked -p kotonoha-cli --features neural --target ${{ matrix.target }}
 
       - name: Smoke test and package
         id: package
@@ -204,7 +204,7 @@ jobs:
         with:
           minimum_release_age: 14d
           cache: false
-          install_args: python
+          install_args: python rust
 
       - name: Read the pinned model source
         id: models
@@ -229,7 +229,8 @@ jobs:
       - name: Package and verify models
         run: |
           set -euo pipefail
-          python scripts/package_models.py --models-dir model-source --source-revision "$(git rev-parse HEAD)"
+          cargo run --locked --release -p kotonoha-cli -- model convert --dir model-source
+          python scripts/package_models.py --native --models-dir model-source --source-revision "$(git rev-parse HEAD)"
           cd target/model-release
           sha256sum --check --strict kotonoha-models-v66.tar.gz.sha256
 
@@ -294,15 +295,15 @@ jobs:
           cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
           ## CLI
 
-          Download `kotonoha-<target>.tar.gz` for your platform (`.zip` on Windows), extract it and put `kotonoha` on your PATH. All binaries support ONNX inference. `SHA256SUMS` lists the checksums of the release assets.
+          Download `kotonoha-<target>.tar.gz` for your platform (`.zip` on Windows), extract it and put `kotonoha` on your PATH. All binaries support dedicated native CPU inference. `SHA256SUMS` lists the checksums of the release assets.
 
           ## Models
 
           Verify `kotonoha-models-v66.tar.gz.sha256` and extract `kotonoha-models-v66.tar.gz`. Set `KOTONOHA_MODEL_BUNDLE` to the extracted `kotonoha-models/` directory.
 
-          The bundle contains 13 trained ONNX models, a merged `accent_dict.csv`, the source `accent_dict_jsut.csv`, and `models.json` with source revisions and SHA-256 checksums.
+          The bundle contains 13 losslessly compressed KNM models, a merged `accent_dict.csv`, the source `accent_dict_jsut.csv`, and `models.json` with source revisions and SHA-256 checksums. The CLI uses the dedicated Rust CPU inference engine.
 
-          Install ONNX Runtime separately and set `ORT_DYLIB_PATH` to its shared library. Text analysis also requires a hasami `.hsd` dictionary, supplied with `--dict`.
+          Inference requires no ONNX Runtime or shared inference libraries. Text analysis requires a hasami `.hsd` dictionary, supplied with `--dict`.
           EOF
           # 添付や公開後の検証で失敗したジョブも、同じタグで再実行できるようにする。
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
