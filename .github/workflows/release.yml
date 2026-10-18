@@ -9,6 +9,10 @@ on:
         description: "Dry run (compute the next version only; no commit, tag or release)"
         type: boolean
         default: false
+      hasami_tag:
+        description: Published hasami HSD release tag (empty selects the latest stable release)
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -61,6 +65,13 @@ jobs:
       - name: Test release preparation and model packaging
         run: python -m unittest discover -s scripts/tests -v
 
+      - name: Pin the published HSD release before tagging
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HASAMI_TAG: ${{ inputs.hasami_tag }}
+        run: python scripts/hasami_release.py snapshot --tag "$HASAMI_TAG" --output .github/hasami-dictionaries.json
+
       - name: Bump the version
         id: bump
         run: |
@@ -95,8 +106,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock kotonoha-python/pyproject.toml kotonoha-python/uv.lock
-          git commit -m "Release $TAG"
+          git add Cargo.toml Cargo.lock kotonoha-python/pyproject.toml kotonoha-python/uv.lock .github/hasami-dictionaries.json
+          git commit -m "chore(release): $TAG を公開" -m "Rust/Python の版と lockfile を更新し、検証対象 HSD の公開タグ・サイズ・SHA-256 を固定する。CLI と KNM の Release ビルド対象をこのコミットにそろえる。"
           git tag -a "$TAG" -m "Release $TAG"
           # 既定ブランチが進んでいたら、タグも含めて push 全体を失敗させる。
           git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/$TAG"
@@ -227,12 +238,28 @@ jobs:
           lfs: true
 
       - name: Build KNM models from the pinned source
-        run: cargo run --locked --release -p kotonoha-cli -- model convert --dir model-source --force
+        run: cargo run --locked --release -p kotonoha-cli --features neural -- model convert --dir model-source --force
+
+      - name: Download and verify the pinned HSD
+        id: hsd
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/hasami_release.py download --snapshot .github/hasami-dictionaries.json --output-dir target/hsd-release >> "$GITHUB_OUTPUT"
+
+      - name: Verify native inference with the updated HSD
+        env:
+          HSD_PATH: ${{ steps.hsd.outputs.dictionary_path }}
+          KOTONOHA_RELEASE_HSD: ${{ steps.hsd.outputs.dictionary_path }}
+          KOTONOHA_RELEASE_MODELS: model-source
+        run: |
+          set -euo pipefail
+          cargo test --locked --release -p kotonoha --features neural --test hsd_knm_release -- --ignored
+          target/release/kotonoha analyze '今日は良い天気です' --dict "$HSD_PATH" --model-bundle model-source --format phone-tones
 
       - name: Package and verify the generated KNM models
         run: |
           set -euo pipefail
-          python scripts/package_models.py --native --models-dir model-source --source-revision "$(git rev-parse HEAD)"
+          python scripts/package_models.py --native --models-dir model-source --source-revision "$(git rev-parse HEAD)" --hasami-release .github/hasami-dictionaries.json
           cd target/model-release
           sha256sum --check --strict kotonoha-models.tar.gz.sha256
 
@@ -242,6 +269,7 @@ jobs:
           path: |
             target/model-release/kotonoha-models.tar.gz
             target/model-release/kotonoha-models.tar.gz.sha256
+            target/model-release/hasami-dictionaries.json
           compression-level: 0
           if-no-files-found: error
 
@@ -281,6 +309,7 @@ jobs:
             kotonoha-x86_64-pc-windows-msvc.zip
             kotonoha-models.tar.gz
             kotonoha-models.tar.gz.sha256
+            hasami-dictionaries.json
           )
           diff -u <(printf '%s\n' "${expected[@]}" | LC_ALL=C sort) \
             <(find release -type f -printf '%f\n' | LC_ALL=C sort)
@@ -306,6 +335,8 @@ jobs:
           Verify `kotonoha-models.tar.gz.sha256` and extract `kotonoha-models.tar.gz`. Set `KOTONOHA_MODEL_BUNDLE` to the extracted `kotonoha-models/` directory.
 
           The bundle contains 13 losslessly compressed KNM models, a merged `accent_dict.csv`, the source `accent_dict_jsut.csv`, and `models.json` with source revisions and SHA-256 checksums. The CLI uses the dedicated Rust CPU inference engine.
+
+          `hasami-dictionaries.json` records the published HSD release and checksums used to validate native inference. HSD changes trigger a rebuild from the pinned learned weights; this does not retrain the neural models. The HSD files remain available from the corresponding hasami release.
 
           Inference requires no ONNX Runtime or shared inference libraries. Text analysis requires a hasami `.hsd` dictionary, supplied with `--dict`.
           EOF

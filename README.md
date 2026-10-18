@@ -348,12 +348,28 @@ hasami と同じく次の処理をまとめて行います。
 2. Rust ワークスペースと Python パッケージの版・lockfile を更新し、コミットと `v<version>` タグを同時に push します。
 3. 同じタグから5ターゲットの CLI をビルドします。
 4. 固定版の学習済み ONNX から 13 個の KNM を毎回ビルドし、辞書とマニフェストを `kotonoha-models.tar.gz` に梱包します。
-5. バイナリ5個、`kotonoha-models.tar.gz`、その `.sha256`、全添付用の `SHA256SUMS` を Release に添付して公開します。
+5. バイナリ5個、`kotonoha-models.tar.gz`、その `.sha256`、検証に使った HSD の記録 `hasami-dictionaries.json`、全添付用の `SHA256SUMS` を Release に添付して公開します。
 6. 公開した添付の名前・サイズ・状態を確認し、再ダウンロードして全ファイルの SHA-256 を照合します。
 
 モデル配布物は、そのタグの `.github/model-bundle.json` に固定した学習済み ONNX を Rust で KNM へ変換し、辞書と一緒に梱包します。
 学習はリリース処理に含みません。入力の欠損・Git LFS ポインタ・SHA-256 不一致を検出すると失敗します。
 CLI とモデルは並列に生成し、すべて成功してから Release を作成します。各ジョブの結果は Actions の Summary に残ります。
+
+#### HSD 更新に合わせた自動 Release
+
+[Rebuild KNM after HSD updates](.github/workflows/hasami-update.yml) は毎時17分に、hasami の最新安定版に公開された
+3 辞書のサイズ・SHA-256 を確認します。最後に公開できた Kotonoha Release の
+`hasami-dictionaries.json` と異なる場合だけ、hasami のタグを指定して通常の Release を起動します。
+追加の認証キーは不要で、同じリポジトリの `GITHUB_TOKEN`（`actions: write`）を使います。
+
+新しい HSD を固定タグから取得して検証し、Kotonoha の専用 KNM 推論と組み合わせて解析を実行します。
+成功した場合だけモデルを梱包・公開します。HSD の記録はアーカイブ内にも含めます。
+HSD 本体は該当する hasami Release から取得します。KNM は固定した学習済み重みから再ビルドし、再学習は行いません。
+
+同じ HSD の再公開では Release を増やしません。実行中の Release があれば待ち、
+失敗したビルドは次の定期確認で再試行します。初回は公開済みモデルに HSD の記録がない場合も対象です。
+このワークフローを既定ブランチへ反映すると定期確認が有効になります。GitHub Actions の定期実行には遅延がありえます。
+手動の `dry_run=true` は更新確認だけを行います。通常の Release では `hasami_tag` を省くと最新安定版を使います。
 
 初回のみ、非公開の `owayo/kotonoha-models` に読み取り専用の deploy key を登録し、
 その秘密鍵を kotonoha の Actions secret `KOTONOHA_MODELS_READ_KEY` に設定してください。

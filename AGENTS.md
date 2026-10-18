@@ -154,6 +154,11 @@ GPU 実行は現在実装していない。形式仕様・ベンチマーク・�
 Rust マニフェストにそろえ、版の識別は取得元コミットと SHA-256 で行う。
 Python の `model_variant` は `default` が既定値。
 
+`.github/workflows/hasami-update.yml` は公開 HSD の更新を毎時確認し、変更時だけ Release を起動する。
+比較対象は公開済み Kotonoha Release の `hasami-dictionaries.json`。ビルド前のコミットを処理済み判定に使わない。
+Release は HSD の公開タグ・サイズ・SHA-256 を固定し、実際の HSD と KNM の組み合わせを検証してから公開する。
+HSD 更新時も KNM の重みは固定した学習元から生成する。辞書の発音補正とニューラルモデルの再学習を混同しない。
+
 既存モデルは `kotonoha model convert --dir <dir>` で通信なしに変換できる。
 `model download` は固定 SHA-256 の既存配布元から取得し、Rust で KNM へ変換する。
 推論時は KNM の重みだけを読む。ONNX をグラフ実行に使うコードを戻さないこと。

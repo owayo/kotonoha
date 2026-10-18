@@ -97,6 +97,32 @@ class PackageModelsTests(unittest.TestCase):
         (self.models / "accent_model_v66_split1.onnx").touch()
         self.assertEqual(self.package().read_bytes(), first)
 
+    def test_hsd_provenance_is_attached_and_included_in_the_archive(self):
+        """検証した HSD の記録を単独添付とアーカイブ内で同じバイト列にする。"""
+        record = (
+            Path(__file__).resolve().parents[2] / ".github/hasami-dictionaries.json"
+        )
+        archive_path = package_models(
+            self.models,
+            self.output,
+            self.lock,
+            self.base,
+            "b" * 40,
+            native=False,
+            hasami_release=record,
+        )
+        attached = (self.output / "hasami-dictionaries.json").read_bytes()
+        with tarfile.open(archive_path) as archive:
+            packed = archive.extractfile(
+                "kotonoha-models/hasami-dictionaries.json"
+            ).read()
+            self.assertEqual(attached, packed)
+            manifest = json.load(archive.extractfile("kotonoha-models/models.json"))
+            entry = next(
+                e for e in manifest["files"] if e["file"] == "hasami-dictionaries.json"
+            )
+            self.assertEqual(entry["sha256"], hashlib.sha256(attached).hexdigest())
+
     def test_native_archive_replaces_onnx_and_checks_conversion_manifest(self):
         source = json.loads(self.lock.read_text(encoding="utf-8"))
         original = next(

@@ -12,6 +12,8 @@ import struct
 import tarfile
 from pathlib import Path
 
+from hasami_release import SNAPSHOT_FILE, validate_snapshot
+
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_NAME = "kotonoha-models.tar.gz"
 
@@ -78,6 +80,7 @@ def package_models(
     base_dictionary: Path,
     source_revision: str,
     native: bool = True,
+    hasami_release: Path | None = None,
 ) -> Path:
     """固定した SHA-256 を検証してから、モデルと辞書を再現可能な形で梱包する。
 
@@ -165,6 +168,12 @@ def package_models(
             [base_dictionary, sources["accent_dict_jsut.csv"]]
         ),
     }
+    if hasami_release is not None:
+        snapshot = json.loads(hasami_release.read_text(encoding="utf-8"))
+        validate_snapshot(snapshot)
+        generated[SNAPSHOT_FILE] = (
+            json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n"
+        ).encode()
     manifest = {
         "schema_version": 1,
         "model_format": "knm-v1" if native else "onnx",
@@ -189,6 +198,8 @@ def package_models(
     ).encode()
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    if SNAPSHOT_FILE in generated:
+        (output_dir / SNAPSHOT_FILE).write_bytes(generated[SNAPSHOT_FILE])
     archive_path = output_dir / BUNDLE_NAME
     # checkout 時刻・OS によらず同じ入力から同じアーカイブを作る。
     with (
@@ -226,6 +237,7 @@ def main():
         "--base-dictionary", type=Path, default=ROOT / "data/accent_dict.csv"
     )
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument("--hasami-release", type=Path)
     parser.add_argument(
         "--native",
         action="store_true",
@@ -247,6 +259,7 @@ def main():
             args.base_dictionary,
             args.source_revision,
             native=args.native,
+            hasami_release=args.hasami_release,
         )
     except (OSError, ValueError, KeyError, csv.Error) as error:
         parser.exit(1, f"Model packaging failed: {error}\n")

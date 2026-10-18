@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "repository": "owayo/hasami",
+  "tag": "v26.10.104",
+  "catalog_sha256": "8bb298d9e658e1ac4b220ad6c6192bfe1fc2e533b116b1ad849facadabf07105",
+  "catalog": {
+    "hasami_version": "26.10.104",
+    "format_version": 5,
+    "recommended": "ipadic-neologd-sudachi",
+    "dictionaries": [
+      {
+        "name": "ipadic-neologd-sudachi",
+        "summary": "IPAdic + NEologd + SudachiDict (recommended, largest vocabulary)",
+        "file": "ipadic-neologd-sudachi.hsd",
+        "size": 220992866,
+        "sha256": "c402c9b22220d32a9d30dab0df19feabe8ab1e2d186a495870fe6b41adf70812",
+        "compressed": {
+          "file": "ipadic-neologd-sudachi.hsd.zst",
+          "size": 71759585,
+          "sha256": "796e22580036fa1dd1030c542545614f8fbb7676b2a57d288d764c5880fc8798"
+        },
+        "sources": "ipadic@61b90ba6e669,neologd@abc61e33d8be,sudachi-raw@20261015/content-symbol"
+      },
+      {
+        "name": "ipadic-neologd",
+        "summary": "IPAdic + NEologd",
+        "file": "ipadic-neologd.hsd",
+        "size": 206585250,
+        "sha256": "c901f1be4c2cddd291c6d50ff6eb58ac07480c540238e072d91e98830996ce7c",
+        "compressed": {
+          "file": "ipadic-neologd.hsd.zst",
+          "size": 66910737,
+          "sha256": "25f30aaed92b9b5dc1953150d337a8cb23086d3ac1c80fabc79a3883e1930b97"
+        },
+        "sources": "ipadic@61b90ba6e669,neologd@abc61e33d8be"
+      },
+      {
+        "name": "ipadic",
+        "summary": "IPAdic",
+        "file": "ipadic.hsd",
+        "size": 16498338,
+        "sha256": "340ef76dac773239e915d8d036907ed38a189c497e7c887d26ef4e9ba67f47b9",
+        "compressed": {
+          "file": "ipadic.hsd.zst",
+          "size": 5825388,
+          "sha256": "1e398aea00e5d830e9f095ce2d0dd4975423a8331792b931159871649aa7916f"
+        },
+        "sources": "ipadic@61b90ba6e669"
+      }
+    ]
+  }
+}
