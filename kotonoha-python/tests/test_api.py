@@ -74,6 +74,17 @@ class EngineApiTests(unittest.TestCase):
         self.assertEqual(node.mora_count, 2)
         self.assertEqual(token.pronunciation, "キョー")
 
+    def test_predictions_are_integer_lists_including_empty_input(self):
+        """予測結果は bytes ではなく、空入力でも整数のリストで返す。"""
+        self.assertEqual(self.engine.predict_accent_types([]), [])
+        tokens = [
+            SimpleNamespace(surface="猫", pos="名詞", reading="ネコ"),
+            SimpleNamespace(surface="犬", pos="名詞", reading="イヌ"),
+        ]
+        predictions = self.engine.predict_accent_types(tokens)
+        self.assertEqual(predictions, [0, 0])
+        self.assertTrue(all(type(value) is int for value in predictions))
+
     def test_conjugation_distinguishes_dictionary_form_and_volitional_u(self):
         """活用形を渡すと基本形の「う」を長音化せず、意志形だけを長音化する。"""
         for surface, lemma, cform, reading, expected in (

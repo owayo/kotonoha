@@ -33,6 +33,9 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 - テキストの形態素解析には hasami の `.hsd` 辞書が必要です。トークン列を直接渡す処理は辞書なしで使えます
 
 ONNX 推論にはモデルと ONNX Runtime の共有ライブラリも必要です。`ORT_DYLIB_PATH` にライブラリのパスを指定します。CUDA を使う場合は対応する GPU・ドライバ・実行環境を用意してください。
+GPU 版では ONNX Runtime が必要とする CUDA・cuDNN の共有ライブラリも必要です。
+Windows で `cudnn64_9.dll` などが見つからない場合の確認方法は
+[CUDA Execution Provider の公式ドキュメント](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#requirements)を参照してください。
 
 v66 系の各 ONNX セッションはノード内の実行を1スレッドに固定します。順番に呼ぶモデルごとに CPU のスレッドプールを作らず、短い発話でのスレッドの競合を抑えます。
 
@@ -197,6 +200,7 @@ let labels = engine.text_to_labels("今日は良い天気です")?;
 同じ見出し語でも読みが一致しなければ、別の読みのアクセントを流用せず、予測器による推定または既定値を使います。
 アクセント辞書 CSV の `accent_type` は `u8` の整数、アクセント規則 CSV の規則名と数値は
 有効な値を指定してください。不正な値は読み込み時にエラーになります。
+結合規則 CSV の列不足や、品詞階層から計算する優先度が255を超える場合もエラーとして返します。
 
 ### CLI
 
@@ -232,6 +236,7 @@ phone_tones = engine.phone_tones(tokens)
 
 `engine.predict_accent_types(tokens)` は、推論失敗や予測結果の長さの不一致で `RuntimeError` を返します。
 評価処理で辞書値へのフォールバックをモデルの予測として数えないための仕様です。
+戻り値は整数のリスト（`list[int]`）で、空入力では `[]` を返します。
 
 ## クレート構成
 

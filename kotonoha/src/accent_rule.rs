@@ -77,14 +77,18 @@ impl AccentRuleTable {
         for result in reader.records() {
             let record = result?;
             if record.len() < 3 {
-                continue;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "アクセント結合規則には左右の品詞と規則の3列以上が必要です",
+                )
+                .into());
             }
 
             let fields: Vec<&str> = record.iter().collect();
             let (left_pos, right_pos, rule_str) = parse_csv_fields(&fields);
 
             let rule_type = parse_rule_type(&rule_str)?;
-            let priority = compute_priority(&left_pos, &right_pos);
+            let priority = compute_priority(&left_pos, &right_pos)?;
 
             table.add_rule(AccentRule {
                 left_pos,
@@ -266,7 +270,7 @@ fn parse_csv_fields(fields: &[&str]) -> (String, String, String) {
             }
         }
         _ => {
-            // Fallback: first half = left, second half = right
+            // 分割点を決められない場合は、前半を左、後半を右の品詞とする。
             let mid = pos_fields.len() / 2;
             let left: Vec<&str> = pos_fields[..mid].iter().map(|s| s.trim()).collect();
             let right: Vec<&str> = pos_fields[mid..].iter().map(|s| s.trim()).collect();
@@ -298,18 +302,23 @@ fn is_known_pos(s: &str) -> bool {
 }
 
 /// 品詞パターンの具体性から優先度を計算する
-fn compute_priority(left: &str, right: &str) -> u8 {
+fn compute_priority(left: &str, right: &str) -> Result<u8, std::io::Error> {
     let left_score = if left == "*" {
         0
     } else {
-        left.split(',').count() as u8
+        left.split(',').count()
     };
     let right_score = if right == "*" {
         0
     } else {
-        right.split(',').count() as u8
+        right.split(',').count()
     };
-    left_score + right_score
+    u8::try_from(left_score + right_score).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "アクセント結合規則の品詞階層が多すぎます（優先度は255以下）",
+        )
+    })
 }
 
 fn parse_rule_type(s: &str) -> Result<AccentRuleType, std::io::Error> {
@@ -722,9 +731,39 @@ mod tests {
 
     #[test]
     fn test_compute_priority() {
-        assert_eq!(compute_priority("*", "*"), 0);
-        assert_eq!(compute_priority("名詞", "助詞"), 2);
-        assert_eq!(compute_priority("名詞,数", "名詞,接尾,助数詞"), 5);
+        assert_eq!(compute_priority("*", "*").unwrap(), 0);
+        assert_eq!(compute_priority("名詞", "助詞").unwrap(), 2);
+        assert_eq!(compute_priority("名詞,数", "名詞,接尾,助数詞").unwrap(), 5);
+    }
+
+    #[test]
+    fn test_from_csv_rejects_incomplete_rule_row() {
+        let path = std::env::temp_dir().join(format!(
+            "kotonoha-incomplete-rule-{}.csv",
+            std::process::id()
+        ));
+        std::fs::write(&path, "left,right,rule\n名詞,助詞\n").unwrap();
+        let result = AccentRuleTable::from_csv(&path);
+        std::fs::remove_file(&path).unwrap();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_csv_checks_priority_before_narrowing() {
+        let path =
+            std::env::temp_dir().join(format!("kotonoha-rule-priority-{}.csv", std::process::id()));
+        for levels in [254, 255, 256] {
+            let left = vec!["名詞"; levels].join(",");
+            std::fs::write(&path, format!("left,right,rule\n\"{left}\",助詞,flat\n")).unwrap();
+            let result = AccentRuleTable::from_csv(&path);
+            if levels == 254 {
+                let table = result.unwrap();
+                assert_eq!(table.find_rule(&left, "助詞").unwrap().priority, u8::MAX);
+            } else {
+                assert!(result.is_err(), "{levels}");
+            }
+        }
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

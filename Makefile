@@ -46,7 +46,7 @@ run: ## デバッグ版を実行する (引数は ARGS="...")
 # PyO3 の extension-module は Python からロードしてテストする。
 test: test-python test-release ## テストを実行する
 	$(RUN) cargo test $(CARGO_FLAGS) --workspace --exclude kotonoha-python --no-fail-fast
-	$(RUN) cargo test $(CARGO_FLAGS) -p kotonoha --all-features --no-fail-fast
+	$(RUN) cargo test $(CARGO_FLAGS) --workspace --exclude kotonoha-python --all-features --no-fail-fast
 
 test-python: ## Python バインディングの公開 API を検査する
 	$(RUN) uv run --locked --project kotonoha-python python -m unittest discover -s kotonoha-python/tests -v

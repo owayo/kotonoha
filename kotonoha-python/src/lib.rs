@@ -231,11 +231,18 @@ impl KotonohaEngine {
     ///
     /// Raises:
     ///     RuntimeError: 推論が失敗した場合、または予測結果の長さが不正な場合
-    fn predict_accent_types(&self, tokens: Vec<PyToken>) -> PyResult<Vec<u8>> {
+    fn predict_accent_types<'py>(
+        &self,
+        py: Python<'py>,
+        tokens: Vec<PyToken>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyList>> {
         let input_tokens = convert_tokens(tokens);
-        self.inner
+        let predictions = self
+            .inner
             .try_predict_accent_types(&input_tokens)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        // Vec<u8> の既定変換は bytes になるため、整数リストを明示的に構築する。
+        pyo3::types::PyList::new(py, predictions)
     }
 }
 
