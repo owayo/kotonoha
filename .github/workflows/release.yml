@@ -13,6 +13,10 @@ on:
         description: Published hasami HSD release tag (empty selects the latest stable release)
         type: string
         default: ""
+      check_hsd_changes:
+        description: Skip publishing when this HSD is already covered (used by hasami)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,14 +24,47 @@ permissions:
 concurrency:
   group: release
   cancel-in-progress: false
+  queue: max
 
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: kotonoha
 
 jobs:
+  check-hsd:
+    name: Check the HSD notification
+    if: ${{ !inputs.dry_run && inputs.check_hsd_changes }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: jdx/mise-action@v4
+        with:
+          minimum_release_age: 14d
+          cache: false
+          install_args: python
+      - name: Compare the published HSD with the last model release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HASAMI_TAG: ${{ inputs.hasami_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HASAMI_TAG" ]; then
+            echo "::error::hasami_tag is required when check_hsd_changes is true"
+            exit 1
+          fi
+          python scripts/hasami_release.py check --tag "$HASAMI_TAG" >> "$GITHUB_OUTPUT"
+
   prepare-release:
     name: Prepare release
+    needs: check-hsd
+    if: ${{ !cancelled() && (needs.check-hsd.result == 'skipped' || (needs.check-hsd.result == 'success' && needs.check-hsd.outputs.changed == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -54,7 +91,8 @@ jobs:
 
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          # キュー待機中に前の Release が進めた版も取り込んでから採番する。
+          ref: ${{ inputs.dry_run && github.sha || github.event.repository.default_branch }}
 
       - uses: jdx/mise-action@v4
         with:
@@ -368,7 +406,7 @@ jobs:
 
   release-summary:
     name: Release summary
-    needs: [prepare-release, build, models, release]
+    needs: [check-hsd, prepare-release, build, models, release]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
@@ -376,6 +414,8 @@ jobs:
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           TAG: ${{ needs.prepare-release.outputs.tag }}
+          HSD_CHECK_RESULT: ${{ needs.check-hsd.result }}
+          HSD_CHANGED: ${{ needs.check-hsd.outputs.changed }}
           PREPARE_RESULT: ${{ needs.prepare-release.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           MODELS_RESULT: ${{ needs.models.result }}
@@ -387,11 +427,16 @@ jobs:
               echo "## Dry run: ${TAG:-no version}"
               echo
               echo "prepare-release: $PREPARE_RESULT. Nothing was committed, tagged or released; builds and model packaging were skipped."
+            elif [ "$HSD_CHECK_RESULT" = "success" ] && [ "$HSD_CHANGED" = "false" ]; then
+              echo "## HSD already covered"
+              echo
+              echo "The HSD is unchanged or older than the last published model release. Nothing was committed, tagged or released."
             else
               echo "## ${TAG:-no version}"
               echo
               echo '| Job | Result |'
               echo '|---|---|'
+              echo "| check-hsd | $HSD_CHECK_RESULT |"
               echo "| prepare-release | $PREPARE_RESULT |"
               echo "| build | $BUILD_RESULT |"
               echo "| models | $MODELS_RESULT |"

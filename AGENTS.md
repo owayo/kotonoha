@@ -4,6 +4,9 @@
 
 kotonohaはRust製の日本語韻律エンジン。OpenJTalkの機能を置き換え、HTS Full-Context LabelおよびPhoneToneを生成する。
 
+公開 README には非公開リポジトリの名称・URL・パス・内部の取得設定を書かない。
+利用者向けの説明は公開 Release と公開 API を基準にする。
+
 ## ビルド・テスト
 
 ```bash
@@ -154,7 +157,11 @@ GPU 実行は現在実装していない。形式仕様・ベンチマーク・�
 Rust マニフェストにそろえ、版の識別は取得元コミットと SHA-256 で行う。
 Python の `model_variant` は `default` が既定値。
 
-`.github/workflows/hasami-update.yml` は公開 HSD の更新を毎時確認し、変更時だけ Release を起動する。
+hasami の Release が HSD の公開・検証後に Kotonoha の `release.yml` を直接起動する。定期チェックは使わない。
+通知は `hasami_tag` と `check_hsd_changes=true` を渡し、Kotonoha の Release 実行枠で変更を判定する。
+同じ HSD や古い通知は省き、実行中の Release があればキューで待機する。
+通知の認証は専用 GitHub App（Kotonoha のみにインストール、Actions: read and write）。
+hasami の variable `KOTONOHA_APP_CLIENT_ID` と Secret `KOTONOHA_APP_PRIVATE_KEY` から短命の token を作る。
 比較対象は公開済み Kotonoha Release の `hasami-dictionaries.json`。ビルド前のコミットを処理済み判定に使わない。
 Release は HSD の公開タグ・サイズ・SHA-256 を固定し、実際の HSD と KNM の組み合わせを検証してから公開する。
 HSD 更新時も KNM の重みは固定した学習元から生成する。辞書の発音補正とニューラルモデルの再学習を混同しない。

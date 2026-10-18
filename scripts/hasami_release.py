@@ -177,11 +177,17 @@ def rebuild_required(candidate: dict, released: dict | None) -> bool:
     """最後に公開できたモデルと比較する。
 
     Returns:
-        初回または HSD に変更がある場合は True。失敗したビルドは処理済みにしない。
+        初回または HSD に変更がある場合は True。古い通知で辞書を巻き戻さない。
+        失敗したビルドは処理済みにしない。
 
     """
     identity = dictionary_identity(candidate)
-    return released is None or identity != dictionary_identity(released)
+    if released is None:
+        return True
+    previous_identity = dictionary_identity(released)
+    candidate_version = tuple(map(int, candidate["tag"][1:].split(".")))
+    released_version = tuple(map(int, released["tag"][1:].split(".")))
+    return candidate_version >= released_version and identity != previous_identity
 
 
 def last_model_snapshot(repository: str) -> dict | None:
@@ -277,6 +283,7 @@ def main():
     check.add_argument(
         "--repository", default=os.environ.get("GITHUB_REPOSITORY", "owayo/kotonoha")
     )
+    check.add_argument("--tag", default="")
     snapshot = commands.add_parser("snapshot")
     snapshot.add_argument("--tag", default="")
     snapshot.add_argument("--output", type=Path, required=True)
@@ -286,7 +293,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "check":
-            candidate = published_snapshot()
+            candidate = published_snapshot(args.tag)
             changed = rebuild_required(candidate, last_model_snapshot(args.repository))
             print(f"changed={str(changed).lower()}")
             print(f"hasami_tag={candidate['tag']}")

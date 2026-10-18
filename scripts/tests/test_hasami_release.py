@@ -2,6 +2,7 @@
 
 import copy
 import hashlib
+import io
 import json
 import subprocess
 import sys
@@ -79,6 +80,36 @@ class HasamiReleaseTests(unittest.TestCase):
             record["catalog"]["dictionaries"][0][field] = value
             with self.assertRaises(ValueError):
                 hsd.validate_snapshot(record)
+
+    def test_delayed_notifications_do_not_roll_back_a_newer_hsd(self):
+        """通知順序が逆転しても、公開済みの新しい辞書を古いものへ戻さない。"""
+        old = snapshot()
+        newer = copy.deepcopy(old)
+        newer["tag"] = "v26.10.101"
+        newer["catalog"]["hasami_version"] = "26.10.101"
+        newer["catalog"]["dictionaries"][0]["sha256"] = "b" * 64
+        self.assertFalse(hsd.rebuild_required(old, newer))
+        self.assertTrue(hsd.rebuild_required(newer, old))
+        same_tag = copy.deepcopy(old)
+        same_tag["catalog"]["dictionaries"][0]["sha256"] = "b" * 64
+        self.assertTrue(hsd.rebuild_required(same_tag, old))
+
+    def test_notification_checks_the_exact_published_tag(self):
+        """通知された版を検証し、処理中に別の最新版へすり替えない。"""
+        with (
+            patch.object(
+                sys, "argv", ["hasami_release.py", "check", "--tag", "v26.10.100"]
+            ),
+            patch.object(
+                hsd, "published_snapshot", return_value=snapshot()
+            ) as published,
+            patch.object(hsd, "last_model_snapshot", return_value=None),
+            patch("sys.stdout", new_callable=io.StringIO) as output,
+        ):
+            hsd.main()
+        published.assert_called_once_with("v26.10.100")
+        self.assertIn("changed=true", output.getvalue())
+        self.assertIn("hasami_tag=v26.10.100", output.getvalue())
 
     def test_metadata_corruption_is_rejected(self):
         """API が返した添付 SHA-256 と一致しない記録では Release を判断しない。"""

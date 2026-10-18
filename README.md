@@ -38,10 +38,7 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 AVX2/FMA を実行時に検出し、9 students と 2 meta models を Rayon で並列実行します。
 スレッド数は `RAYON_NUM_THREADS` で調整できます。
 
-重みは FP32 のまま可逆圧縮し、本番 13 モデルで約 245 MB → 204.5 MB。
-形式仕様、圧縮方式の比較、実測値と再現手順は
-[kotonoha-models/docs/knm-format.md](https://github.com/owayo/kotonoha-models/blob/main/docs/knm-format.md)
-に集約しています。
+重みは FP32 のまま可逆圧縮し、本番 13 モデルで約 245 MB → 204.5 MB に削減しています（辞書を除く、10進 MB）。
 
 ## インストール
 
@@ -222,7 +219,7 @@ Python の `model_variant` は省略するか `"default"` を指定します。
 固定版の既存 ONNX を通信なしで変換する場合は、次を実行します。元ファイルは保持されます。
 
 ```bash
-kotonoha model convert --dir /path/to/kotonoha-models
+kotonoha model convert --dir /path/to/model-source
 ```
 
 変換元の固定値は `.github/model-bundle.json` と `kotonoha/src/model/manifest.rs` にあります。
@@ -271,7 +268,7 @@ engine.load_dictionary(Path::new("ipadic.hsd"))?;
 let labels = engine.text_to_labels("今日は良い天気です")?;
 ```
 
-アクセント辞書は [kotonoha-training-data](https://github.com/owayo/kotonoha-training-data) の `data/dicts/` でも管理しています。
+アクセント辞書は配布モデルに同梱しています。追加の辞書も CSV で指定できます。
 `Engine` は `(lemma, reading)` の完全一致でアクセント型を取得します。
 同じ見出し語でも読みが一致しなければ、別の読みのアクセントを流用せず、予測器による推定または既定値を使います。
 アクセント辞書 CSV の `accent_type` は `u8` の整数、アクセント規則 CSV の規則名と数値は
@@ -324,23 +321,16 @@ KNM の取得・`model_bundle` の指定は [モデルの取得・共有](#モ�
 | `kotonoha-cli` | CLI ツール (`kotonoha` コマンド) |
 | `kotonoha-python` | Python バインディング (PyO3) |
 
-## 関連リポジトリ
-
-| リポジトリ | 説明 |
-|---|---|
-| [kotonoha-models](https://github.com/owayo/kotonoha-models) | KNM 配布モデル、ONNX 学習元、形式仕様・ベンチマーク (Git LFS) |
-| [kotonoha-training-data](https://github.com/owayo/kotonoha-training-data) | 訓練データ・辞書・LLM データ生成ツール |
-| [hasami](https://github.com/owayo/hasami) | 形態素解析エンジン |
-
 ## パフォーマンス
 
 `cargo run --release --locked -p kotonoha-cli -- bench` で内部ベンチマークを実行できます。
 固定の5トークンを渡し、ルールによるアクセント処理・ラベル生成・韻律抽出などを測定します。
 HSD の形態素解析、KNM の読込・ニューラル推論は含みません。
 
-KNM と ONNX Runtime の容量・読込・推論の比較は
-[kotonoha-models の測定記録](https://github.com/owayo/kotonoha-models/blob/main/docs/benchmark.md)
-を参照してください。測定した環境・並列数・入力ごとの結果を記録しており、すべての入力での速度優位を示すものではありません。
+KNM 移行時の測定では、Windows / Ryzen 7 5700X、モデル間8並列、実発話20件の中央値で、
+ONNX Runtime の参照パイプライン32.32 ms/発話に対し、専用 Rust パイプラインは29.31 ms/発話でした。
+特徴量処理を含む比較であり、単一モデル・逐次実行・長い入力では ONNX Runtime の方が速い場合があります。
+すべての環境・入力での速度優位を示すものではありません。
 
 ## 開発
 
@@ -382,22 +372,35 @@ CLI とモデルは並列に生成し、すべて成功してから Release を�
 
 #### HSD 更新に合わせた自動 Release
 
-[Rebuild KNM after HSD updates](.github/workflows/hasami-update.yml) は毎時17分に、hasami の最新安定版に公開された
-3 辞書のサイズ・SHA-256 を確認します。最後に公開できた Kotonoha Release の
-`hasami-dictionaries.json` と異なる場合だけ、hasami のタグを指定して通常の Release を起動します。
-追加の認証キーは不要で、同じリポジトリの `GITHUB_TOKEN`（`actions: write`）を使います。
+hasami の [Release ワークフロー](https://github.com/owayo/hasami/blob/main/.github/workflows/release.yml)は、
+HSD の公開と添付の検証に成功した直後、そのタグを指定して Kotonoha の [Release](.github/workflows/release.yml) を起動します。
+毎時チェックは行いません。通知では `hasami_tag` と `check_hsd_changes=true` を指定します。
+Kotonoha は Release の実行枠を取得してから、指定タグの3辞書のサイズ・SHA-256 を
+最後に公開できたモデルの `hasami-dictionaries.json` と比較します。
 
 新しい HSD を固定タグから取得して検証し、Kotonoha の専用 KNM 推論と組み合わせて解析を実行します。
 成功した場合だけモデルを梱包・公開します。HSD の記録はアーカイブ内にも含めます。
 HSD 本体は該当する hasami Release から取得します。KNM は固定した学習済み重みから再ビルドし、再学習は行いません。
 
-同じ HSD の再公開では Release を増やしません。実行中の Release があればその回の確認をスキップし、
-失敗したビルドは次の定期確認で再試行します。初回は公開済みモデルに HSD の記録がない場合も対象です。
-このワークフローを既定ブランチへ反映すると定期確認が有効になります。GitHub Actions の定期実行には遅延がありえます。
-手動の `dry_run=true` は更新確認だけを行います。通常の Release では `hasami_tag` を省くと最新安定版を使います。
+同じ HSD の重複通知や、公開済みモデルが使う HSD より古い通知では Release を増やしません。
+実行中の Release があればキューで待機します（最大100件）。待機後の既定ブランチから採番するため、前の Release の版更新も取り込みます。
+初回は公開済みモデルに HSD の記録がない場合もビルドします。失敗した生成は処理済みとせず、Actions の失敗ジョブを再実行できます。
+自動の定期再試行はありません。通常の手動 Release は `check_hsd_changes=false`（既定）のままなら毎回ビルドし、
+`hasami_tag` を省くと最新安定版を使います。`dry_run=true` は従来どおり採番・メタデータ更新の確認だけです。
 
-初回のみ、非公開の `owayo/kotonoha-models` に読み取り専用の deploy key を登録し、
-その秘密鍵を kotonoha の Actions secret `KOTONOHA_MODELS_READ_KEY` に設定してください。
+リポジトリをまたぐ通知用に、初回だけ次を設定します。
+
+1. 専用 GitHub App に **Actions: Read and write** だけを許可し、**`owayo/kotonoha` のみ**にインストールします。
+2. **hasami 側**の Actions variable `KOTONOHA_APP_CLIENT_ID` に Client ID、Actions secret `KOTONOHA_APP_PRIVATE_KEY` に秘密鍵を登録します。
+3. Kotonoha の受信側を先に既定ブランチへ反映し、App の設定後に hasami の通知側を反映します。
+
+同じ所有者でも、hasami の `GITHUB_TOKEN` は Kotonoha の workflow を起動できないため、この認証が必要です。
+[GitHub の workflow dispatch 権限](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)を参照してください。
+通知ジョブで Kotonoha の Actions だけに絞った短命の installation token を生成し、ジョブ終了時に失効させます。
+App の設定不備や通知失敗は hasami の `notify-kotonoha` ジョブを失敗にします。
+HSD の公開は完了済みなので、設定を直してその失敗ジョブだけ再実行すれば再ビルド通知を送れます。
+
+Release のモデル入力とその取得設定はリリース環境の管理者が用意します。
 モデルを更新するときは `.github/model-bundle.json` のコミット・ファイル一覧・サイズ・SHA-256 も更新します。
 
 Actions には、既定ブランチへのコミット・タグの push と Release 作成ができる `GITHUB_TOKEN` の権限が必要です。
@@ -411,12 +414,12 @@ Actions には、既定ブランチへのコミット・タグの push と Relea
 
 #### ローカルでのモデル梱包
 
-Git LFS の実体を取得したモデルリポジトリと Python 3.12 以上を用意し、Kotonoha リポジトリで実行します。
+固定版のモデル入力を `/path/to/model-source` に配置し、Python 3.12 以上を用意して Kotonoha リポジトリで実行します。
 固定版の ONNX から KNM を生成してから、辞書と HSD の記録を梱包します。
 
 ```bash
-cargo run --release --locked -p kotonoha-cli --features neural -- model convert --dir ../kotonoha-models --force
-python scripts/package_models.py --native --models-dir ../kotonoha-models --source-revision "$(git rev-parse HEAD)" --hasami-release .github/hasami-dictionaries.json
+cargo run --release --locked -p kotonoha-cli --features neural -- model convert --dir /path/to/model-source --force
+python scripts/package_models.py --native --models-dir /path/to/model-source --source-revision "$(git rev-parse HEAD)" --hasami-release .github/hasami-dictionaries.json
 python -m unittest discover -s scripts/tests -v
 ```
 
