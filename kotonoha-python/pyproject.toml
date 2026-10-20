@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "kotonoha"
-version = "26.10.103"
+version = "26.10.104"
 description = "Japanese prosody engine for TTS (Text-to-Speech)"
 requires-python = ">=3.9"
 license = { text = "MIT" }
