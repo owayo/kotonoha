@@ -45,7 +45,7 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = AnalyzeFormat::Labels)]
         format: AnalyzeFormat,
 
-        /// 形態素トークンも表示する。
+        /// 形態素トークンを MeCab 形式で標準エラー出力にも表示する。
         #[arg(long)]
         tokens: bool,
     },
@@ -233,12 +233,17 @@ fn cmd_analyze(
     let mut engine = kotonoha::Engine::with_default_rules();
     load_model_bundle(&mut engine, model_bundle);
 
-    if let Some(path) = dict_path
-        && let Err(e) = engine.load_dictionary(path)
-    {
+    let Some(dict_path) = dict_path else {
+        eprintln!("Warning: No dictionary specified. Use --dict to specify a .hsd dictionary.");
+        eprintln!(
+            "Without a dictionary, use the 'label' subcommand with pre-tokenized JSON input."
+        );
+        std::process::exit(1);
+    };
+    let mut analyzer = hasami::Analyzer::load(dict_path).unwrap_or_else(|e| {
         eprintln!("Error loading dictionary: {e}");
         std::process::exit(1);
-    }
+    });
 
     if let Some(path) = accent_dict_path
         && let Err(e) = engine.load_accent_dict(path)
@@ -247,61 +252,37 @@ fn cmd_analyze(
         std::process::exit(1);
     }
 
-    if dict_path.is_some() {
-        // Use text-based analysis (includes morphological analysis)
-        if show_tokens {
-            eprintln!("(token display requires dictionary-based tokenization)");
-        }
-
-        match format {
-            AnalyzeFormat::Labels => match engine.text_to_labels(text) {
-                Ok(labels) => {
-                    for label in &labels {
-                        println!("{label}");
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    std::process::exit(1);
-                }
-            },
-            AnalyzeFormat::PhoneTones => match engine.text_to_phone_tones(text) {
-                Ok(phone_tones) => {
-                    for pt in &phone_tones {
-                        println!("{}\t{}", pt.phone, pt.tone);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    std::process::exit(1);
-                }
-            },
-            AnalyzeFormat::Prosody => match engine.text_to_prosody_symbols(text) {
-                Ok(symbols) => {
-                    println!("{}", symbols.join(""));
-                }
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    std::process::exit(1);
-                }
-            },
-            AnalyzeFormat::Json => match engine.text_to_labels(text) {
-                Ok(labels) => {
-                    let json = serde_json::to_string_pretty(&labels).unwrap();
-                    println!("{json}");
-                }
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    std::process::exit(1);
-                }
-            },
-        }
-    } else {
-        eprintln!("Warning: No dictionary specified. Use --dict to specify a .hsd dictionary.");
-        eprintln!(
-            "Without a dictionary, use the 'label' subcommand with pre-tokenized JSON input."
-        );
+    let tokens = analyzer.try_tokenize(text).unwrap_or_else(|e| {
+        eprintln!("Error tokenizing text: {e}");
         std::process::exit(1);
+    });
+    if show_tokens {
+        eprint!("{}", hasami::analyzer::format_mecab(&tokens));
+    }
+    let input_tokens: Vec<InputToken> = tokens.into_iter().map(InputToken::from).collect();
+
+    match format {
+        AnalyzeFormat::Labels => {
+            for label in engine.tokens_to_labels(&input_tokens) {
+                println!("{label}");
+            }
+        }
+        AnalyzeFormat::PhoneTones => {
+            for pt in engine.tokens_to_phone_tones(&input_tokens) {
+                println!("{}\t{}", pt.phone, pt.tone);
+            }
+        }
+        AnalyzeFormat::Prosody => {
+            println!(
+                "{}",
+                engine.tokens_to_prosody_symbols(&input_tokens).join("")
+            );
+        }
+        AnalyzeFormat::Json => {
+            let labels = engine.tokens_to_labels(&input_tokens);
+            let json = serde_json::to_string_pretty(&labels).unwrap();
+            println!("{json}");
+        }
     }
 }
 
