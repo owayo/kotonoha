@@ -338,3 +338,75 @@ fn quantity_and_counter_readings_reach_pronunciation_and_labels() {
         assert_eq!(phones.len(), labels.len(), "{text}");
     }
 }
+
+#[test]
+fn spaced_month_readings_reach_pronunciation_and_labels() {
+    let mut builder = DictBuilder::new();
+    for (surface, pos, reading, pronunciation) in [
+        ("1", "名詞,数,*,*", "イチ", "イチ"),
+        ("2", "名詞,数,*,*", "ニ", "ニ"),
+        ("4", "名詞,数,*,*", "ヨン", "ヨン"),
+        ("７", "名詞,数,*,*", "ナナ", "ナナ"),
+        ("九", "名詞,数,*,*", "キュウ", "キュー"),
+        ("十", "名詞,数,*,*", "ジュウ", "ジュー"),
+        ("月", "名詞,一般,*,*", "ツキ", "ツキ"),
+        ("間", "名詞,接尾,一般,*", "カン", "カン"),
+    ] {
+        builder.add_entry(DictEntry {
+            surface: surface.into(),
+            base_form: surface.into(),
+            reading: reading.into(),
+            pronunciation: pronunciation.into(),
+            pos: pos.into(),
+            cost: -10000,
+            ..Default::default()
+        });
+    }
+    let mut analyzer = hasami::Analyzer::from_dict(builder.build().unwrap());
+    let engine = Engine::default();
+    for (text, expected) in [
+        ("4 月", "シガツ"),
+        ("７\t月", "シチガツ"),
+        ("九 月", "クガツ"),
+        ("十 月", "ジュウガツ"),
+        ("12 月", "ジュウニガツ"),
+        ("月", "ツキ"),
+        ("九 月間", "キュウツキカン"),
+    ] {
+        let tokens: Vec<InputToken> = analyzer
+            .try_tokenize(text)
+            .unwrap()
+            .into_iter()
+            .map(InputToken::from)
+            .collect();
+        let mut nodes = engine.analyze(&tokens);
+        assert_eq!(
+            nodes
+                .iter()
+                .map(|node| node.pronunciation.as_str())
+                .collect::<String>(),
+            expected,
+            "{text}"
+        );
+        let phrases = engine.estimate_accent(&mut nodes);
+        assert_eq!(
+            phrases
+                .iter()
+                .map(|phrase| phrase.mora_count)
+                .sum::<usize>(),
+            kotonoha::mora::count_mora(expected),
+            "{text}"
+        );
+        let phones = engine.extract_phone_tones(&nodes, &phrases);
+        assert_eq!(phones.len(), engine.make_label(&nodes, &phrases).len());
+        assert_eq!(
+            phones
+                .iter()
+                .filter(|phone| phone.phone != "sil")
+                .map(|phone| phone.phone.as_str())
+                .collect::<Vec<_>>(),
+            kotonoha::phoneme::katakana_to_phonemes(expected),
+            "{text}"
+        );
+    }
+}

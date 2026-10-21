@@ -354,7 +354,7 @@ struct PyToken {
 }
 
 /// Python用NjdNode出力
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[derive(Clone)]
 struct PyNjdNode {
     #[pyo3(get)]
