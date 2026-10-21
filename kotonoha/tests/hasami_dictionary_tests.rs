@@ -6,6 +6,73 @@ use kotonoha::njd::InputToken;
 
 #[test]
 #[ignore = "KOTONOHA_TEST_DICT に監査済みの配布辞書を指定する"]
+fn distributed_roles_and_academic_terms_reach_pronunciation_and_labels() {
+    let path = std::env::var("KOTONOHA_TEST_DICT").expect("KOTONOHA_TEST_DICT is required");
+    let mut engine = Engine::default();
+    engine.load_dictionary(std::path::Path::new(&path)).unwrap();
+    for (text, pronunciation) in [
+        ("理事長", "リジチョー"),
+        ("活動拠点", "カツドーキョテン"),
+        ("修正案", "シューセイアン"),
+        ("非常勤講師", "ヒジョーキンコーシ"),
+        ("教育機関", "キョーイクキカン"),
+        ("通信社", "ツーシンシャ"),
+        ("研究科", "ケンキューカ"),
+        ("課長補佐", "カチョーホサ"),
+        ("事務局", "ジムキョク"),
+        ("社会科学", "シャカイカガク"),
+        ("応用科学", "オーヨーカガク"),
+        ("公式戦", "コーシキセン"),
+        ("土木工学", "ドボクコーガク"),
+        ("英文学", "エイブンガク"),
+        ("回転面", "カイテンメン"),
+        ("公職追放", "コーショクツイホー"),
+        ("立教女学院", "リッキョージョガクイン"),
+    ] {
+        let mut nodes = engine.text_to_analyze(text).unwrap();
+        assert_eq!(
+            kotonoha::phoneme::katakana_to_phonemes(
+                &nodes
+                    .iter()
+                    .map(|n| n.pronunciation.as_str())
+                    .collect::<String>()
+            ),
+            kotonoha::phoneme::katakana_to_phonemes(pronunciation),
+            "{text}"
+        );
+        for node in &nodes {
+            assert_eq!(
+                node.mora_count,
+                kotonoha::mora::parse_mora(&node.pronunciation).len(),
+                "{text}"
+            );
+        }
+        let phrases = engine.estimate_accent(&mut nodes);
+        assert_eq!(
+            phrases.iter().map(|p| p.mora_count).sum::<usize>(),
+            kotonoha::mora::count_mora(pronunciation)
+        );
+        let phones = engine.extract_phone_tones(&nodes, &phrases);
+        assert_eq!(
+            phones.len(),
+            engine.make_label(&nodes, &phrases).len(),
+            "{text}"
+        );
+        assert_eq!(
+            phones
+                .iter()
+                .filter(|p| !matches!(p.phone.as_str(), "sil" | "pau"))
+                .map(|p| p.phone.as_str())
+                .collect::<Vec<_>>(),
+            kotonoha::phoneme::katakana_to_phonemes(pronunciation),
+            "{text}"
+        );
+        assert!(!engine.text_to_prosody_symbols(text).unwrap().is_empty());
+    }
+}
+
+#[test]
+#[ignore = "KOTONOHA_TEST_DICT に監査済みの配布辞書を指定する"]
 fn distributed_kana_boundaries_reach_pronunciation_and_labels() {
     let path = std::env::var("KOTONOHA_TEST_DICT").expect("KOTONOHA_TEST_DICT is required");
     let mut engine = Engine::default();
