@@ -280,9 +280,13 @@ let labels = engine.text_to_labels("今日は良い天気です")?;
 ```bash
 kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd
 kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd --format phone-tones
+kotonoha analyze '今日は良い天気です' --dict data/ipadic.hsd --tokens
 kotonoha tokenize '東京都に住む' --dict data/ipadic.hsd --format wakachi
 kotonoha --help
 ```
+
+`analyze --tokens` は、韻律生成に使う形態素トークンを MeCab 形式で標準エラー出力に表示します。
+標準出力には `--format` で選んだ解析結果を出力するため、`--format json` もそのまま JSON として読み込めます。
 
 `label` は解析済みトークンの JSON、`build-dict` は MeCab 辞書ソースからの構築、`train-crf` は CRF モデルの学習を扱います。各サブコマンドの引数は `kotonoha <サブコマンド> --help` で確認できます。
 `train-crf` の入力は発話を空行で区切り、各行を4列または9列にしてください。
