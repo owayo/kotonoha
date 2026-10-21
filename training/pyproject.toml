@@ -8,7 +8,7 @@ dependencies = [
     "onnx>=1.23.2",
     "onnxruntime-gpu>=1.31.0; sys_platform != 'darwin'",
     "onnxruntime>=1.31.0; sys_platform == 'darwin'",
-    "transformers>=5.19.0",
+    "transformers>=5.20.2",
     "fugashi>=1.5.2",
     "unidic-lite>=1.0.8",
     "pyopenjtalk-plus>=0.4.1.post9",
