@@ -1,0 +1,2 @@
+# Preserve the source bytes identified by the KNM format benchmark.
+kotonoha/examples/knm_format_probe.rs text eol=lf

@@ -55,3 +55,7 @@ required-features = ["neural"]
 [[example]]
 name = "knm_accuracy"
 required-features = ["neural"]
+
+[[example]]
+name = "knm_format_probe"
+required-features = ["neural"]
