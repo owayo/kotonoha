@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 
 UPSTREAM = "owayo/hasami"
@@ -156,6 +157,47 @@ def published_snapshot(tag: str = "") -> dict:
     return snapshot
 
 
+def pin_dependency(snapshot: dict, manifest: Path) -> None:
+    """検証済み HSD と Cargo の hasami タグをそろえ、他の依存設定を保持する。
+
+    Raises:
+        ValueError: HSD 記録や既存の hasami 指定が想定した形式でない場合。
+
+    """
+    validate_snapshot(snapshot)
+    source = manifest.read_text(encoding="utf-8")
+    expected = tomllib.loads(source)
+    dependency = expected["workspace"]["dependencies"]["hasami"]
+    if (
+        not isinstance(dependency, dict)
+        or dependency.get("git") != f"https://github.com/{UPSTREAM}"
+        or not isinstance(dependency.get("tag"), str)
+        or {"rev", "branch", "path"}.intersection(dependency)
+    ):
+        raise ValueError("Expected a tagged hasami git dependency")
+    dependency["tag"] = snapshot["tag"]
+    section = re.search(
+        r"(?ms)^\[workspace\.dependencies\][^\S\n]*\n(?:(?!^\[).)*", source
+    )
+    if section is None:
+        raise ValueError("Expected [workspace.dependencies]")
+    entry = re.search(r"(?m)^hasami[ \t]*=[ \t]*\{[^\n]*", section[0])
+    if entry is None:
+        raise ValueError("Expected an inline hasami dependency")
+    pinned, count = re.subn(
+        r'(\btag[ \t]*=[ \t]*)"[^"\n]*"',
+        lambda match: f'{match[1]}"{snapshot["tag"]}"',
+        entry[0],
+    )
+    start = section.start() + entry.start()
+    end = section.start() + entry.end()
+    updated = source[:start] + pinned + source[end:]
+    if count != 1 or tomllib.loads(updated) != expected:
+        raise ValueError("Failed to pin only the hasami tag")
+    if updated != source:
+        manifest.write_text(updated, encoding="utf-8", newline="\n")
+
+
 def dictionary_identity(snapshot: dict) -> tuple:
     """HSD の内容に基づく識別値を作る。
 
@@ -287,6 +329,9 @@ def main():
     snapshot = commands.add_parser("snapshot")
     snapshot.add_argument("--tag", default="")
     snapshot.add_argument("--output", type=Path, required=True)
+    pin = commands.add_parser("pin-dependency")
+    pin.add_argument("--snapshot", type=Path, required=True)
+    pin.add_argument("--manifest", type=Path, required=True)
     download = commands.add_parser("download")
     download.add_argument("--snapshot", type=Path, required=True)
     download.add_argument("--output-dir", type=Path, required=True)
@@ -305,6 +350,9 @@ def main():
                 encoding="utf-8",
                 newline="\n",
             )
+        elif args.command == "pin-dependency":
+            record = json.loads(args.snapshot.read_text(encoding="utf-8"))
+            pin_dependency(record, args.manifest)
         else:
             record = json.loads(args.snapshot.read_text(encoding="utf-8"))
             path = download_dictionary(record, args.output_dir)

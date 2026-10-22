@@ -166,6 +166,7 @@ Release の判定ジョブは手動実行時も成功で完了させ、HSD 比�
 hasami の variable `KOTONOHA_APP_CLIENT_ID` と Secret `KOTONOHA_APP_PRIVATE_KEY` から短命の token を作る。
 比較対象は公開済み Kotonoha Release の `hasami-dictionaries.json`。ビルド前のコミットを処理済み判定に使わない。
 Release は HSD の公開タグ・サイズ・SHA-256 を固定し、実際の HSD と KNM の組み合わせを検証してから公開する。
+タグ作成前に Cargo の hasami 依存も検証済み HSD と同じ公開タグへそろえ、版上げ時に Cargo.lock を追従する。
 HSD 更新時も KNM の重みは固定した学習元から生成する。辞書の発音補正とニューラルモデルの再学習を混同しない。
 
 既存モデルは `kotonoha model convert --dir <dir>` で通信なしに変換できる。

@@ -117,6 +117,10 @@ jobs:
           HASAMI_TAG: ${{ inputs.hasami_tag }}
         run: python scripts/hasami_release.py snapshot --tag "$HASAMI_TAG" --output .github/hasami-dictionaries.json
 
+      - name: Match the hasami dependency to the pinned HSD release
+        if: ${{ !inputs.dry_run }}
+        run: python scripts/hasami_release.py pin-dependency --snapshot .github/hasami-dictionaries.json --manifest Cargo.toml
+
       - name: Bump the version
         id: bump
         run: |
