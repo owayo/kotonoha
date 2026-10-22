@@ -33,7 +33,8 @@ tar = { version = "0.4.46", optional = true, default-features = false }
 matrixmultiply = { version = "0.3.11", optional = true }
 libm = { version = "0.2.16", optional = true }
 wide = { version = "1.7.1", optional = true }
-zstd = { version = "0.14.3", default-features = false }
+# 基本の bulk API だけを使うため、下流が選べる 0.14 系の下限を保つ。
+zstd = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 criterion = { workspace = true }
