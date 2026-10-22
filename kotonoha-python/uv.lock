@@ -4,7 +4,7 @@ requires-python = ">=3.9"
 
 [[package]]
 name = "kotonoha"
-version = "26.10.105"
+version = "26.10.106"
 source = { editable = "." }
 
 [package.metadata]
