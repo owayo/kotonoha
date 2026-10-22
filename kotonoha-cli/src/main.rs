@@ -134,6 +134,9 @@ enum ModelCommands {
     Convert {
         #[arg(long, value_name = "DIR")]
         dir: PathBuf,
+        /// KNM と変換記録の出力先（省略時は --dir と同じ）
+        #[arg(long, value_name = "DIR")]
+        output_dir: Option<PathBuf>,
         #[arg(long)]
         force: bool,
     },
@@ -369,9 +372,15 @@ fn cmd_label(
 
 fn cmd_model(command: ModelCommands) {
     let result = match command {
-        ModelCommands::Convert { dir, force } => {
-            kotonoha::model::convert_legacy_models(&dir, force)
-        }
+        ModelCommands::Convert {
+            dir,
+            output_dir,
+            force,
+        } => kotonoha::model::convert_legacy_models_to(
+            &dir,
+            output_dir.as_deref().unwrap_or(&dir),
+            force,
+        ),
         ModelCommands::Path { dir } => dir
             .or_else(kotonoha::model::default_model_dir)
             .ok_or(kotonoha::model::DownloadError::NoDirectory),

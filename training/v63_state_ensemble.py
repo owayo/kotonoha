@@ -78,7 +78,7 @@ def main() -> None:
     )
     parser.add_argument("--meta-cache", default="/tmp/v61_meta_features.pt")
     parser.add_argument(
-        "--teacher-model", default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx"
+        "--teacher-model", default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx"
     )
     args = parser.parse_args()
 

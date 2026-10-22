@@ -37,16 +37,16 @@ val_utts = [u for i, u in enumerate(jsut) if i in val_idx]
 
 providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 sess_v24 = ort.InferenceSession(
-    "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+    "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
 )
 sess_v20 = ort.InferenceSession(
-    "/mnt/c/GitHub/kotonoha-models/accent_model_v20.onnx", providers=providers
+    "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v20.onnx", providers=providers
 )
 sess_v17 = ort.InferenceSession(
-    "/mnt/c/GitHub/kotonoha-models/accent_model_v17.onnx", providers=providers
+    "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v17.onnx", providers=providers
 )
 sess_v48 = ort.InferenceSession(
-    "/mnt/c/GitHub/kotonoha-models/accent_model_v48.onnx", providers=providers
+    "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v48.onnx", providers=providers
 )
 
 s_v20, s_v17, s_v48, s_v20_tta, labels = [], [], [], [], []

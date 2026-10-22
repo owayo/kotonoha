@@ -16,7 +16,9 @@ pub use manifest::{MODEL_FILES, MODEL_REVISION};
 #[cfg(feature = "download")]
 mod download;
 #[cfg(feature = "download")]
-pub use download::{DownloadError, DownloadOptions, convert_legacy_models, download};
+pub use download::{
+    DownloadError, DownloadOptions, convert_legacy_models, convert_legacy_models_to, download,
+};
 
 /// 配置名と取得元 1 ファイル。サイズと SHA-256 は固定した取得元の実体に対応する。
 #[derive(Debug, Clone, Copy)]

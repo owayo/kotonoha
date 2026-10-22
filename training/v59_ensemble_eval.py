@@ -37,12 +37,12 @@ def _softmax(x: np.ndarray) -> np.ndarray:
 def main() -> None:
     """Run 5-fold OOF + ensemble evaluation across the full dataset."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     parser.add_argument("--num-folds", type=int, default=5)
     parser.add_argument("--fold-base-seed", type=int, default=0)
     parser.add_argument(
         "--teacher-model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     parser.add_argument(
         "--model-name-template", default="accent_model_v59_fold{fold}.onnx"

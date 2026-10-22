@@ -53,7 +53,7 @@ def main() -> None:
     """Evaluate Rust V66Pipeline on JSUT val_split=0 val 500 utts."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--val-split-seed", type=int, default=0)
-    parser.add_argument("--bundle", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--bundle", default="/mnt/c/GitHub/kotonoha-models/bundles/base")
     args = parser.parse_args()
 
     if "ORT_DYLIB_PATH" not in os.environ:
@@ -70,7 +70,7 @@ def main() -> None:
     # exclusively, the Rust runtime reproduces JSUT's enriched values without
     # introducing false positives from kanjium.
     dict_paths = [
-        Path("/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv"),
+        Path("/mnt/c/GitHub/kotonoha-models/bundles/base/accent_dict_jsut.csv"),
     ]
     accent_dict = _load_accent_dicts(dict_paths)
     jsut_path = "/home/owayo/kotonoha-training/data/jsut_accent_data_v3.json"

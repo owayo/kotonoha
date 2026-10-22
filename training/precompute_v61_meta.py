@@ -67,7 +67,7 @@ def main() -> None:
         "--out", type=str, default="/tmp/v61_meta_features.pt", help="output cache path"
     )
     parser.add_argument(
-        "--models-dir", type=str, default="/mnt/c/GitHub/kotonoha-models"
+        "--models-dir", type=str, default="/mnt/c/GitHub/kotonoha-models/onnx"
     )
     parser.add_argument(
         "--include-corpus",

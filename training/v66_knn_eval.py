@@ -95,7 +95,7 @@ def main() -> None:
     parser.add_argument("--meta-cache", default="/tmp/v66_stacker.pt")
     parser.add_argument(
         "--teacher-model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     parser.add_argument("--k", type=int, default=16, help="kNN k")
     parser.add_argument(
@@ -155,7 +155,7 @@ def main() -> None:
     # v66_split1 ONNX prediction
     print("\nRunning v66_split1 ONNX...")
     sess_v66s1 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v66_split1.onnx",
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_split1.onnx",
         providers=providers,
     )
     sm_model: list[np.ndarray] = []

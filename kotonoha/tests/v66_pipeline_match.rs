@@ -1,7 +1,7 @@
 //! V66Pipeline (Rust) ↔ Python `dump_v66_pipeline_fixture.py` argmax 一致テスト
 //!
 //! 環境要求 (満たさない場合スキップ):
-//! - `V66_BUNDLE_DIR` (省略時 `/mnt/c/GitHub/kotonoha-models`)
+//! - `V66_BUNDLE_DIR` (省略時 sibling の `kotonoha-models/bundles/base`)
 //! - fixture: `tests/fixtures/v66_pipeline.json`
 
 #![cfg(feature = "neural")]
@@ -64,7 +64,9 @@ fn pipeline_argmax_matches_python() {
     }
     let bundle_dir = std::env::var("V66_BUNDLE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/mnt/c/GitHub/kotonoha-models"));
+        .unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../kotonoha-models/bundles/base")
+        });
     if !bundle_dir.is_dir() {
         skip_with(&format!("bundle dir missing: {}", bundle_dir.display()));
         return;

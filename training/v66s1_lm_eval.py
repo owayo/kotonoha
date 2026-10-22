@@ -46,16 +46,16 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     sess_v24 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
     )
     stacker_all = torch.load("/tmp/v66_stacker.pt", weights_only=False)
     sess_models = {
         "v66_split1": ort.InferenceSession(
-            "/mnt/c/GitHub/kotonoha-models/accent_model_v66_split1.onnx",
+            "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_split1.onnx",
             providers=providers,
         ),
         "v66_split1_lm": ort.InferenceSession(
-            "/mnt/c/GitHub/kotonoha-models/accent_model_v66_split1_lm.onnx",
+            "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_split1_lm.onnx",
             providers=providers,
         ),
     }

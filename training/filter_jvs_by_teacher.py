@@ -6,7 +6,7 @@ v24 などの強力な teacher ONNX モデルで JVS 発話を予測し、
 Usage:
   uv run python filter_jvs_by_teacher.py \
       --jvs /home/owayo/kotonoha-training/data/jvs_accent_data.json \
-      --teacher /mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx \
+      --teacher /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx \
       --threshold 0.90 \
       --output /mnt/c/GitHub/kotonoha/training/filtered_jvs_v24.json
 """

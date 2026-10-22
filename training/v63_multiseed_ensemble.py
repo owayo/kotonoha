@@ -32,14 +32,14 @@ def main() -> None:
     """Multi-seed v63 ensemble eval; supports adding v61, v62 too."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--val-split-seed", type=int, default=0)
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     parser.add_argument(
         "--targets",
         default=(
-            "v63:/mnt/c/GitHub/kotonoha-models/accent_model_v63.onnx,"
+            "v63:/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v63.onnx,"
             "v63s1:/tmp/v63_seed1.onnx,v63s2:/tmp/v63_seed2.onnx,"
-            "v61:/mnt/c/GitHub/kotonoha-models/accent_model_v61.onnx,"
-            "v62:/mnt/c/GitHub/kotonoha-models/accent_model_v62.onnx"
+            "v61:/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v61.onnx,"
+            "v62:/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v62.onnx"
         ),
         help="comma-separated name:path pairs",
     )

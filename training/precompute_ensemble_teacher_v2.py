@@ -55,13 +55,13 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     sess_v17 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v17.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v17.onnx", providers=providers
     )
     sess_v20 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v20.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v20.onnx", providers=providers
     )
     sess_v24 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
     )
 
     for src_path, out_path in files:

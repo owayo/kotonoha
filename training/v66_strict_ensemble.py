@@ -37,7 +37,7 @@ def main() -> None:
     """Strict-no-leak ensemble eval on val_split=0 val 500 utts."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--val-split-seed", type=int, default=0)
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     parser.add_argument("--stacker-cache", default="/tmp/v66_stacker.pt")
     args = parser.parse_args()
 

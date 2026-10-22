@@ -37,7 +37,7 @@ def main() -> None:
     """Compute 11-student mean softmax per token for soft-target training."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="/tmp/v65_ens_prob.pt")
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     args = parser.parse_args()
 
     _load_dotenv()

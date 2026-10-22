@@ -21,8 +21,8 @@ v38 (80.69%, 14 dim with v24 teacher argmax) をベースに 85%突破を狙う:
 Usage:
   cd training
   uv run python train_onnx_v39.py \
-      --teacher-model /mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx \
-      --teacher-v38 /mnt/c/GitHub/kotonoha-models/accent_model_v38.onnx
+      --teacher-model /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx \
+      --teacher-v38 /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v38.onnx
 """
 
 from __future__ import annotations
@@ -2019,7 +2019,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-model",
         type=str,
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
         help="v27: teacher ONNX for distillation (empty string to disable KD)",
     )
     parser.add_argument(
@@ -2043,7 +2043,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-v38",
         type=str,
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v38.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v38.onnx",
         help="v39: 2nd teacher ONNX (v38). Empty string to disable dim 14 feature.",
     )
     parser.add_argument(

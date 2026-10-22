@@ -35,7 +35,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=str, default="/tmp/v63_consensus.pt")
     parser.add_argument(
-        "--models-dir", type=str, default="/mnt/c/GitHub/kotonoha-models"
+        "--models-dir", type=str, default="/mnt/c/GitHub/kotonoha-models/onnx"
     )
     args = parser.parse_args()
 

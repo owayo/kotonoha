@@ -159,10 +159,32 @@ class PackageModelsTests(unittest.TestCase):
             names = bundle.getnames()
             self.assertIn("kotonoha-models/accent.knm", names)
             self.assertNotIn("kotonoha-models/accent_model_v66_split1.onnx", names)
+        original_archive = archive.read_bytes()
+        bundle_dir = self.root / "bundles/base"
+        bundle_dir.mkdir(parents=True)
+        for name in ("accent.knm", "accent_dict_jsut.csv", "knm-manifest.json"):
+            (self.models / name).rename(bundle_dir / name)
+        archive = package_models(
+            self.models,
+            self.output,
+            self.lock,
+            self.base,
+            "b" * 40,
+            native=True,
+            bundle_dir=bundle_dir,
+        )
+        self.assertEqual(archive.read_bytes(), original_archive)
+        native = bundle_dir / "accent.knm"
         native.write_bytes(native.read_bytes()[:-1] + b"y")
         with self.assertRaisesRegex(ValueError, "conversion manifest"):
             package_models(
-                self.models, self.output, self.lock, self.base, "b" * 40, native=True
+                self.models,
+                self.output,
+                self.lock,
+                self.base,
+                "b" * 40,
+                native=True,
+                bundle_dir=bundle_dir,
             )
 
     def test_missing_corrupt_or_unresolved_lfs_model_is_rejected(self):

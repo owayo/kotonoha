@@ -177,9 +177,9 @@ HSD 更新時も KNM の重みは固定した学習元から生成する。辞�
 ```python
 import kotonoha
 engine = kotonoha.KotonohaEngine(
-    model_bundle="/mnt/c/GitHub/kotonoha-models",   # 13 KNM を含む dir
+    model_bundle="/mnt/c/GitHub/kotonoha-models/bundles/base",   # 13 KNM を含む dir
     accent_dict_paths=[                              # 追加辞書 (任意、後勝ちマージ)
-        "/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv",
+        "/mnt/c/GitHub/kotonoha-models/bundles/base/accent_dict_jsut.csv",
     ],
     dict_path="/path/to/hasami_dict.hsd",            # 形態素解析辞書 (任意)
 )
@@ -213,7 +213,7 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 形式仕様・圧縮と性能の根拠は `kotonoha-models/docs/`、現在の利用手順は `README.md` にある。
 以下は2026年4月の学習・評価記録。ONNX の名前と評価値を、現在の配布名・未知データでの精度と混同しない。
 
-学習時の ONNX 出力先は sibling の `kotonoha-models/`（Windows: `C:/GitHub/kotonoha-models/`、WSL: `/mnt/c/GitHub/kotonoha-models/`）。
+学習時の ONNX 出力先は sibling の `kotonoha-models/onnx/`（Windows: `C:/GitHub/kotonoha-models/onnx/`、WSL: `/mnt/c/GitHub/kotonoha-models/onnx/`）。
 研究用のファイル名規則 `accent_model_v{N}.onnx` は変換元の追跡のために残す。
 
 ### 学習時のモデル比較（2026-04）

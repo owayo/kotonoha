@@ -33,7 +33,7 @@ def main() -> None:
     """Run ensemble eval across v60..v63 (24 dim) on val_split=0 val 500 utts."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--val-split-seed", type=int, default=0)
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     args = parser.parse_args()
 
     _load_dotenv()

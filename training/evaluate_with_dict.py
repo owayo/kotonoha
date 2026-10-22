@@ -41,11 +41,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--teacher-v24",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     ap.add_argument(
         "--model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v38.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v38.onnx",
         help="Model to evaluate (expects 14 dim input if v38-style)",
     )
     ap.add_argument(

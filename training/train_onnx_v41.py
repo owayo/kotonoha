@@ -2001,7 +2001,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-model",
         type=str,
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
         help="v27: teacher ONNX for distillation (empty string to disable KD)",
     )
     parser.add_argument(
@@ -2025,7 +2025,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-v38",
         type=str,
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v38.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v38.onnx",
         help="v41: v38 ONNX used for JVS pseudo-labeling",
     )
     parser.add_argument(

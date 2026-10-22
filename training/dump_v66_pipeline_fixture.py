@@ -35,7 +35,7 @@ def main() -> None:
     )
     parser.add_argument("--num-utts", type=int, default=20)
     parser.add_argument("--val-split-seed", type=int, default=0)
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     args = parser.parse_args()
 
     _load_dotenv()

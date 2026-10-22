@@ -81,6 +81,7 @@ def package_models(
     source_revision: str,
     native: bool = True,
     hasami_release: Path | None = None,
+    bundle_dir: Path | None = None,
 ) -> Path:
     """固定した SHA-256 を検証してから、モデルと辞書を再現可能な形で梱包する。
 
@@ -92,12 +93,13 @@ def package_models(
 
     """
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    bundle_dir = bundle_dir or models_dir
     sources = {}
     for entry in lock["files"]:
         name = entry["file"]
         if Path(name).name != name or name in sources:
             raise ValueError(f"Invalid or duplicate model filename: {name}")
-        path = models_dir / name
+        path = (models_dir if name.endswith(".onnx") else bundle_dir) / name
         if not path.is_file():
             raise ValueError(f"Missing model bundle input: {path}")
         with path.open("rb") as stream:
@@ -113,7 +115,7 @@ def package_models(
 
     if native:
         converted_manifest = json.loads(
-            (models_dir / "knm-manifest.json").read_text(encoding="utf-8")
+            (bundle_dir / "knm-manifest.json").read_text(encoding="utf-8")
         )
         converted_files = {
             entry["file"]: entry for entry in converted_manifest["files"]
@@ -130,11 +132,12 @@ def package_models(
                 or native_name in sources
             ):
                 raise ValueError(f"Invalid or duplicate KNM filename: {native_name}")
-            path = models_dir / native_name
+            path = bundle_dir / native_name
             if not path.is_file():
                 raise ValueError(
                     f"Missing KNM: {path}; "
-                    f"run kotonoha model convert --dir {models_dir}"
+                    f"run kotonoha model convert --dir {models_dir} "
+                    f"--output-dir {bundle_dir}"
                 )
             pinned = converted_files.get(path.name)
             if (
@@ -230,6 +233,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models-dir", type=Path, required=True)
     parser.add_argument(
+        "--bundle-dir",
+        type=Path,
+        help=(
+            "Directory containing KNM, conversion manifest and source dictionary "
+            "(defaults to --models-dir)"
+        ),
+    )
+    parser.add_argument(
         "--output-dir", type=Path, default=ROOT / "target/model-release"
     )
     parser.add_argument("--lock", type=Path, default=ROOT / ".github/model-bundle.json")
@@ -260,6 +271,7 @@ def main():
             args.source_revision,
             native=args.native,
             hasami_release=args.hasami_release,
+            bundle_dir=args.bundle_dir,
         )
     except (OSError, ValueError, KeyError, csv.Error) as error:
         parser.exit(1, f"Model packaging failed: {error}\n")

@@ -92,7 +92,7 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     sess_v24 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
     )
 
     print("\nComputing teacher logits for train+val...")
@@ -211,7 +211,7 @@ def main() -> None:
     # Save and export
     out_state = Path("/tmp/v66_full_jsut_state.pt")
     torch.save({"acc": va_acc, "state": best_state, "seed": 0}, out_state)
-    out_onnx = Path("/mnt/c/GitHub/kotonoha-models/accent_model_v66_full.onnx")
+    out_onnx = Path("/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_full.onnx")
     model.load_state_dict(best_state)
     _export_onnx(model, out_onnx, device)
     print(f"\nSaved {out_onnx}")

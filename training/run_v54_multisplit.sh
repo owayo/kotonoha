@@ -8,7 +8,7 @@ for SPLIT in 1 2 3; do
     rm -rf /tmp/v54_states_${SPLIT}
     mkdir -p /tmp/v54_states_${SPLIT}
     uv run python train_onnx_v38.py \
-        --output /mnt/c/GitHub/kotonoha-models/accent_model_v54_split${SPLIT}.onnx \
+        --output /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v54_split${SPLIT}.onnx \
         --seeds 0 \
         --val-split-seed ${SPLIT} \
         --teacher-cache /tmp/v54_teacher_split${SPLIT}.pt \

@@ -38,7 +38,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--meta-out", default="/tmp/v64_meta_features.pt")
     parser.add_argument("--consensus-out", default="/tmp/v64_consensus.pt")
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     args = parser.parse_args()
 
     _load_dotenv()

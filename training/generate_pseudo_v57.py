@@ -59,10 +59,10 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     sess_v24 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
     )
     sess_v38 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v38.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v38.onnx", providers=providers
     )
 
     # Load v56 5 seeds (val_split=0 trained)

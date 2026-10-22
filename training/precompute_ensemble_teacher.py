@@ -6,7 +6,7 @@ Outputs: torch.save([np.ndarray[seq_len, NUM_CLASSES], ...], cache_path)
 
 Usage:
   uv run python precompute_ensemble_teacher.py \
-      --teacher-onnx /mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx \
+      --teacher-onnx /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx \
       --state-dir /tmp/v27_states \
       --top-k 5 \
       --cache /tmp/v29_ensemble_teacher.pt

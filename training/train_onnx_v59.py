@@ -30,7 +30,7 @@ Usage:
   for FOLD in 0 1 2 3 4; do
     uv run python train_onnx_v59.py --fold-id $FOLD --seeds 0,1,2 \
       --state-dir /tmp/v59_states \
-      --output /mnt/c/GitHub/kotonoha-models/accent_model_v59_f$FOLD.onnx
+      --output /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v59_f$FOLD.onnx
   done
 """
 
@@ -2045,7 +2045,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-model",
         type=str,
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
         help="v27: teacher ONNX for distillation (empty string to disable KD)",
     )
     parser.add_argument(

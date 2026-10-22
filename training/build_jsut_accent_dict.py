@@ -7,7 +7,7 @@ dict_accent_type マップを CSV にエクスポートして同梱すること�
 モードでも JSUT と同等の dict_accent_type を再現する。
 
 出力:
-- /mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv (既存 dict と同形式)
+- /mnt/c/GitHub/kotonoha-models/bundles/base/accent_dict_jsut.csv (既存 dict と同形式)
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--out",
-        default="/mnt/c/GitHub/kotonoha-models/accent_dict_jsut.csv",
+        default="/mnt/c/GitHub/kotonoha-models/bundles/base/accent_dict_jsut.csv",
     )
     parser.add_argument(
         "--jsut",

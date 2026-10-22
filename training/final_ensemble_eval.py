@@ -42,7 +42,7 @@ def main() -> None:
     val_idx = set(idx[:val_size])
     val_utts = [u for i, u in enumerate(jsut) if i in val_idx]
 
-    onnx_dir = Path("/mnt/c/GitHub/kotonoha-models")
+    onnx_dir = Path("/mnt/c/GitHub/kotonoha-models/onnx")
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
     # Strong candidates (>80%) from prior eval

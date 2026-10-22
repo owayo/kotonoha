@@ -50,12 +50,12 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     sess_v24 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
     )
     stacker_all = torch.load("/tmp/v66_stacker.pt", weights_only=False)
     cons_all = torch.load("/tmp/v64_consensus.pt", weights_only=False)
     sess_v66s1 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v66_split1.onnx",
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_split1.onnx",
         providers=providers,
     )
 

@@ -69,7 +69,7 @@ def main() -> None:
     parser.add_argument("--consensus-cache", default="/tmp/v64_consensus.pt")
     parser.add_argument(
         "--teacher-model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     args = parser.parse_args()
 

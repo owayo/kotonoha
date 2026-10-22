@@ -86,7 +86,7 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     sess_v24 = ort.InferenceSession(
-        "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", providers=providers
+        "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", providers=providers
     )
     teacher_train_logits: list[np.ndarray] = []
     for j, utt in enumerate(train_utts):
@@ -206,7 +206,7 @@ def main() -> None:
     torch.save({"acc": best_acc, "state": best_state, "seed": 0}, out_state_path)
     print(f"Saved state to {out_state_path}")
 
-    out_onnx = Path("/mnt/c/GitHub/kotonoha-models/accent_model_v66_split1_lm.onnx")
+    out_onnx = Path("/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_split1_lm.onnx")
     model.load_state_dict(best_state)
     _export_onnx(model, out_onnx, device)
     print(f"Saved ONNX to {out_onnx}")

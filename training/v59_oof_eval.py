@@ -5,7 +5,7 @@
 (disjoint K-fold で leak なし)。
 
 Usage:
-  uv run python v59_oof_eval.py --models-dir /mnt/c/GitHub/kotonoha-models \
+  uv run python v59_oof_eval.py --models-dir /mnt/c/GitHub/kotonoha-models/onnx \
     --num-folds 5 --fold-base-seed 0
 """
 
@@ -37,12 +37,12 @@ def _accuracy(preds: list[np.ndarray], labels: list[np.ndarray]) -> tuple[int, i
 def main() -> None:
     """Run OOF evaluation across all folds and print per-fold + aggregate accuracy."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     parser.add_argument("--num-folds", type=int, default=5)
     parser.add_argument("--fold-base-seed", type=int, default=0)
     parser.add_argument(
         "--teacher-model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     parser.add_argument(
         "--model-name-template",

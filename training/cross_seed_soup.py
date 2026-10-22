@@ -6,7 +6,7 @@ greedy soup で最適な重み平均を探索する。
 Usage:
   uv run python cross_seed_soup.py \
       --state-dirs /tmp/v27_states /tmp/v29_states \
-      --output /mnt/c/GitHub/kotonoha-models/accent_model_v30_soup.onnx
+      --output /mnt/c/GitHub/kotonoha-models/onnx/accent_model_v30_soup.onnx
 """
 
 from __future__ import annotations

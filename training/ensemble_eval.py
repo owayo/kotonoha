@@ -52,10 +52,10 @@ def main() -> None:
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
     model_info = [
-        ("v24", "/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx", 11),
-        ("v33", "/mnt/c/GitHub/kotonoha-models/accent_model_v33.onnx", 13),
-        ("v38", "/mnt/c/GitHub/kotonoha-models/accent_model_v38.onnx", 14),
-        ("v41", "/mnt/c/GitHub/kotonoha-models/accent_model_v41.onnx", 14),
+        ("v24", "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx", 11),
+        ("v33", "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v33.onnx", 13),
+        ("v38", "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v38.onnx", 14),
+        ("v41", "/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v41.onnx", 14),
     ]
     sessions = {}
     for name, path, _dim in model_info:

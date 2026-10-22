@@ -43,7 +43,7 @@ def main() -> None:
     val_utts = [u for i, u in enumerate(jsut) if i in val_idx]
 
     # All available models with their input dims
-    onnx_dir = Path("/mnt/c/GitHub/kotonoha-models")
+    onnx_dir = Path("/mnt/c/GitHub/kotonoha-models/onnx")
     # Exclude v1-v4 (very old), test models
     candidates = [
         ("v5", 11),

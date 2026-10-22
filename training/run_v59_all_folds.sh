@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 NUM_FOLDS=${1:-5}
 SEEDS=${2:-0}
-MODELS_DIR=/mnt/c/GitHub/kotonoha-models
+MODELS_DIR=/mnt/c/GitHub/kotonoha-models/onnx
 STATES_DIR=/tmp/v59_states
 TEACHER_MODEL=$MODELS_DIR/accent_model_v24.onnx
 

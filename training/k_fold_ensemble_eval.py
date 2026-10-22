@@ -111,7 +111,7 @@ def main() -> None:
     _enrich_utterances(jsut, accent_dict)
 
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    models_dir = Path("/mnt/c/GitHub/kotonoha-models")
+    models_dir = Path("/mnt/c/GitHub/kotonoha-models/onnx")
     sess_v24 = ort.InferenceSession(
         str(models_dir / "accent_model_v24.onnx"), providers=providers
     )

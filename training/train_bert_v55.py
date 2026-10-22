@@ -266,7 +266,7 @@ def main() -> None:
     ap.add_argument("--patience", type=int, default=5)
     ap.add_argument("--bert-model", default="tohoku-nlp/bert-base-japanese-char-v3")
     ap.add_argument(
-        "--output", default="/mnt/c/GitHub/kotonoha-models/accent_model_v55.pt"
+        "--output", default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v55.pt"
     )
     args = ap.parse_args()
 

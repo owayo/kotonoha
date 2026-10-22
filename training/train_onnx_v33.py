@@ -1997,7 +1997,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-model",
         type=str,
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
         help="v27: teacher ONNX for distillation (empty string to disable KD)",
     )
     parser.add_argument(

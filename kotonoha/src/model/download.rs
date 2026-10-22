@@ -50,8 +50,18 @@ pub enum DownloadError {
 
 /// 固定版の既存 ONNX をその場で KNM に変換する。通信せず、元ファイルは保持する。
 pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, DownloadError> {
+    convert_legacy_models_to(dir, dir, force)
+}
+
+/// 固定版 ONNX を別の出力先へ変換する。通信せず、元ファイルは保持する。
+pub fn convert_legacy_models_to(
+    dir: &Path,
+    output_dir: &Path,
+    force: bool,
+) -> Result<PathBuf, DownloadError> {
+    fs::create_dir_all(output_dir)?;
     for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".knm")) {
-        let native = dir.join(file.file);
+        let native = output_dir.join(file.file);
         if native.exists() && !force {
             match super::knm::Weights::load(&native) {
                 Ok(weights) if weights.source_sha256 == file.sha256 => continue,
@@ -63,7 +73,7 @@ pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, Downloa
             return Err(DownloadError::Integrity(file.file.into()));
         }
         let weights = super::legacy::convert(&fs::read(&source)?, file.sha256)?;
-        let mut temporary = tempfile::NamedTempFile::new_in(dir)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(output_dir)?;
         weights.write(&mut temporary, file.sha256)?;
         temporary.as_file().sync_all()?;
         super::knm::Weights::load(temporary.path())?;
@@ -71,7 +81,7 @@ pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, Downloa
     }
     let mut files = Vec::new();
     for file in MODEL_FILES.iter().filter(|f| f.file.ends_with(".knm")) {
-        let path = dir.join(file.file);
+        let path = output_dir.join(file.file);
         let bytes = fs::read(&path)?;
         let digest: String = Sha256::digest(&bytes)
             .iter()
@@ -79,7 +89,7 @@ pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, Downloa
             .collect();
         files.push(serde_json::json!({"file":file.file,"source":file.source,"source_sha256":file.sha256,"size":bytes.len(),"sha256":digest}));
     }
-    let mut manifest = tempfile::NamedTempFile::new_in(dir)?;
+    let mut manifest = tempfile::NamedTempFile::new_in(output_dir)?;
     serde_json::to_writer_pretty(
         &mut manifest,
         &serde_json::json!({"format_version":1,"source_revision":MODEL_REVISION,"files":files}),
@@ -88,9 +98,9 @@ pub fn convert_legacy_models(dir: &Path, force: bool) -> Result<PathBuf, Downloa
     manifest.write_all(b"\n")?;
     manifest.as_file().sync_all()?;
     manifest
-        .persist(dir.join("knm-manifest.json"))
+        .persist(output_dir.join("knm-manifest.json"))
         .map_err(|e| e.error)?;
-    Ok(dir.to_path_buf())
+    Ok(output_dir.to_path_buf())
 }
 
 fn github_token() -> Option<String> {

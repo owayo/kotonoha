@@ -3,6 +3,32 @@
 use super::*;
 
 #[test]
+fn separate_conversion_checks_source_and_protects_output() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("onnx");
+    let output = root.path().join("bundles/base");
+    fs::create_dir(&source).unwrap();
+    let model = &MODEL_FILES[0];
+    let source_path = source.join(model.source);
+    fs::write(&source_path, b"invalid ONNX").unwrap();
+    assert!(matches!(
+        convert_legacy_models_to(&source, &output, false),
+        Err(DownloadError::Integrity(_))
+    ));
+    assert!(output.is_dir());
+    assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
+
+    let native = output.join(model.file);
+    fs::write(&native, b"user model").unwrap();
+    assert!(matches!(
+        convert_legacy_models_to(&source, &output, false),
+        Err(DownloadError::Existing(path)) if path == native
+    ));
+    assert_eq!(fs::read(&native).unwrap(), b"user model");
+    assert_eq!(fs::read(&source_path).unwrap(), b"invalid ONNX");
+}
+
+#[test]
 fn manifest_covers_runtime_bundle() {
     assert_eq!(
         MODEL_FILES

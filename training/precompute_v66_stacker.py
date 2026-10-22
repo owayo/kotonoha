@@ -39,7 +39,7 @@ def main() -> None:
     """Compute 84-dim per-token stacker features over JSUT + corpus."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="/tmp/v66_stacker.pt")
-    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models")
+    parser.add_argument("--models-dir", default="/mnt/c/GitHub/kotonoha-models/onnx")
     args = parser.parse_args()
 
     _load_dotenv()

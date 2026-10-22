@@ -1698,7 +1698,7 @@ def main() -> None:
     parser.add_argument(
         "--teacher-model",
         type=Path,
-        default=Path("/mnt/c/GitHub/kotonoha-models/accent_model_v13.onnx"),
+        default=Path("/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v13.onnx"),
         help="ONNX model for JVS data filtering",
     )
     parser.add_argument(

@@ -40,7 +40,7 @@ def main() -> None:
     )
     ap.add_argument(
         "--teacher-v24",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     ap.add_argument("--val-split-seed", type=int, default=0)
     args = ap.parse_args()

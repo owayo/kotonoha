@@ -76,11 +76,11 @@ def main() -> None:
     parser.add_argument("--meta-cache", default="/tmp/v66_stacker.pt")
     parser.add_argument(
         "--teacher-model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v24.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v24.onnx",
     )
     parser.add_argument(
         "--neural-model",
-        default="/mnt/c/GitHub/kotonoha-models/accent_model_v66_split1.onnx",
+        default="/mnt/c/GitHub/kotonoha-models/onnx/accent_model_v66_split1.onnx",
     )
     parser.add_argument("--use-position", action="store_true")
     parser.add_argument(

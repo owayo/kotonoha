@@ -6,6 +6,8 @@ BiLSTM + Self-Attention によるアクセント型予測モデルの学習パ�
 
 現在の Kotonoha は **13個の KNM と専用 Rust CPU エンジン**を使用する。
 配布名は `teacher.knm`、`student-01.knm`〜`student-09.knm`、`meta-01.knm`・`meta-02.knm`、`accent.knm`。
+クローン内の配置は `../kotonoha-models/bundles/base/`、学習・参照評価用のONNXは
+`../kotonoha-models/onnx/`。追加学習候補は `../kotonoha-models/candidates/` に保存する。
 `accent.knm` は最終段で、ほかの12モデルが計算した特徴量を必要とする。
 利用者は `kotonoha model download` または Python の `kotonoha.download_models()` で最新安定版 Release を取得できる。
 推論時に ONNX Runtime・CUDA・`ORT_DYLIB_PATH` は不要。
