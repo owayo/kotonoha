@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -46,6 +47,100 @@ def snapshot():
 
 class HasamiReleaseTests(unittest.TestCase):
     """自動 Release の判定と、固定した公開物の検証。"""
+
+    def test_dependency_pin_changes_only_the_workspace_hasami_tag(self):
+        """別セクション・コメント・他の依存を保持し、検証済みのタグだけを採用する。"""
+        source = (
+            '[package]\nname = "example"\nversion = "0.1.0"\n'
+            '[dependencies]\nhasami = { version = "1" }\n'
+            "[workspace.dependencies]\n"
+            '# hasami = { tag = "v0.0.0" }\n'
+            'hasami = { git = "https://github.com/owayo/hasami", '
+            'tag = "v26.10.99", default-features = false, features = ["analyzer"] }\n'
+            'other = { git = "https://example.com/other", tag = "v1" }\n'
+            '[workspace.metadata]\ntag = "unchanged"\n'
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "Cargo.toml"
+            manifest.write_text(source, encoding="utf-8")
+            hsd.pin_dependency(snapshot(), manifest)
+            updated = manifest.read_text(encoding="utf-8")
+            self.assertEqual(updated, source.replace('"v26.10.99"', '"v26.10.100"'))
+            self.assertEqual(
+                tomllib.loads(updated)["workspace"]["dependencies"]["hasami"]["tag"],
+                snapshot()["tag"],
+            )
+            # 同じタグなら書き直さない。
+            with patch.object(Path, "write_text") as write:
+                hsd.pin_dependency(snapshot(), manifest)
+            write.assert_not_called()
+
+    def test_invalid_dependency_pin_does_not_change_the_manifest(self):
+        """別の取得元や競合する指定、想定外の TOML は書き換える前に拒否する。"""
+        entries = [
+            'hasami = "1"',
+            'hasami = { git = "https://example.com/other", tag = "v1" }',
+            'hasami = { git = "https://github.com/owayo/hasami", rev = "abc" }',
+            'hasami = { git = "https://github.com/owayo/hasami", '
+            'tag = "v1", branch = "main" }',
+            'hasami = { git = "https://github.com/owayo/hasami", '
+            'tag = "v1", rev = "abc" }',
+            'hasami = { git = "https://github.com/owayo/hasami", '
+            'tag = "v1", path = "other" }',
+            "[workspace.dependencies.hasami]\n"
+            'git = "https://github.com/owayo/hasami"\ntag = "v1"',
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "Cargo.toml"
+            for entry in entries:
+                with self.subTest(entry=entry):
+                    source = "[workspace.dependencies]\n" + entry + "\n"
+                    manifest.write_text(source, encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        hsd.pin_dependency(snapshot(), manifest)
+                    self.assertEqual(manifest.read_text(encoding="utf-8"), source)
+
+    def test_dependency_pin_cli_uses_and_validates_the_saved_snapshot(self):
+        """通信せず保存した HSD の版を採用し、不正な記録で manifest を更新しない。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "Cargo.toml"
+            record = Path(temporary) / "hsd.json"
+            source = (
+                "[workspace.dependencies]\n"
+                'hasami = { git = "https://github.com/owayo/hasami", '
+                'tag = "v26.10.99" }\n'
+            )
+            manifest.write_text(source, encoding="utf-8")
+            record.write_text(json.dumps(snapshot()), encoding="utf-8")
+            command = [
+                "hasami_release.py",
+                "pin-dependency",
+                "--snapshot",
+                str(record),
+                "--manifest",
+                str(manifest),
+            ]
+            with (
+                patch.object(sys, "argv", command),
+                patch.object(hsd, "gh_json") as fetch,
+            ):
+                hsd.main()
+            fetch.assert_not_called()
+            self.assertIn('tag = "v26.10.100"', manifest.read_text(encoding="utf-8"))
+            before = manifest.read_bytes()
+            invalid = snapshot()
+            invalid["tag"] = "../main"
+            record.write_text(json.dumps(invalid), encoding="utf-8")
+            snapshot_before = record.read_bytes()
+            with (
+                patch.object(sys, "argv", command),
+                patch("sys.stderr", new_callable=io.StringIO),
+                self.assertRaises(SystemExit) as error,
+            ):
+                hsd.main()
+            self.assertEqual(error.exception.code, 1)
+            self.assertEqual(manifest.read_bytes(), before)
+            self.assertEqual(record.read_bytes(), snapshot_before)
 
     def test_changes_use_hsd_content_and_not_just_release_tags(self):
         """同じ辞書ならタグだけの更新では再公開せず、どの辞書の変更も検出する。"""
