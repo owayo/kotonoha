@@ -201,6 +201,50 @@ fn all_moras_map_to_expected_phonemes() {
 }
 
 #[test]
+fn all_moras_preserve_following_long_vowels_and_kana() {
+    for &(mora, phonemes) in MORA_PHONEMES {
+        let mut expected = phonemes.to_vec();
+        if let Some(&last) = phonemes.last()
+            && kotonoha::phoneme::is_vowel(last)
+        {
+            expected.extend([last, last]);
+        }
+        expected.extend(["k", "a", "N"]);
+
+        let input = format!("{mora}ーーカン");
+        assert_eq!(katakana_to_phonemes(&input), expected, "{input}");
+    }
+}
+
+#[test]
+fn small_kana_and_ignored_characters_preserve_conversion_boundaries() {
+    let cases: &[(&str, &[&str])] = &[
+        ("", &[]),
+        ("ーー", &[]),
+        ("ンーッー", &["N", "cl"]),
+        (
+            "イェキャティドゥヴョ",
+            &["y", "e", "ky", "a", "t", "i", "d", "u", "by", "o"],
+        ),
+        ("ビィー", &["b", "i", "i"]),
+        ("キャィー", &["ky", "i", "i"]),
+        ("アィー", &["a", "i", "i"]),
+        ("ンァー", &["N", "a", "a"]),
+        ("ァィゥェォ", &["a", "i", "u", "e", "o"]),
+        ("カャ", &["k", "a", "y", "a"]),
+        ("ヂャ", &["j", "i", "y", "a"]),
+        ("キ?ャ", &["k", "i", "y", "a"]),
+        ("キ?ィー", &["k", "i", "i"]),
+        ("コ!ー", &["k", "o", "o"]),
+        ("漢字かな🙂", &[]),
+    ];
+
+    for &(input, expected) in cases {
+        assert_eq!(katakana_to_phonemes(input), expected, "{input}");
+    }
+}
+
+#[test]
 fn all_mora_phonemes_are_defined() {
     let undefined: Vec<String> = MORA_PHONEMES
         .iter()
