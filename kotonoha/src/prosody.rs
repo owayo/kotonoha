@@ -24,62 +24,26 @@ pub const SYMBOL_ACCENT_DOWN: &str = "]"; // アクセント下降
 
 /// NjdNodeとアクセント句からPhoneTone列を抽出する
 pub fn extract_phone_tones(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> Vec<PhoneTone> {
-    let mut result = Vec::new();
-
-    // 先頭の無音
-    result.push(PhoneTone {
-        phone: "sil".to_string(),
-        tone: 0,
-    });
-
-    for phrase in phrases {
-        let mut mora_idx: usize = 0;
-
-        for &node_idx in &phrase.nodes {
-            let node = &nodes[node_idx];
-            let moras = mora::parse_mora(&node.pronunciation);
-
-            for m in &moras {
-                let tone = compute_tone(mora_idx, phrase.accent_type, phrase.mora_count);
-
-                // 子音
-                if let Some(ref consonant) = m.consonant {
-                    result.push(PhoneTone {
-                        phone: consonant.clone(),
-                        tone,
-                    });
-                }
-
-                // 母音
-                result.push(PhoneTone {
-                    phone: m.vowel.clone(),
-                    tone,
-                });
-
-                mora_idx += 1;
-            }
-        }
-
-        // アクセント句間のポーズ（最後以外）
-        // 注: 実際にはポーズは文脈に依存するが、簡易実装ではスキップ
-    }
-
-    // 末尾の無音
-    result.push(PhoneTone {
-        phone: "sil".to_string(),
-        tone: 0,
-    });
-
-    result
+    collect_phone_tones(nodes, phrases, false)
 }
 
 /// NjdNodeとアクセント句からPhoneTone列を抽出する（句読点を保持）
 ///
-/// `extract_phone_tones` と異なり、Pos::Kigou ノードのうちモーラを持たないものは
+/// `extract_phone_tones` と異なり、モーラを持たないノードは
 /// 表層形の各文字を phone として tone=0 で出力する。
+/// 長音記号は直前の母音を、直前の出力と同じ高低で繰り返す。
 pub fn extract_phone_tones_with_punct(
     nodes: &[NjdNode],
     phrases: &[AccentPhrase],
+) -> Vec<PhoneTone> {
+    collect_phone_tones(nodes, phrases, true)
+}
+
+/// 音素列と高低を共通の走査で構築し、必要に応じてモーラのない表層形を補う。
+fn collect_phone_tones(
+    nodes: &[NjdNode],
+    phrases: &[AccentPhrase],
+    preserve_punctuation: bool,
 ) -> Vec<PhoneTone> {
     let mut result = Vec::new();
     let mut last_vowel: Option<String> = None;
@@ -98,43 +62,25 @@ pub fn extract_phone_tones_with_punct(
 
             // モーラがないノード（記号・空pronunciation等）は表層形を句読点として出力
             // 半角カンマ等が辞書で名詞扱いになる場合でも脱落しない
-            if moras.is_empty() {
-                for ch in node.surface.chars() {
-                    if ch == 'ー' {
-                        // 長音記号: 直前の母音を繰り返す
-                        if let Some(ref vowel) = last_vowel {
-                            let tone = result.last().map_or(0, |pt| pt.tone);
-                            result.push(PhoneTone {
-                                phone: vowel.clone(),
-                                tone,
-                            });
-                        }
-                    } else {
-                        let phone = ch.to_string();
-                        if matches!(phone.as_str(), "a" | "i" | "u" | "e" | "o") {
-                            last_vowel = Some(phone.clone());
-                        }
-                        result.push(PhoneTone { phone, tone: 0 });
-                    }
-                }
-                continue;
+            if preserve_punctuation && moras.is_empty() {
+                append_punctuation(&mut result, &node.surface, &mut last_vowel);
             }
 
-            for m in &moras {
-                let tone = compute_tone(mora_idx, phrase.accent_type, phrase.mora_count);
+            for m in moras {
+                let tone = compute_tone(mora_idx, phrase.accent_type);
 
-                if let Some(ref consonant) = m.consonant {
+                if let Some(consonant) = m.consonant {
                     result.push(PhoneTone {
-                        phone: consonant.clone(),
+                        phone: consonant,
                         tone,
                     });
                 }
 
-                if matches!(m.vowel.as_str(), "a" | "i" | "u" | "e" | "o") {
+                if preserve_punctuation && matches!(m.vowel.as_str(), "a" | "i" | "u" | "e" | "o") {
                     last_vowel = Some(m.vowel.clone());
                 }
                 result.push(PhoneTone {
-                    phone: m.vowel.clone(),
+                    phone: m.vowel,
                     tone,
                 });
 
@@ -151,29 +97,38 @@ pub fn extract_phone_tones_with_punct(
     result
 }
 
+/// モーラのない表層形を出力する。長音は最後の母音と直前の出力の高低を引き継ぐ。
+fn append_punctuation(result: &mut Vec<PhoneTone>, surface: &str, last_vowel: &mut Option<String>) {
+    for ch in surface.chars() {
+        if ch == 'ー' {
+            if let Some(vowel) = last_vowel {
+                let tone = result.last().map_or(0, |pt| pt.tone);
+                result.push(PhoneTone {
+                    phone: vowel.clone(),
+                    tone,
+                });
+            }
+        } else {
+            let phone = ch.to_string();
+            if matches!(phone.as_str(), "a" | "i" | "u" | "e" | "o") {
+                *last_vowel = Some(phone.clone());
+            }
+            result.push(PhoneTone { phone, tone: 0 });
+        }
+    }
+}
+
 /// モーラ位置とアクセント型からトーン（高低）を計算する
 ///
 /// 日本語のアクセント規則:
 /// - 0型（平板）: 1モーラ目=低, 2モーラ目以降=高
 /// - 1型（頭高）: 1モーラ目=高, 2モーラ目以降=低
 /// - n型（中高/尾高）: 1モーラ目=低, 2〜nモーラ目=高, n+1以降=低
-fn compute_tone(mora_idx: usize, accent_type: usize, _mora_count: usize) -> u8 {
-    if accent_type == 0 {
-        // 平板型: 1モーラ目は低、2モーラ目以降は高
-        if mora_idx == 0 { 0 } else { 1 }
-    } else if accent_type == 1 {
-        // 頭高型: 1モーラ目は高、2モーラ目以降は低
-        if mora_idx == 0 { 1 } else { 0 }
-    } else {
-        // n型: 1モーラ目は低、2〜nモーラ目は高、n+1以降は低
-        let n = accent_type;
-        if mora_idx == 0 {
-            0
-        } else if mora_idx < n {
-            1
-        } else {
-            0
-        }
+fn compute_tone(mora_idx: usize, accent_type: usize) -> u8 {
+    match accent_type {
+        0 => u8::from(mora_idx > 0),
+        1 => u8::from(mora_idx == 0),
+        n => u8::from(mora_idx > 0 && mora_idx < n),
     }
 }
 
@@ -191,9 +146,9 @@ pub fn extract_prosody_symbols(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> V
             let moras = mora::parse_mora(&node.pronunciation);
 
             for m in &moras {
-                let tone = compute_tone(mora_idx, phrase.accent_type, phrase.mora_count);
+                let tone = compute_tone(mora_idx, phrase.accent_type);
                 let prev_tone = if mora_idx > 0 {
-                    compute_tone(mora_idx - 1, phrase.accent_type, phrase.mora_count)
+                    compute_tone(mora_idx - 1, phrase.accent_type)
                 } else {
                     0
                 };
@@ -208,7 +163,7 @@ pub fn extract_prosody_symbols(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> V
 
                 // アクセント下降の検出
                 let next_tone = if mora_idx + 1 < phrase.mora_count {
-                    compute_tone(mora_idx + 1, phrase.accent_type, phrase.mora_count)
+                    compute_tone(mora_idx + 1, phrase.accent_type)
                 } else {
                     0
                 };
@@ -244,27 +199,27 @@ mod tests {
     #[test]
     fn test_compute_tone_flat() {
         // 平板型 (0型): 低高高高...
-        assert_eq!(compute_tone(0, 0, 4), 0);
-        assert_eq!(compute_tone(1, 0, 4), 1);
-        assert_eq!(compute_tone(2, 0, 4), 1);
-        assert_eq!(compute_tone(3, 0, 4), 1);
+        assert_eq!(compute_tone(0, 0), 0);
+        assert_eq!(compute_tone(1, 0), 1);
+        assert_eq!(compute_tone(2, 0), 1);
+        assert_eq!(compute_tone(3, 0), 1);
     }
 
     #[test]
     fn test_compute_tone_atamadaka() {
         // 頭高型 (1型): 高低低低...
-        assert_eq!(compute_tone(0, 1, 4), 1);
-        assert_eq!(compute_tone(1, 1, 4), 0);
-        assert_eq!(compute_tone(2, 1, 4), 0);
+        assert_eq!(compute_tone(0, 1), 1);
+        assert_eq!(compute_tone(1, 1), 0);
+        assert_eq!(compute_tone(2, 1), 0);
     }
 
     #[test]
     fn test_compute_tone_nakadaka() {
         // 中高型 (2型): 低高低低...
-        assert_eq!(compute_tone(0, 2, 4), 0);
-        assert_eq!(compute_tone(1, 2, 4), 1);
-        assert_eq!(compute_tone(2, 2, 4), 0);
-        assert_eq!(compute_tone(3, 2, 4), 0);
+        assert_eq!(compute_tone(0, 2), 0);
+        assert_eq!(compute_tone(1, 2), 1);
+        assert_eq!(compute_tone(2, 2), 0);
+        assert_eq!(compute_tone(3, 2), 0);
     }
 
     #[test]

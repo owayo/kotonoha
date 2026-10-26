@@ -100,6 +100,130 @@ fn test_punctuation_long_vowel_repeats_previous_vowel() {
     assert_eq!(phones(&ascii_tones), vec!["sil", "a", "a", "sil"]);
 }
 
+#[test]
+fn test_phone_tone_modes_preserve_tones_across_nodes_and_phrases() {
+    let engine = Engine::default();
+    let nodes = engine.analyze(&[
+        tok("猫", "名詞", "ネコ"),
+        tok("愛", "名詞", "アイ"),
+        tok("犬", "名詞", "イヌ"),
+    ]);
+
+    for (accent_type, tones) in [
+        (0, [0, 1, 1, 1]),
+        (1, [1, 0, 0, 0]),
+        (2, [0, 1, 0, 0]),
+        (3, [0, 1, 1, 0]),
+        (4, [0, 1, 1, 1]),
+    ] {
+        let phrases = [
+            AccentPhrase {
+                nodes: vec![0, 1],
+                accent_type,
+                mora_count: 4,
+                is_interrogative: false,
+            },
+            AccentPhrase {
+                nodes: vec![2],
+                accent_type: 1,
+                mora_count: 2,
+                is_interrogative: false,
+            },
+        ];
+        let expected: Vec<_> = [
+            ("sil", 0),
+            ("n", tones[0]),
+            ("e", tones[0]),
+            ("k", tones[1]),
+            ("o", tones[1]),
+            ("a", tones[2]),
+            ("i", tones[3]),
+            ("i", 1),
+            ("n", 0),
+            ("u", 0),
+            ("sil", 0),
+        ]
+        .into_iter()
+        .map(|(phone, tone)| PhoneTone {
+            phone: phone.to_string(),
+            tone,
+        })
+        .collect();
+
+        assert_eq!(engine.extract_phone_tones(&nodes, &phrases), expected);
+        assert_eq!(
+            engine.extract_phone_tones_with_punct(&nodes, &phrases),
+            expected
+        );
+    }
+}
+
+#[test]
+fn test_punctuation_does_not_advance_mora_position() {
+    let engine = Engine::default();
+    let nodes = engine.analyze(&[
+        tok("カ", "名詞", "カ"),
+        tok(",", "名詞", ""),
+        tok("キ", "名詞", "キ"),
+        tok("。ー", "記号", ""),
+        tok("ウ", "名詞", "ウ"),
+    ]);
+    let phrases = [
+        AccentPhrase {
+            nodes: vec![0, 1, 2],
+            accent_type: 0,
+            mora_count: 2,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![3],
+            accent_type: 0,
+            mora_count: 0,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![4],
+            accent_type: 1,
+            mora_count: 1,
+            is_interrogative: false,
+        },
+    ];
+    let plain = engine.extract_phone_tones(&nodes, &phrases);
+    let with_punct = engine.extract_phone_tones_with_punct(&nodes, &phrases);
+    assert_eq!(phones(&plain), ["sil", "k", "a", "k", "i", "u", "sil"]);
+    assert_eq!(mora_tones(&plain), [0, 1, 1]);
+    assert_eq!(
+        phones(&with_punct),
+        ["sil", "k", "a", ",", "k", "i", "。", "i", "u", "sil"]
+    );
+    assert_eq!(
+        with_punct.iter().map(|p| p.tone).collect::<Vec<_>>(),
+        [0, 0, 0, 0, 1, 1, 0, 0, 1, 0]
+    );
+}
+
+#[test]
+fn test_punctuation_long_vowel_keeps_vowel_and_uses_last_phone_tone() {
+    let engine = Engine::default();
+    let nodes = engine.analyze(&[
+        tok("ー", "記号", ""),
+        tok("アッン", "名詞", "アッン"),
+        tok("ーー!ーiーー", "記号", ""),
+    ]);
+    let phrases = make_phrases(&nodes, 0);
+    let pts = engine.extract_phone_tones_with_punct(&nodes, &phrases);
+    assert_eq!(
+        phones(&pts),
+        [
+            "sil", "a", "cl", "N", "a", "a", "!", "a", "i", "i", "i", "sil"
+        ]
+    );
+    assert_eq!(
+        pts.iter().map(|p| p.tone).collect::<Vec<_>>(),
+        [0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
+    );
+}
+
 // ============================================================
 // Tone patterns: type 0 (flat) with 1-6 moras
 // ============================================================
