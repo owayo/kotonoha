@@ -137,6 +137,21 @@ make test
 
 ユニットテストは各モジュール内、結合テストは `kotonoha/tests/` に配置。
 
+Windows の Makefile は POSIX シェルを前提とするため、CI と同様に `mise exec -- cargo`
+と `mise exec -- uv` で直接検証する。Rust はワークスペースから `kotonoha-python` を除いた
+既定 feature・全 feature のテストと、ワークスペース全体の両 feature 構成の clippy を実行する。
+Python API は `uv run --locked --project kotonoha-python python -m unittest discover
+-s kotonoha-python/tests -v`、配布処理は `python -m unittest discover -s scripts/tests -v`。
+WSL と Windows でチェックアウトを共有し、既存 `.venv` を更新できない場合は、
+`UV_PROJECT_ENVIRONMENT` で Windows 用の別ディレクトリを指定する。
+
+ラベル生成の計測は `cargo bench --locked -p kotonoha --bench benchmark -- label_scaling`。
+通常文の反復と、同じトークン列を1句にまとめた条件を比較する。
+`cargo run --release --locked -p kotonoha --example label_allocations` は、ラベル生成中の
+アロケーション数・累積要求バイト数・出力ハッシュを返す。累積要求バイト数はピーク使用量ではない。
+ラベルの B〜K フィールドは句内で共通なので、直前の1句分だけを保持する。
+音素がない句も前後句情報と句位置に含め、発話をまたいでキャッシュを共有しない。
+
 ## Pythonバインディング
 
 `kotonoha-python` クレートがPyO3経由でPythonバインディングを提供する。

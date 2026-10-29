@@ -34,6 +34,62 @@ fn non_sil_labels(labels: &[String]) -> Vec<&String> {
         .collect()
 }
 
+#[test]
+fn phrase_fields_follow_boundaries_including_empty_and_interrogative_phrases() {
+    let engine = Engine::default();
+    let nodes = engine.analyze(&[
+        tok("ア", "名詞", "ア"),
+        tok("カ", "名詞", "カ"),
+        tok("ン", "名詞", "ン"),
+    ]);
+    let phrases = [
+        AccentPhrase {
+            nodes: vec![0],
+            accent_type: 0,
+            mora_count: 1,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![],
+            accent_type: 0,
+            mora_count: 0,
+            is_interrogative: false,
+        },
+        AccentPhrase {
+            nodes: vec![1],
+            accent_type: 1,
+            mora_count: 1,
+            is_interrogative: true,
+        },
+        AccentPhrase {
+            nodes: vec![2],
+            accent_type: 0,
+            mora_count: 1,
+            is_interrogative: false,
+        },
+    ];
+    // 音素を持たない句も前後句情報と句の位置に含める。
+    let suffixes = [
+        "/B:xx-xx_xx/C:1_0+0/D:0+0_0/E:xx_xx!xx_xx-xx/F:1_0#0_xx@1_4|1_3/G:0_0%0_xx_0/H:xx_xx/I:4-3@1+1&1-4|1+3/J:xx_xx/K:1+4-3",
+        "/B:0-0_0/C:1_1+1/D:1+0_0/E:0_0!0_xx-0/F:1_1#0_xx@3_2|2_2/G:1_0%0_xx_0/H:xx_xx/I:4-3@1+1&1-4|1+3/J:xx_xx/K:1+4-3",
+        "/B:1-1_1/C:1_0+0/D:xx+xx_xx/E:1_1!0_xx-0/F:1_0#0_xx@4_1|3_1/G:xx_xx%xx_xx_xx/H:xx_xx/I:4-3@1+1&1-4|1+3/J:xx_xx/K:1+4-3",
+    ];
+    let expected = [
+        format!("xx^xx-a+k=a/A:0+1+1{}", suffixes[0]),
+        format!("xx^a-k+a=N/A:0+1+1{}", suffixes[1]),
+        format!("a^k-a+N=xx/A:0+1+1{}", suffixes[1]),
+        format!("k^a-N+xx=xx/A:0+1+1{}", suffixes[2]),
+    ];
+    let labels = engine.make_label(&nodes, &phrases);
+    assert_eq!(non_sil_labels(&labels), expected.iter().collect::<Vec<_>>());
+    assert_eq!(labels.len(), expected.len() + 2);
+
+    // 共有 Engine を再利用しても、直前の発話の句情報を引き継がない。
+    let single = engine.make_label(&nodes[..1], &phrases[..1]);
+    assert!(single[1].ends_with("/K:1+1-1"));
+    assert_eq!(engine.make_label(&nodes, &phrases), labels);
+}
+
 // ============================================================
 // Basic sil label tests
 // ============================================================

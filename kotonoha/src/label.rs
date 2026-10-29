@@ -88,11 +88,14 @@ pub fn generate_labels(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> Vec<Strin
     let context = build_label_context(nodes, phrases);
 
     // ラベル文字列を生成
-    let mut labels = Vec::new();
+    let mut labels = Vec::with_capacity(context.phonemes.len() + 2);
 
     // 先頭 sil
     labels.push(format_sil_label(Some(&context.utterance)));
 
+    // B〜K は句内で変わらない。直前の句だけを保持し、長い発話でも保存量を増やさない。
+    let mut cached_phrase = None;
+    let mut phrase_context = String::new();
     for (i, pinfo) in context.phonemes.iter().enumerate() {
         let p_prev2 = if i >= 2 {
             &context.phonemes[i - 2].symbol
@@ -117,25 +120,17 @@ pub fn generate_labels(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> Vec<Strin
             .unwrap_or("xx");
 
         let phrase = &context.phrases[pinfo.phrase_index.min(context.phrases.len() - 1)];
-        let prev_phrase = if pinfo.phrase_index > 0 {
-            Some(&context.phrases[pinfo.phrase_index - 1])
-        } else {
-            None
-        };
-        let next_phrase = context.phrases.get(pinfo.phrase_index + 1);
+        if cached_phrase != Some(pinfo.phrase_index) {
+            phrase_context = format_phrase_context(&context, pinfo.phrase_index);
+            cached_phrase = Some(pinfo.phrase_index);
+        }
 
-        let bg_idx = phrase.breath_group_index;
-        let curr_bg = &context.breath_groups[bg_idx];
-
-        let label = format_full_context_label(&LabelFormatInput {
-            phonemes: [p_prev2, p_prev, p_curr, p_next, p_next2],
+        let label = format_full_context_label(
+            [p_prev2, p_prev, p_curr, p_next, p_next2],
             phrase,
-            prev_phrase,
-            next_phrase,
-            mora_pos: pinfo.mora_index,
-            curr_breath_group: curr_bg,
-            utterance: &context.utterance,
-        });
+            pinfo.mora_index,
+            &phrase_context,
+        );
         labels.push(label);
     }
 
@@ -405,25 +400,14 @@ fn format_sil_label(utterance: Option<&UtteranceInfo>) -> String {
     )
 }
 
-/// Full-Context Label生成に必要なコンテキスト
-struct LabelFormatInput<'a> {
-    phonemes: [&'a str; 5],
-    phrase: &'a PhraseInfo,
-    prev_phrase: Option<&'a PhraseInfo>,
-    next_phrase: Option<&'a PhraseInfo>,
+/// 音素ごとに変わる音素窓と A フィールドに、句単位の共通フィールドを連結する。
+fn format_full_context_label(
+    phonemes: [&str; 5],
+    phrase: &PhraseInfo,
     mora_pos: usize,
-    curr_breath_group: &'a BreathGroup,
-    utterance: &'a UtteranceInfo,
-}
-
-/// Full-Context Label文字列を組み立てる
-fn format_full_context_label(input: &LabelFormatInput<'_>) -> String {
-    let [p1, p2, p3, p4, p5] = input.phonemes;
-    let phrase = input.phrase;
-    let prev_phrase = input.prev_phrase;
-    let next_phrase = input.next_phrase;
-    let mora_pos = input.mora_pos;
-
+    phrase_context: &str,
+) -> String {
+    let [p1, p2, p3, p4, p5] = phonemes;
     // A: アクセント句のアクセント型情報
     let a1 = if phrase.accent_type == 0 {
         0i128
@@ -432,6 +416,15 @@ fn format_full_context_label(input: &LabelFormatInput<'_>) -> String {
     };
     let a2 = mora_pos + 1;
     let a3 = phrase.mora_count - mora_pos;
+
+    format!("{p1}^{p2}-{p3}+{p4}={p5}/A:{a1}+{a2}+{a3}{phrase_context}")
+}
+
+/// 同じ句の全音素が共有する B〜K フィールドを組み立てる。
+fn format_phrase_context(context: &LabelContext, phrase_index: usize) -> String {
+    let phrase = &context.phrases[phrase_index];
+    let prev_phrase = phrase_index.checked_sub(1).map(|i| &context.phrases[i]);
+    let next_phrase = context.phrases.get(phrase_index + 1);
 
     // B: 前のアクセント句情報
     let (b1, b2, b3) = match prev_phrase {
@@ -469,9 +462,8 @@ fn format_full_context_label(input: &LabelFormatInput<'_>) -> String {
     };
 
     // F: 現在のアクセント句情報（呼気段落内での位置を含む）
-    // f1=mora_count, f2=accent_type, f3=0(placeholder), f4=xx(placeholder),
-    // f5=AP position in BG (fwd), f6=AP position in BG (bwd),
-    // f7=mora position in utterance (fwd), f8=mora position in utterance (bwd)
+    // f1=モーラ数、f2=アクセント型、f3=0・f4=xx（固定値）、
+    // f5・f6=呼気段落内の句の前方・後方位置、f7・f8=モーラの前方・後方位置。
     let f_field = format!(
         "{}_{}#0_xx@{}_{}|{}_{}",
         phrase.mora_count,
@@ -496,12 +488,10 @@ fn format_full_context_label(input: &LabelFormatInput<'_>) -> String {
     let h_field = "xx_xx";
 
     // I: 現在の呼気段落情報
-    // i1=AP count in BG, i2=mora count in BG,
-    // i3=BG position in utterance (fwd), i4=BG position in utterance (bwd),
-    // i5=cumulative AP position from start, i6=from end,
-    // i7=cumulative mora position from start, i8=from end
-    let bg = input.curr_breath_group;
-    let utt = input.utterance;
+    // i1・i2=段落内の句数・モーラ数、i3・i4=発話内の段落の前方・後方位置、
+    // i5・i6=句の累積前方・後方位置、i7・i8=モーラの累積前方・後方位置。
+    let bg = &context.breath_groups[phrase.breath_group_index];
+    let utt = &context.utterance;
     let i_field = format!(
         "{}-{}@{}+{}&{}-{}|{}+{}",
         bg.accent_phrase_count,
@@ -524,9 +514,7 @@ fn format_full_context_label(input: &LabelFormatInput<'_>) -> String {
     );
 
     format!(
-        "{p1}^{p2}-{p3}+{p4}={p5}\
-         /A:{a1}+{a2}+{a3}\
-         /B:{b1}-{b2}_{b3}\
+        "/B:{b1}-{b2}_{b3}\
          /C:{c1}_{c2}+{c3}\
          /D:{d1}+{d2}_{d3}\
          /E:{e_field}\
@@ -547,7 +535,7 @@ mod tests {
     #[test]
     fn test_empty_labels() {
         let labels = generate_labels(&[], &[]);
-        assert_eq!(labels.len(), 1); // sil only
+        assert_eq!(labels.len(), 1); // 無音ラベルのみ
         assert!(labels[0].contains("sil"));
         // 空入力ではK:xx+xx-xx
         assert!(labels[0].contains("/K:xx+xx-xx"));
@@ -586,7 +574,7 @@ mod tests {
         }];
 
         let labels = generate_labels(&nodes, &phrases);
-        // sil + phonemes + sil
+        // 先頭の無音ラベル + 音素列 + 末尾の無音ラベル
         assert!(labels.len() >= 3);
         assert!(labels.first().unwrap().contains("sil"));
         assert!(labels.last().unwrap().contains("sil"));
