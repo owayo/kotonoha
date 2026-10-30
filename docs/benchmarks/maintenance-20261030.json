@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-30",
+  "base_commit": "9adb5b8362330e3e94dbb4da684c2830f6f79fa6",
+  "platform": "Windows x64",
+  "cpu": "AMD Ryzen 7 5700X",
+  "rust": "1.99.1",
+  "criterion": "0.8.2",
+  "sample_count": 30,
+  "warmup_seconds": 0.5,
+  "measurement_seconds": 1,
+  "resamples": 1000,
+  "rounds": 1,
+  "order": ["before", "after"],
+  "timing_status": "Reference only: untouched benchmarks moved +20%/-38% in the same runs, so wall-time deltas are dominated by host scheduling noise. Adopted evidence is the deterministic allocation counting below.",
+  "timing_summary_us_median": [
+    {"case": "engine/analyze", "before": 4.6868, "after": 5.6273, "touched": false},
+    {"case": "engine/estimate_accent", "before": 10.471, "after": 10.139, "touched": true},
+    {"case": "engine/generate_labels", "before": 42.635, "after": 31.091, "touched": true},
+    {"case": "engine/tokens_to_labels", "before": 38.597, "after": 33.254, "touched": true},
+    {"case": "engine/prosody_extraction", "before": 19.949, "after": 12.393, "touched": false},
+    {"case": "label_scaling/phrases/1", "before": 28.572, "after": 19.434, "touched": true},
+    {"case": "label_scaling/single/1", "before": 25.138, "after": 15.975, "touched": true},
+    {"case": "label_scaling/phrases/20", "before": 648.71, "after": 626.03, "touched": true},
+    {"case": "label_scaling/single/20", "before": 392.76, "after": 363.29, "touched": true},
+    {"case": "label_scaling/phrases/200", "before": 6924.5, "after": 5327.5, "touched": true},
+    {"case": "label_scaling/single/200", "before": 4407.4, "after": 3065.7, "touched": true}
+  ],
+  "allocation_tool": "kotonoha/examples/label_allocations.rs (make_label 1回分、ウォームアップ後)",
+  "allocation_digest_match": true,
+  "allocations": [
+    {"case": "phrases/1", "labels": 19, "digest": "6aa474a2d675bc51", "before_allocations": 223, "after_allocations": 217, "before_bytes": 12416, "after_bytes": 12296},
+    {"case": "single/1", "labels": 19, "digest": "df3a6cd81598177d", "before_allocations": 184, "after_allocations": 180, "before_bytes": 12410, "after_bytes": 12290},
+    {"case": "phrases/20", "labels": 342, "digest": "fe22d6b1e8b798ad", "before_allocations": 4337, "after_allocations": 4217, "before_bytes": 232694, "after_bytes": 230294},
+    {"case": "single/20", "labels": 342, "digest": "a0cb84a107549e3d", "before_allocations": 3031, "after_allocations": 3019, "before_bytes": 213350, "after_bytes": 210830},
+    {"case": "phrases/200", "labels": 3402, "digest": "cc8b446663a8ca43", "before_allocations": 43826, "after_allocations": 42626, "before_bytes": 2333629, "after_bytes": 2309629},
+    {"case": "single/200", "labels": 3402, "digest": "2dffd499fb4e2693", "before_allocations": 29863, "after_allocations": 29845, "before_bytes": 1991442, "after_bytes": 1971002}
+  ]
+}

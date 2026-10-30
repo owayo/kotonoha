@@ -928,6 +928,42 @@ fn test_voiceless_kusuri_ku_devoices() {
 }
 
 #[test]
+fn test_voiceless_single_mora_word_not_devoiced() {
+    // 木: 単独の1モーラ語は、発話末で無声子音に続く i でも無声化しない（規則5）
+    let engine = Engine::default();
+    let tokens = vec![tok("木", "名詞", "キ")];
+    let mut nodes = engine.analyze(&tokens);
+    nodes[0].accent_type = 0;
+    let phrases = make_phrases(&nodes, 0);
+    let labels = engine.make_label(&nodes, &phrases);
+    let all = labels.join(" ");
+    assert!(
+        all.contains("-i+") && !all.contains("-I+"),
+        "単独の1モーラ語「キ」は無声化しない: {}",
+        all
+    );
+}
+
+#[test]
+fn test_voiceless_one_mora_node_in_multi_node_phrase_devoices() {
+    // 木戸: 句に2ノードあるため1モーラ語の例外は適用されず、
+    // キは後続の無声子音 t により無声化する
+    let engine = Engine::default();
+    let tokens = vec![tok("木", "名詞", "キ"), tok("戸", "名詞", "ト")];
+    let mut nodes = engine.analyze(&tokens);
+    nodes[0].accent_type = 0;
+    nodes[1].accent_type = 0;
+    let phrases = make_phrases(&nodes, 0);
+    let labels = engine.make_label(&nodes, &phrases);
+    let all = labels.join(" ");
+    assert!(
+        all.contains("-I+"),
+        "2ノード句の「キ」には1モーラ語の例外が効かず無声化する: {}",
+        all
+    );
+}
+
+#[test]
 fn test_voiceless_desu_su_devoices() {
     // です: de-su → su should devoice at utterance end
     let engine = Engine::default();
