@@ -188,29 +188,19 @@ fn build_label_context(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> LabelCont
         mora_offset += phrase.mora_count;
 
         // フレーズ内の全モーラを先に収集する（無声化判定にはフレーズ全体のモーラ列が必要）
-        // 各ノードのモーラ数を記録して1モーラ語を検出する
         let mut phrase_moras: Vec<mora::Mora> = Vec::new();
-        let mut node_mora_counts: Vec<usize> = Vec::new();
         for &node_idx in &phrase.nodes {
             let node = &nodes[node_idx];
             // 音素は PhoneTone (prosody.rs) と同じく長音展開済みの pronunciation から生成する。
             // reading を使うと「トウキョウ vs トオキョオ」の音素差や、reading 中の
             // 長音記号「ー」が単独モーラで空母音になる問題が起きる。
-            let moras = mora::parse_mora(&node.pronunciation);
-            node_mora_counts.push(moras.len());
-            phrase_moras.extend(moras);
+            phrase_moras.extend(mora::parse_mora(&node.pronunciation));
         }
 
         let is_last_phrase = phrase_idx == phrases.len() - 1;
 
-        // 各モーラがどのノードに属するかを計算し、1モーラ語かどうかを判定する
-        let mut mora_to_single_mora_word: Vec<bool> = Vec::new();
-        for &count in &node_mora_counts {
-            let is_single = count == 1 && phrase.nodes.len() == 1;
-            for _ in 0..count {
-                mora_to_single_mora_word.push(is_single);
-            }
-        }
+        // 1モーラ語（句が単独の語で、その語が1モーラ）は句内の全モーラで共通
+        let is_single_mora_word = phrase.nodes.len() == 1 && phrase_moras.len() == 1;
 
         for (mora_idx_in_phrase, m) in phrase_moras.iter().enumerate() {
             // 子音がある場合
@@ -219,11 +209,6 @@ fn build_label_context(nodes: &[NjdNode], phrases: &[AccentPhrase]) -> LabelCont
                 // accent_type > 0 のとき、mora_idx_in_phrase + 1 == accent_type がアクセント核
                 let is_accent_nucleus =
                     phrase.accent_type > 0 && (mora_idx_in_phrase + 1) == phrase.accent_type;
-
-                let is_single_mora_word = mora_to_single_mora_word
-                    .get(mora_idx_in_phrase)
-                    .copied()
-                    .unwrap_or(false);
 
                 let voiceless_ctx = VoicelessContext {
                     is_accent_nucleus,

@@ -2,7 +2,7 @@
 [tools]
 rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] }
 python = "3.14.7"
-uv = "0.13.4"
+uv = "0.13.5"
 
 [env]
 UV_PYTHON_PREFERENCE = "only-system"

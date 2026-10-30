@@ -47,17 +47,14 @@ fn set_chain_flags(nodes: &mut [NjdNode]) {
     nodes[0].chain_flag = 0;
 
     for i in 1..nodes.len() {
-        // 安全に前後のノード情報を取得するためにインデックスで参照
-        let prev_pos = nodes[i - 1].pos.clone();
-        let prev_detail1 = nodes[i - 1].pos_detail1.clone();
-        let curr_pos = nodes[i].pos.clone();
-        let curr_detail1 = nodes[i].pos_detail1.clone();
-
-        nodes[i].chain_flag = if should_chain(&prev_pos, &prev_detail1, &curr_pos, &curr_detail1) {
-            1
-        } else {
-            0
-        };
+        // 判定を先に済ませれば共有借用が代入と重ならず、クローンは不要
+        let chain = should_chain(
+            &nodes[i - 1].pos,
+            &nodes[i - 1].pos_detail1,
+            &nodes[i].pos,
+            &nodes[i].pos_detail1,
+        );
+        nodes[i].chain_flag = i8::from(chain);
     }
 }
 
@@ -173,12 +170,11 @@ fn build_accent_phrases(nodes: &[NjdNode]) -> Vec<AccentPhrase> {
         if node.chain_flag == 0 && !current_nodes.is_empty() {
             // 新しいアクセント句を開始
             phrases.push(AccentPhrase {
-                nodes: current_nodes.clone(),
+                nodes: std::mem::take(&mut current_nodes),
                 accent_type: 0,
                 mora_count: current_mora_count,
                 is_interrogative: false,
             });
-            current_nodes.clear();
             current_mora_count = 0;
         }
         current_nodes.push(i);
@@ -204,9 +200,14 @@ fn build_full_pos_str(node: &NjdNode) -> String {
     if node.pos_detail1 == "*" || node.pos_detail1.is_empty() {
         return base.to_string();
     }
-    let mut full = format!("{},{}", base, node.pos_detail1);
+    let mut full =
+        String::with_capacity(base.len() + node.pos_detail1.len() + node.pos_detail2.len() + 2);
+    full.push_str(base);
+    full.push(',');
+    full.push_str(&node.pos_detail1);
     if node.pos_detail2 != "*" && !node.pos_detail2.is_empty() {
-        full = format!("{},{}", full, node.pos_detail2);
+        full.push(',');
+        full.push_str(&node.pos_detail2);
     }
     full
 }
@@ -227,14 +228,11 @@ fn combine_accent_types(
         let mut combined_accent = usize::from(nodes[first_idx].accent_type);
         let mut combined_mora = nodes[first_idx].mora_count;
 
-        // 2番目以降のノードとアクセントを結合
-        for window_idx in 1..phrase.nodes.len() {
-            let node_idx = phrase.nodes[window_idx];
-            let prev_idx = phrase.nodes[window_idx - 1];
+        // 2番目以降のノードとアクセントを結合。
+        // 右側の品詞文字列は次の反復で左側になるので、持ち回して再構築を省く
+        let mut left_pos = build_full_pos_str(&nodes[first_idx]);
+        for &node_idx in &phrase.nodes[1..] {
             let node = &nodes[node_idx];
-            let prev_node = &nodes[prev_idx];
-
-            let left_pos = build_full_pos_str(prev_node);
             let right_pos = build_full_pos_str(node);
 
             if let Some(rule) = rule_table.find_rule(&left_pos, &right_pos) {
@@ -248,6 +246,7 @@ fn combine_accent_types(
             }
 
             combined_mora += node.mora_count;
+            left_pos = right_pos;
         }
 
         phrase.accent_type = combined_accent;
