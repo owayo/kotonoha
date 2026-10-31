@@ -170,3 +170,62 @@ fn missing_or_invalid_dictionary_fails_without_analysis_output() {
         assert!(String::from_utf8_lossy(&output.stderr).contains(expected));
     }
 }
+
+#[test]
+fn quantity_readings_reach_cli_tokens_and_analysis() {
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../kotonoha/tests/fixtures/quantities");
+    let mut builder = DictBuilder::new();
+    builder.add_csv_dir(&source).unwrap();
+    builder.load_matrix(source.join("matrix.def")).unwrap();
+    builder.load_unk(source.join("unk.def")).unwrap();
+    builder.load_char_def(source.join("char.def")).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let dict = dir.path().join("quantity.hsd");
+    builder
+        .write_hsd(&dict, &builder.write_options(), |_, _| {})
+        .unwrap();
+    let cases: Vec<[String; 3]> = serde_json::from_str(include_str!(
+        "../../kotonoha/tests/fixtures/quantities/cases.json"
+    ))
+    .unwrap();
+
+    for [text, reading, pronunciation] in cases {
+        let tokens = successful(
+            cli(dir.path())
+                .args(["tokenize", &text, "--dict"])
+                .arg(&dict)
+                .args(["--format", "json"])
+                .output()
+                .unwrap(),
+        );
+        let tokens: Vec<serde_json::Value> = serde_json::from_slice(&tokens.stdout).unwrap();
+        assert_eq!(
+            tokens
+                .iter()
+                .map(|token| token["reading"].as_str().unwrap())
+                .collect::<String>(),
+            reading,
+            "{text}"
+        );
+        let analyzed = successful(
+            cli(dir.path())
+                .args(["analyze", &text, "--dict"])
+                .arg(&dict)
+                .args(["--format", "phone-tones"])
+                .output()
+                .unwrap(),
+        );
+        let output = String::from_utf8(analyzed.stdout).unwrap();
+        let phones: Vec<_> = output
+            .lines()
+            .map(|line| line.split_once('\t').unwrap().0)
+            .filter(|&phone| phone != "sil")
+            .collect();
+        assert_eq!(
+            phones,
+            kotonoha::phoneme::katakana_to_phonemes(&pronunciation),
+            "{text}"
+        );
+    }
+}

@@ -16,7 +16,18 @@ fn released_hsd_runs_native_pipeline() -> Result<(), Box<dyn std::error::Error>>
     let models = PathBuf::from(std::env::var("KOTONOHA_RELEASE_MODELS")?);
     let mut analyzer = hasami::Analyzer::load(&dictionary)?;
     let pipeline = V66Pipeline::new(V66Bundle::from_dir(&models)?);
-    let texts = ["今日は良い天気です。", "作ろうと思う。", "C++とC#を使う。"];
+    let texts = [
+        "今日は良い天気です。",
+        "作ろうと思う。",
+        "C++とC#を使う。",
+        "10階と十階。",
+        "10冊と十冊。",
+        "10足と十足。",
+        "10歳と十才。",
+        "六冊と六足。",
+        "100階と千階。",
+        "10.5階とISO10階。",
+    ];
     for text in texts {
         let tokens: Vec<InputToken> = analyzer
             .try_tokenize(text)?
@@ -38,8 +49,10 @@ fn released_hsd_runs_native_pipeline() -> Result<(), Box<dyn std::error::Error>>
     engine.load_dictionary(&dictionary)?;
     engine.set_contextual_accent_predictor(Box::new(pipeline));
     for text in texts {
-        assert!(!engine.text_to_phone_tones(text)?.is_empty());
-        assert!(!engine.text_to_labels(text)?.is_empty());
+        let phones = engine.text_to_phone_tones(text)?;
+        let labels = engine.text_to_labels(text)?;
+        assert!(!phones.is_empty());
+        assert_eq!(phones.len(), labels.len(), "{text}");
     }
     Ok(())
 }
