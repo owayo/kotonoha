@@ -1,9 +1,8 @@
 //! カタカナ 1 モーラの音素化が、Style-Bert-VITS2 のモーラ表と一致することを検証する。
 //!
-//! `katakana_to_phonemes()` は文字ごとの場合分けで書かれているため、小書き仮名の
-//! 組み合わせが漏れやすい。漏れると `mora::split_cv()` が子音を連結してしまい
-//! （「ジェ」が `j`,`i`,`e` → 子音 `ji` + 母音 `e`）、音素として無効な値が下流に流れる。
-//! ここで全モーラを突き合わせることで、その取りこぼしを検出する。
+//! 音素化とモーラ処理は対応表を共有する。未対応の小書き仮名まで結合すると、
+//! 「カャ」の `k`,`a`,`y`,`a` から存在しない子音 `kay` を作ってしまう。
+//! 対応表・境界例・カタカナ全組み合わせを突き合わせ、その取りこぼしを検出する。
 //!
 //! 次の 3 つは意図的に Style-Bert-VITS2 と表記が異なる:
 //! - 促音は HTS 表記の `cl`（Style-Bert-VITS2 側が `q` に読み替える）
@@ -256,4 +255,132 @@ fn all_mora_phonemes_are_defined() {
         })
         .collect();
     assert!(undefined.is_empty(), "undefined phonemes: {:?}", undefined);
+}
+
+#[test]
+fn mora_boundaries_preserve_vowels_and_reject_nonexistent_consonants() {
+    for input in [
+        "アィー",
+        "ンァー",
+        "カャ",
+        "ヂャ",
+        "キャィー",
+        "ンーッー",
+        "ヿヽヾ",
+        "キ?ィー",
+    ] {
+        let moras = kotonoha::mora::parse_mora(input);
+        let phones: Vec<_> = moras
+            .iter()
+            .flat_map(|m| m.consonant.iter().chain(std::iter::once(&m.vowel)))
+            .cloned()
+            .collect();
+        assert_eq!(phones, katakana_to_phonemes(input), "{input}");
+        assert_eq!(kotonoha::mora::count_mora(input), moras.len(), "{input}");
+        assert!(
+            moras
+                .iter()
+                .filter_map(|m| m.consonant.as_deref())
+                .all(kotonoha::phoneme::is_consonant),
+            "{input}"
+        );
+        for phone in phones {
+            assert!(
+                kotonoha::phoneme::ALL_PHONEMES.contains(&phone.as_str()),
+                "{input}: {phone}"
+            );
+        }
+    }
+}
+
+#[test]
+fn all_katakana_pairs_agree_between_mora_and_phoneme_conversion() {
+    for first in '\u{30a0}'..='\u{30ff}' {
+        for second in '\u{30a0}'..='\u{30ff}' {
+            let input = format!("{first}{second}");
+            let moras = kotonoha::mora::parse_mora(&input);
+            let phones: Vec<_> = moras
+                .iter()
+                .flat_map(|m| m.consonant.iter().chain(std::iter::once(&m.vowel)))
+                .cloned()
+                .collect();
+            assert_eq!(phones, katakana_to_phonemes(&input), "{input}");
+            assert_eq!(kotonoha::mora::count_mora(&input), moras.len(), "{input}");
+        }
+    }
+}
+
+#[test]
+fn mora_boundaries_reach_accent_tones_and_labels() {
+    use kotonoha::Engine;
+    use kotonoha::accent::AccentPhrase;
+    use kotonoha::njd::InputToken;
+
+    let engine = Engine::default();
+    let cases: &[(&str, usize, &[&str])] = &[
+        ("カャ", 2, &["k", "a", "y", "a"]),
+        ("アィー", 3, &["a", "i", "i"]),
+        ("ンァー", 3, &["N", "a", "a"]),
+        ("キャィー", 2, &["ky", "i", "i"]),
+        ("ンーッー", 2, &["N", "cl"]),
+    ];
+
+    for &(input, expected_count, expected_phones) in cases {
+        let mut nodes = engine.analyze(&[
+            InputToken::new("境界", "名詞", input, input),
+            InputToken::new("後続", "名詞", "ア", "ア"),
+        ]);
+        assert_eq!(nodes[0].mora_count, expected_count, "{input}");
+        let estimated = engine.estimate_accent(&mut nodes);
+        assert_eq!(
+            estimated
+                .iter()
+                .map(|phrase| phrase.mora_count)
+                .sum::<usize>(),
+            expected_count + 1,
+            "{input}"
+        );
+
+        // 核を最終モーラに置き、後続語へ移る位置でもトーンとラベルを照合する。
+        let phrases = [AccentPhrase {
+            nodes: vec![0, 1],
+            accent_type: expected_count,
+            mora_count: expected_count + 1,
+            is_interrogative: false,
+        }];
+        let tones = engine.extract_phone_tones(&nodes, &phrases);
+        let mut expected = expected_phones.to_vec();
+        expected.push("a");
+        assert_eq!(
+            tones[1..tones.len() - 1]
+                .iter()
+                .map(|phone| phone.phone.as_str())
+                .collect::<Vec<_>>(),
+            expected,
+            "{input}"
+        );
+        assert_eq!(tones[1].tone, 0, "{input}");
+        assert_eq!(tones[tones.len() - 3].tone, 1, "{input}");
+        assert_eq!(tones[tones.len() - 2].tone, 0, "{input}");
+
+        let labels = engine.make_label(&nodes, &phrases);
+        assert_eq!(labels.len(), tones.len(), "{input}");
+        for (label, phone) in labels[1..labels.len() - 1].iter().zip(&expected) {
+            assert!(label.contains(&format!("-{phone}+")), "{input}: {label}");
+            assert!(
+                label.contains(&format!("/F:{}_{expected_count}#", expected_count + 1)),
+                "{input}: {label}"
+            );
+        }
+        assert!(
+            labels[labels.len() - 3].contains(&format!("/A:0+{expected_count}+2")),
+            "{input}: {}",
+            labels[labels.len() - 3]
+        );
+        assert!(
+            labels[labels.len() - 2].contains(&format!("/A:-1+{}+1", expected_count + 1)),
+            "{input}: {}",
+            labels[labels.len() - 2]
+        );
+    }
 }

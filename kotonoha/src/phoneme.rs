@@ -159,7 +159,7 @@ pub fn katakana_to_phonemes(kana: &str) -> Vec<String> {
 
 /// 2文字で1モーラになる組み合わせの子音と母音を返す。
 /// 対応しない組み合わせは文字を消費せず、単独の仮名として処理する。
-fn combined_kana_phonemes(first: char, second: char) -> Option<[&'static str; 2]> {
+pub(crate) fn combined_kana_phonemes(first: char, second: char) -> Option<[&'static str; 2]> {
     let consonant = match (first, second) {
         ('イ', 'ェ') => "y",
         ('ウ', 'ィ' | 'ェ' | 'ォ') => "w",
@@ -197,7 +197,7 @@ fn combined_kana_phonemes(first: char, second: char) -> Option<[&'static str; 2]
 }
 
 /// 単独の仮名を音素へ写す。長音と小書き母音の文脈依存処理は走査側で行う。
-fn single_kana_phonemes(kana: char) -> &'static [&'static str] {
+pub(crate) fn single_kana_phonemes(kana: char) -> &'static [&'static str] {
     match kana {
         'ア' | 'ァ' => &["a"],
         'イ' | 'ィ' | 'ヰ' => &["i"],
