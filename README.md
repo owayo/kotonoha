@@ -71,6 +71,43 @@ text = normalizer.normalize("C++とC#")
 ONNX モデルや ONNX Runtime は不要です。Rust では `DictionaryNormalizer::load(path, symbols)`、
 メモリ上の辞書では `DictionaryNormalizer::from_dictionary(dictionary, symbols)` を使います。
 
+### 単一数量と識別子を正規化する
+
+`DictionaryNormalizer` は、利用側が単一数量・識別子と判定した区間を hasami へ委譲できる。
+Rust の返り値は `Result<Option<String>, hasami::DictError>`、Python は `str | None`。
+辞書のエラーは Rust では `Err`、Python では例外として返す。KNM モデルは読み込まない。
+
+| メソッド | 戻り値 |
+| --- | --- |
+| `quantity_pronunciation(value)` | 認可された数量全体の発音。全体が 1 既知語として選ばれた場合や、数量・境界・読みが対象外なら `None` |
+| `normalize_identifier(value)` | 全体が辞書にある ASCII 英数字 ID は原文、限定した未知 ID は字母・単桁読み、未対応は `None` |
+
+利用側で数量の判定を先に行い、数量区間の `None` は既存の数量処理へ戻す。識別子として再分類しない。
+残る識別子へ `normalize_identifier` を使い、原文・カタカナのどちらの `str` も再数値変換せず保持する。
+`None` は採用する結果がないことを示し、読みの正誤を判定する値ではない。Rust でも同じ順に扱う。
+
+```python
+from __future__ import annotations
+
+from kotonoha import DictionaryNormalizer
+
+normalizer = DictionaryNormalizer("ipadic-neologd-sudachi.hsd", symbols="")
+
+def normalize_scalar(value: str, *, is_quantity: bool) -> str | None:
+    if is_quantity:
+        return normalizer.quantity_pronunciation(value)
+    return normalizer.normalize_identifier(value)
+```
+
+全体が既知の `C3PO` などは、短さ・大小文字より先に原文で保護し、登録済みの独自読みを以後の解析に渡す。
+原文保持は辞書の発音を検証した結果ではない。未知 ID の字母読みは英大文字で始まり数字を含む 5 文字以上の
+ASCII 英大文字・数字と、内部で連続しない `-`・`_` に限定し、既知語幹に独自読みがあれば `None` を返す。
+条件を満たす未知の `ZX1B-90Q` は字母・単桁読み、未知の `GPT-5.02` は `None` となる。
+小数点・先頭ゼロを保つ数値変換は利用側が行う。
+
+追加単位 `bit`・`mph`・`kcal`・`km2`・`km/h`・`m/s` の数量合成は半角の数値・単位綴りに限定する。
+既存の全角単位の読み補完は従来の境界規則に従う。
+
 ### CLI
 
 [Releases](https://github.com/owayo/kotonoha/releases) から OS・CPU に対応するアーカイブを取得し、

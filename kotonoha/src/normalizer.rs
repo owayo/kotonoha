@@ -31,6 +31,17 @@ impl DictionaryNormalizer {
         }
     }
 
+    /// 明示された単一数量の発音を共有解析器へ委譲する。モデルは読み込まない。
+    pub fn quantity_pronunciation(&mut self, input: &str) -> Result<Option<String>, DictError> {
+        self.analyzer.quantity_pronunciation(input)
+    }
+
+    /// ASCII英数字識別子の既知全体は原文、限定した未知IDは字母・桁読みで返す。
+    /// Someを再び数量変換せず保持し、Noneだけ呼出側の従来変換へ戻す。
+    pub fn normalize_identifier(&mut self, input: &str) -> Result<Option<String>, DictError> {
+        self.analyzer.normalize_identifier(input)
+    }
+
     /// 既知語の発音だけを置換し、それ以外の入力と空白を保持する。
     ///
     /// 英字・下線の続く識別子内部や同じ記号の連続には当てない。

@@ -21,6 +21,21 @@ impl DictionaryNormalizer {
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// 単一数量の発音を共有解析器へ委譲する。未対応ならNone。
+    fn quantity_pronunciation(&mut self, input: &str) -> PyResult<Option<String>> {
+        self.inner
+            .quantity_pronunciation(input)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// 識別子の正規化済み文字列を返す。既知全体は原文、限定した未知IDは字母・桁読み。
+    /// Someを再数値変換せず保持し、未対応のNoneだけ従来変換へ戻す。
+    fn normalize_identifier(&mut self, input: &str) -> PyResult<Option<String>> {
+        self.inner
+            .normalize_identifier(input)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    }
+
     /// 既知の記号付き語だけを辞書の発音で置換し、括弧と他の入力を保持する。
     fn normalize(&mut self, text: &str) -> PyResult<String> {
         self.inner
