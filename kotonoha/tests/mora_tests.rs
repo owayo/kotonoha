@@ -199,8 +199,8 @@ fn test_mora_count_consecutive_sokuon() {
 
 #[test]
 fn test_mora_count_mixed_special() {
-    // ンッー = 3
-    assert_eq!(count_mora("ンッー"), 3);
+    // 促音・撥音の後の長音は母音を持たず、音素変換でも伸ばさない。
+    assert_eq!(count_mora("ンッー"), 2);
 }
 
 // ============================================================
