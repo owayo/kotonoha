@@ -1,4 +1,8 @@
-//! 辞書にある記号付きの語を、破壊的な記号変換より前に発音表記へ写す。
+//! 辞書の記号付き語を正規化し、選択済み英字語・固定句の発音候補を照会する。
+//!
+//! 有限な表記・素性の合意だけを調べ、語義一意やアクセント同一は保証しない。
+
+mod lexical;
 
 use std::path::Path;
 
@@ -36,7 +40,55 @@ impl DictionaryNormalizer {
         self.analyzer.quantity_pronunciation(input)
     }
 
-    /// ASCII英数字識別子の既知全体は原文、限定した未知IDは字母・桁読みで返す。
+    /// 全文で認可された数量のUTF-8バイト範囲と発音を返す。モデルは読み込まない。
+    pub fn quantity_spans(&mut self, input: &str) -> Result<Vec<hasami::QuantitySpan>, DictError> {
+        self.analyzer.quantity_spans(input)
+    }
+
+    /// 全文で選択された既知トークンのUTF-8バイト範囲。モデルを読み込まない。
+    pub fn known_word_spans(
+        &mut self,
+        input: &str,
+    ) -> Result<Vec<std::ops::Range<usize>>, DictError> {
+        self.analyzer.known_word_spans(input)
+    }
+
+    /// 全文の選択済みトークンの開始・終了・発音を返す。位置はUTF-8バイト。
+    ///
+    /// 未知語と空発音もそのまま含め、発音の正しさは判定しない。モデルは読み込まず、
+    /// 入力や通常のトークンを書き換えない。前処理による範囲外の読みの変化を照合できる。
+    pub fn token_pronunciations(
+        &mut self,
+        input: &str,
+    ) -> Result<Vec<(usize, usize, String)>, DictError> {
+        Ok(self
+            .analyzer
+            .try_tokenize(input)?
+            .into_iter()
+            .map(|token| (token.start, token.end, token.pronunciation.to_string()))
+            .collect())
+    }
+
+    /// 全文で選択された、辞書発音が合意する英字語・固定句のUTF-8範囲と発音。
+    ///
+    /// 数字・識別子内部・活用語・異音候補等は辞退する。語義の正しさは判定せず、
+    /// 入力や通常のトークンを書き換えない。モデルは読み込まない。
+    pub fn lexical_pronunciation_spans(
+        &mut self,
+        input: &str,
+    ) -> Result<Vec<(usize, usize, String)>, DictError> {
+        lexical::collect(&mut self.analyzer, input)
+    }
+
+    /// 完全なカタカナ発音だけを既存の共通処理で音素へ写す。
+    ///
+    /// 空・未対応文字・発音できない長音記号を含む場合はNone。意味の正解や
+    /// アクセントは判定せず、未知文字を消した結果を同音確認には使わない。
+    pub fn pronunciation_phonemes(pronunciation: &str) -> Option<Vec<String>> {
+        lexical::pronunciation_phonemes(pronunciation)
+    }
+
+    /// ASCII識別子の既知全体は原文、限定した未知ID・郵便電話形は字母・桁読みで返す。
     /// Someを再び数量変換せず保持し、Noneだけ呼出側の従来変換へ戻す。
     pub fn normalize_identifier(&mut self, input: &str) -> Result<Option<String>, DictError> {
         self.analyzer.normalize_identifier(input)

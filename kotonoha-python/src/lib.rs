@@ -28,7 +28,56 @@ impl DictionaryNormalizer {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    /// 識別子の正規化済み文字列を返す。既知全体は原文、限定した未知IDは字母・桁読み。
+    /// 全文で認可された数量の(start, end, pronunciation)を返す。位置はUTF-8バイト。
+    fn quantity_spans(&mut self, input: &str) -> PyResult<Vec<(usize, usize, String)>> {
+        self.inner
+            .quantity_spans(input)
+            .map(|spans| {
+                spans
+                    .into_iter()
+                    .map(|span| (span.start, span.end, span.pronunciation))
+                    .collect()
+            })
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// 選択済み既知語の(start, end)を返す。Python文字位置ではなくUTF-8バイト位置。
+    fn known_word_spans(&mut self, input: &str) -> PyResult<Vec<(usize, usize)>> {
+        self.inner
+            .known_word_spans(input)
+            .map(|spans| {
+                spans
+                    .into_iter()
+                    .map(|span| (span.start, span.end))
+                    .collect()
+            })
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// 全選択トークンのUTF-8開始・終了・発音。未知語と空発音も含み、正読の判定はしない。
+    fn token_pronunciations(&mut self, input: &str) -> PyResult<Vec<(usize, usize, String)>> {
+        self.inner
+            .token_pronunciations(input)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// 選択済み英字語・固定句の辞書発音候補。位置はUTF-8バイト。意味は判定しない。
+    fn lexical_pronunciation_spans(
+        &mut self,
+        input: &str,
+    ) -> PyResult<Vec<(usize, usize, String)>> {
+        self.inner
+            .lexical_pronunciation_spans(input)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// 完全なカタカナ発音だけを共通処理で音素へ写す。空・不正字はNone。
+    #[staticmethod]
+    fn pronunciation_phonemes(pronunciation: &str) -> Option<Vec<String>> {
+        RustDictionaryNormalizer::pronunciation_phonemes(pronunciation)
+    }
+
+    /// 識別子の正規化済み文字列。既知全体は原文、限定した未知ID・郵便電話形は字母・桁読み。
     /// Someを再数値変換せず保持し、未対応のNoneだけ従来変換へ戻す。
     fn normalize_identifier(&mut self, input: &str) -> PyResult<Option<String>> {
         self.inner
