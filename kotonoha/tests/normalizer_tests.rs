@@ -136,6 +136,53 @@ fn contextual_dictionary(
     let mut builder = DictBuilder::new();
     for (surface, pos, r, p, kind, form) in [
         ("関数", "名詞,一般,*,*", "カンスウ", "カンスー", "", ""),
+        ("式", "名詞,一般,*,*", "シキ", "シキ", "", ""),
+        ("自体", "名詞,一般,*,*", "ジタイ", "ジタイ", "", ""),
+        ("が", "助詞,格助詞,一般,*", "ガ", "ガ", "", ""),
+        (
+            "返す",
+            "動詞,自立,*,*",
+            "カエス",
+            "カエス",
+            "五段・サ行",
+            "基本形",
+        ),
+        (
+            "とり",
+            "動詞,自立,*,*",
+            "トリ",
+            "トリ",
+            "五段・ラ行",
+            "連用形",
+        ),
+        (
+            "うる",
+            "動詞,非自立,*,*",
+            "ウル",
+            "ウル",
+            "一段・得ル",
+            "基本形",
+        ),
+        ("最大", "名詞,一般,*,*", "サイダイ", "サイダイ", "", ""),
+        ("最も", "副詞,一般,*,*", "モットモ", "モットモ", "", ""),
+        ("頻度", "名詞,一般,*,*", "ヒンド", "ヒンド", "", ""),
+        (
+            "高い",
+            "形容詞,自立,*,*",
+            "タカイ",
+            "タカイ",
+            "形容詞・アウオ段",
+            "基本形",
+        ),
+        (
+            "です",
+            "助動詞,*,*,*",
+            "デス",
+            "デス",
+            "特殊・デス",
+            "基本形",
+        ),
+        ("アタイ", "名詞,固有名詞,一般,*", "アタイ", "アタイ", "", ""),
         ("の", "助詞,連体化,*,*", "ノ", "ノ", "", ""),
         ("値", value_pos, reading, pronunciation, "", ""),
         ("は", "助詞,係助詞,*,*", "ハ", "ワ", "", ""),
@@ -171,10 +218,10 @@ fn contextual_dictionary(
         builder.add_entry(DictEntry {
             surface: surface.into(),
             pos: pos.into(),
-            base_form: if surface == "(笑)" {
-                "笑い"
-            } else {
-                surface
+            base_form: match surface {
+                "(笑)" => "笑い",
+                "とり" => "とる",
+                _ => surface,
             }
             .into(),
             reading: r.into(),
@@ -296,5 +343,110 @@ fn mathematical_contexts_use_shared_corrections_inside_outer_quotes() {
         "関数の値（ね）を読む。",
     ] {
         assert_eq!(normalizer.normalize(text).unwrap(), text);
+    }
+}
+
+#[test]
+fn strong_math_readings_project_only_original_utf8_receipts() {
+    let mut analyzer =
+        hasami::Analyzer::from_dict(contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"));
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "+",
+    );
+    let input = "  C++。😀。式自体が値を返す。\nとりうる最大の値。\t最も頻度が高い値です。  0002/3・14/70m2";
+    let receipts = analyzer.contextual_reading_spans(input).unwrap();
+    assert_eq!(receipts.len(), 3);
+    assert!(receipts.iter().all(
+        |span| input.get(span.start..span.end) == Some("値") && span.pronunciation == "アタイ"
+    ));
+    let selected = normalizer.token_pronunciations(input).unwrap();
+    let normalized = normalizer.normalize(input).unwrap();
+    assert_eq!(
+        normalized,
+        "  シープラスプラス。😀。式自体がアタイを返す。\nとりうる最大のアタイ。\t最も頻度が高いアタイです。  0002/3・14/70m2"
+    );
+    assert_eq!(normalizer.token_pronunciations(input).unwrap(), selected);
+    assert_eq!(normalizer.normalize(&normalized).unwrap(), normalized);
+}
+
+#[test]
+fn strong_math_readings_reach_njd_and_phones_from_actual_analyzer_tokens() {
+    let mut analyzer =
+        hasami::Analyzer::from_dict(contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"));
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "",
+    );
+    let engine = Engine::default();
+    for text in [
+        "式自体が値を返す。",
+        "とりうる最大の値。",
+        "最も頻度が高い値です。",
+    ] {
+        let normalized = normalizer.normalize(text).unwrap();
+        let raw = analyzer.try_tokenize(text).unwrap();
+        let projected = analyzer.try_tokenize(&normalized).unwrap();
+        let raw_value = raw.iter().find(|t| t.surface.as_ref() == "値").unwrap();
+        let projected_value = projected
+            .iter()
+            .find(|t| t.surface.as_ref() == "アタイ")
+            .unwrap();
+        // 異なる入力の表層・品詞を同値扱いせず、採用された発音と音素を確かめる。
+        assert_ne!(raw_value.surface, projected_value.surface);
+        for selected in [raw_value, projected_value] {
+            let tokens = vec![InputToken::from(selected.clone())];
+            let nodes = engine.analyze(&tokens);
+            assert_eq!(nodes.len(), 1);
+            assert_eq!(nodes[0].pronunciation, "アタイ");
+            assert_eq!(nodes[0].mora_count, 3);
+            let tones = engine.tokens_to_phone_tones(&tokens);
+            let phones: Vec<_> = tones.iter().map(|tone| tone.phone.as_str()).collect();
+            assert_eq!(phones, ["sil", "a", "t", "a", "i", "sil"]);
+        }
+    }
+}
+
+#[test]
+fn strong_math_readings_preserve_prices_names_notes_and_identifiers() {
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "",
+    );
+    for text in [
+        "魚の値を返す。",
+        "最も高い値です。",
+        "頻度が高い値です。",
+        "式自体が値（ね）を返す。",
+        "とりうる最大の値（ね）。",
+        "最も頻度が高い値（ね）です。",
+        "SKU-式自体が値を返す。",
+        "SKU：とりうる最大の値。",
+        "SKU/最も頻度が高い値です。",
+        "😀式自体が値を返す。",
+        "式 自体が値を返す。",
+        "とり うる最大の値。",
+        "最も 頻度が高い値です。",
+        "「式」自体が値を返す。",
+    ] {
+        assert_eq!(normalizer.normalize(text).unwrap(), text, "{text}");
+    }
+    for (pos, reading, pronunciation) in [
+        ("名詞,固有名詞,人名,名", "ネ", "ネ"),
+        ("名詞,一般,*,*", "アタイ", "アタイ"),
+        ("名詞,一般,*,*", "チ", "チ"),
+        ("名詞,一般,*,*", "ネ", "アタイ"),
+    ] {
+        let mut normalizer = DictionaryNormalizer::from_dictionary(
+            contextual_dictionary(pos, reading, pronunciation),
+            "",
+        );
+        for text in [
+            "式自体が値を返す。",
+            "とりうる最大の値。",
+            "最も頻度が高い値です。",
+        ] {
+            assert_eq!(normalizer.normalize(text).unwrap(), text);
+        }
     }
 }
