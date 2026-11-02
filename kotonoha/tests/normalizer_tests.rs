@@ -127,3 +127,174 @@ fn actual_tokens_preserve_symbol_pronunciations_in_njd_and_prosody() {
         assert!(!engine.tokens_to_prosody_symbols(&tokens).is_empty());
     }
 }
+
+fn contextual_dictionary(
+    value_pos: &str,
+    reading: &str,
+    pronunciation: &str,
+) -> hasami::Dictionary {
+    let mut builder = DictBuilder::new();
+    for (surface, pos, r, p, kind, form) in [
+        ("関数", "名詞,一般,*,*", "カンスウ", "カンスー", "", ""),
+        ("の", "助詞,連体化,*,*", "ノ", "ノ", "", ""),
+        ("値", value_pos, reading, pronunciation, "", ""),
+        ("は", "助詞,係助詞,*,*", "ハ", "ワ", "", ""),
+        ("を", "助詞,格助詞,一般,*", "ヲ", "ヲ", "", ""),
+        (
+            "求める",
+            "動詞,自立,*,*",
+            "モトメル",
+            "モトメル",
+            "一段",
+            "基本形",
+        ),
+        ("f", "記号,アルファベット,*,*", "エフ", "エフ", "", ""),
+        ("8", "名詞,数,*,*", "ハチ", "ハチ", "", ""),
+        ("魚", "名詞,一般,*,*", "サカナ", "サカナ", "", ""),
+        ("。", "記号,句点,*,*", "。", "。", "", ""),
+        ("、", "記号,読点,*,*", "、", "、", "", ""),
+        (",", "記号,読点,*,*", ",", ",", "", ""),
+        ("(", "記号,括弧開,*,*", "(", "(", "", ""),
+        (")", "記号,括弧閉,*,*", ")", ")", "", ""),
+        ("「", "記号,括弧開,*,*", "「", "「", "", ""),
+        ("」", "記号,括弧閉,*,*", "」", "」", "", ""),
+        (
+            "C++",
+            "名詞,固有名詞,一般,*",
+            "シープラスプラス",
+            "シープラスプラス",
+            "",
+            "",
+        ),
+        ("(笑)", "記号,一般,*,*", "ワライ", "ワライ", "", ""),
+    ] {
+        builder.add_entry(DictEntry {
+            surface: surface.into(),
+            pos: pos.into(),
+            base_form: if surface == "(笑)" {
+                "笑い"
+            } else {
+                surface
+            }
+            .into(),
+            reading: r.into(),
+            pronunciation: p.into(),
+            conj_type: kind.into(),
+            conj_form: form.into(),
+            cost: -1000,
+            ..Default::default()
+        });
+    }
+    builder.build().unwrap()
+}
+
+#[test]
+fn contextual_corrections_reach_normalization_without_symbol_characters() {
+    let mut analyzer =
+        hasami::Analyzer::from_dict(contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"));
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "",
+    );
+    let text = "関数の値。";
+    let receipts = analyzer.contextual_reading_spans(text).unwrap();
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(&text[receipts[0].start..receipts[0].end], "値");
+    let selected = normalizer.token_pronunciations(text).unwrap();
+    assert_eq!(normalizer.normalize(text).unwrap(), "関数のアタイ。");
+    assert_eq!(normalizer.token_pronunciations(text).unwrap(), selected);
+    assert_eq!(
+        normalizer.normalize("関数の値、").unwrap(),
+        "関数のアタイ、"
+    );
+    assert_eq!(
+        normalizer.normalize("関数のアタイ。").unwrap(),
+        "関数のアタイ。"
+    );
+}
+
+#[test]
+fn contextual_and_symbol_edits_share_original_utf8_positions() {
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "+",
+    );
+    let text = "  C++。\t関数の値。\nf(8)の値を求める。(笑)  ";
+    assert_eq!(
+        normalizer.normalize(text).unwrap(),
+        "  シープラスプラス。\t関数のアタイ。\nf(8)のアタイを求める。(ワライ)  "
+    );
+    // 原文の文脈で決定し、括弧・引数・改行や末尾の注記は別々の座標で保つ。
+    assert_eq!(normalizer.normalize("f(8)の値を").unwrap(), "f(8)の値を");
+}
+
+#[test]
+fn contextual_projection_preserves_numeric_labels_and_nonreceipt_bytes() {
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "+",
+    );
+    for suffix in ["0002", "3・14", "70m2"] {
+        let text = format!("関数の値は{suffix}");
+        assert_eq!(
+            normalizer.normalize(&text).unwrap(),
+            format!("関数のアタイは{suffix}")
+        );
+    }
+    for text in [
+        "魚の値を求める。",
+        "「関数」の値。",
+        "関数 の値。",
+        "f8の値を求める。",
+        "関数の値,ね,を求める。",
+        "モドリチ",
+        "",
+        " \t\n",
+    ] {
+        assert_eq!(normalizer.normalize(text).unwrap(), text);
+    }
+}
+
+#[test]
+fn already_correct_custom_and_name_pronunciations_have_no_projection() {
+    for (pos, reading, pronunciation) in [
+        ("名詞,一般,*,*", "アタイ", "アタイ"),
+        ("名詞,一般,*,*", "チ", "チ"),
+        ("名詞,一般,*,*", "ネ", "アタイ"),
+        ("名詞,固有名詞,人名,名", "ネ", "ネ"),
+    ] {
+        let mut normalizer = DictionaryNormalizer::from_dictionary(
+            contextual_dictionary(pos, reading, pronunciation),
+            "",
+        );
+        assert_eq!(normalizer.normalize("関数の値。").unwrap(), "関数の値。");
+    }
+}
+
+#[test]
+fn mathematical_contexts_use_shared_corrections_inside_outer_quotes() {
+    let mut normalizer = DictionaryNormalizer::from_dictionary(
+        contextual_dictionary("名詞,一般,*,*", "ネ", "ネ"),
+        "+",
+    );
+    for text in [
+        "「関数の値」関数の値。",
+        "「魚。関数の値」関数の値。",
+        "「魚。\n関数の値」関数の値。",
+        "「関数の値」を買う。",
+        "「f(8)の値を求める」",
+    ] {
+        let expected = text.replace('値', "アタイ");
+        assert_eq!(normalizer.normalize(text).unwrap(), expected);
+    }
+    // 価格や非連続の構文はこの委譲経路で補正されない。従来の字面保持を、
+    // 文脈上の発音が「ネ」であるという根拠にはしない。
+    for text in [
+        "「魚の値」を買う。",
+        "「関数 の値を求める」を買う。",
+        "「積 分した値を求める」を買う。",
+        "関数の値（ね）を読む。",
+    ] {
+        assert_eq!(normalizer.normalize(text).unwrap(), text);
+    }
+}

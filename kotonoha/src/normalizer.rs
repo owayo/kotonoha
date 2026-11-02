@@ -1,4 +1,4 @@
-//! 辞書の記号付き語を正規化し、選択済み英字語・固定句の発音候補を照会する。
+//! 辞書の記号付き語と解析器の文脈補正を正規化し、発音候補を照会する。
 //!
 //! 有限な表記・素性の合意だけを調べ、語義一意やアクセント同一は保証しない。
 
@@ -8,7 +8,7 @@ use std::path::Path;
 
 use hasami::{Analyzer, DictError, Dictionary, Token};
 
-/// 数字で始まる語・数式・識別子を残し、既知の記号付き語だけを発音表記へ写す。
+/// 既知の記号付き語と、解析器が実際に文脈補正した範囲だけを発音表記へ写す。
 ///
 /// 読みは辞書から取得する。数字・字幅・句読点の正規化は行わず、
 /// 括弧を含まない原形へ正規化された記号注記では、外側の括弧を保持する。
@@ -94,32 +94,54 @@ impl DictionaryNormalizer {
         self.analyzer.normalize_identifier(input)
     }
 
-    /// 既知語の発音だけを置換し、それ以外の入力と空白を保持する。
+    /// 記号付き既知語と共有解析器が実際に補正した発音だけを置換する。
     ///
     /// 英字・下線の続く識別子内部や同じ記号の連続には当てない。
     /// 規格番号のように語の直後へ数字が続く形は許容する。
+    /// 他の入力と空白を保持し、語義や発音を独自に判断しない。
+    /// 置換範囲はすべて同じ原文のUTF-8バイト位置。文脈補正が記号付き語の置換と
+    /// 重なる場合は従来の記号付き語を優先し、置換後の仮名を再解析して読みを選ばない。
     pub fn normalize(&mut self, text: &str) -> Result<String, DictError> {
-        if !text.chars().any(|character| {
+        let contextual = self.analyzer.contextual_reading_spans(text)?;
+        let has_symbol = text.chars().any(|character| {
             self.symbols.contains(character) || matches!(character, '(' | '（' | '[' | '［')
-        }) {
+        });
+        if !has_symbol && contextual.is_empty() {
             return Ok(text.to_owned());
         }
-        let tokens = self.analyzer.try_tokenize(text)?;
+        let mut replacements = Vec::new();
+        if has_symbol {
+            let tokens = self.analyzer.try_tokenize(text)?;
+            for token in &tokens {
+                let Some(pronunciation) = symbol_pronunciation(text, token, &self.symbols) else {
+                    continue;
+                };
+                let pronunciation =
+                    if let Some((opening, closing)) = outer_parentheses(&token.surface) {
+                        format!("{opening}{pronunciation}{closing}")
+                    } else {
+                        pronunciation.to_owned()
+                    };
+                replacements.push((token.start, token.end, pronunciation));
+            }
+        }
+        // 記号付き語の範囲は原文順。既存の置換を優先し、重なる文脈補正は加えない。
+        let symbol_count = replacements.len();
+        for span in contextual {
+            let following =
+                replacements[..symbol_count].partition_point(|(_, end, _)| *end <= span.start);
+            if following < symbol_count && replacements[following].0 < span.end {
+                continue;
+            }
+            replacements.push((span.start, span.end, span.pronunciation));
+        }
+        replacements.sort_by_key(|(start, _, _)| *start);
         let mut output = String::with_capacity(text.len());
         let mut copied_end = 0;
-        for token in &tokens {
-            let Some(pronunciation) = symbol_pronunciation(text, token, &self.symbols) else {
-                continue;
-            };
-            output.push_str(&text[copied_end..token.start]);
-            if let Some((opening, closing)) = outer_parentheses(&token.surface) {
-                output.push(opening);
-                output.push_str(pronunciation);
-                output.push(closing);
-            } else {
-                output.push_str(pronunciation);
-            }
-            copied_end = token.end;
+        for (start, end, pronunciation) in replacements {
+            output.push_str(&text[copied_end..start]);
+            output.push_str(&pronunciation);
+            copied_end = end;
         }
         output.push_str(&text[copied_end..]);
         Ok(output)
