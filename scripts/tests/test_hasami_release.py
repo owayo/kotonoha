@@ -48,6 +48,24 @@ def snapshot():
 class HasamiReleaseTests(unittest.TestCase):
     """自動 Release の判定と、固定した公開物の検証。"""
 
+    def test_workspace_manifest_accepts_release_dependency_pin(self):
+        """実際の依存設定をRelease準備へ渡し、タグ以外の設定を保持する。"""
+        source_manifest = Path(__file__).resolve().parents[2] / "Cargo.toml"
+        source = source_manifest.read_text(encoding="utf-8")
+        record = snapshot()
+        expected = tomllib.loads(source)
+        expected["workspace"]["dependencies"]["hasami"]["tag"] = record["tag"]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "Cargo.toml"
+            manifest.write_text(source, encoding="utf-8")
+            hsd.pin_dependency(record, manifest)
+            self.assertEqual(
+                tomllib.loads(manifest.read_text(encoding="utf-8")), expected
+            )
+
+        self.assertEqual(source_manifest.read_text(encoding="utf-8"), source)
+
     def test_dependency_pin_changes_only_the_workspace_hasami_tag(self):
         """別セクション・コメント・他の依存を保持し、検証済みのタグだけを採用する。"""
         source = (
