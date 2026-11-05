@@ -1,23 +1,23 @@
 {
   "schema_version": 1,
   "repository": "owayo/hasami",
-  "tag": "v26.10.107",
-  "catalog_sha256": "ead62ecc1c0f50e0223a9b002249ebe11e1dee4c558abc10ad195154011847c6",
+  "tag": "v26.11.101",
+  "catalog_sha256": "ca60c523840537ce7618e998aa4545edc3ef661040363dd80fe8a0b001533454",
   "catalog": {
-    "hasami_version": "26.10.107",
-    "format_version": 5,
+    "hasami_version": "26.11.101",
+    "format_version": 6,
     "recommended": "ipadic-neologd-sudachi",
     "dictionaries": [
       {
         "name": "ipadic-neologd-sudachi",
         "summary": "IPAdic + NEologd + SudachiDict (recommended, largest vocabulary)",
         "file": "ipadic-neologd-sudachi.hsd",
-        "size": 220997666,
-        "sha256": "69f9ea94ff4520432bb25ee067cd948d72b5cad617b8ac06c81753e16828f806",
+        "size": 210871586,
+        "sha256": "9aa08a800d04f0683a4d33516686db54b8f7bb0bcb7b7ead5f418d74cac07f3e",
         "compressed": {
           "file": "ipadic-neologd-sudachi.hsd.zst",
-          "size": 71748523,
-          "sha256": "8285e4522563de94ec24ecc461bc35cc817d830b0d8a92fdbec55a104897a347"
+          "size": 71613937,
+          "sha256": "a71f05b81e4fde46a3a50b9b1a1310e97227ec3aa01326d7935ab49ea27614ea"
         },
         "sources": "ipadic@61b90ba6e669,neologd@abc61e33d8be,sudachi-raw@20261015/content-symbol"
       },
@@ -25,12 +25,12 @@
         "name": "ipadic-neologd",
         "summary": "IPAdic + NEologd",
         "file": "ipadic-neologd.hsd",
-        "size": 206569250,
-        "sha256": "f8fba844db1bae8d83bcb1962cb1548a569757517f5edecb98abcf5780d3a32a",
+        "size": 197261282,
+        "sha256": "20691f3aba290008f3f21b1d6e84b8cdf9b1c3736f659a6c46bf637f6138e0f1",
         "compressed": {
           "file": "ipadic-neologd.hsd.zst",
-          "size": 66916641,
-          "sha256": "aa188d79035f111cd22ace146c27bb71f7ee756927a857b7d835e8468e0d9993"
+          "size": 66778431,
+          "sha256": "baa8f4b9f5bd4823a499dc75cc08e6f23be1d2dc0619cd6236c0ffd6da7340fc"
         },
         "sources": "ipadic@61b90ba6e669,neologd@abc61e33d8be"
       },
@@ -38,12 +38,12 @@
         "name": "ipadic",
         "summary": "IPAdic",
         "file": "ipadic.hsd",
-        "size": 16498338,
-        "sha256": "e928034a2bfb69250a1c7e8cbd54ba2afa8abecc28f219770d1abd4f0530efb5",
+        "size": 15714402,
+        "sha256": "a7e1c04d0aecb04c7fd7ffb1d2e394051b92b1a3fac4f9070377af453711bf46",
         "compressed": {
           "file": "ipadic.hsd.zst",
-          "size": 5825447,
-          "sha256": "b05406e0945e9a8b164e5198d72dabbfaff26fb6db17c99921330b4243238088"
+          "size": 5806862,
+          "sha256": "01ee53edd62344c7ccf8933f6042feaecb3fe4e423709e7a1eab39b7105fa8d3"
         },
         "sources": "ipadic@61b90ba6e669"
       }
