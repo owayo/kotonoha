@@ -43,8 +43,8 @@ pub enum AccentRuleType {
 #[derive(Debug, Clone)]
 pub struct AccentRuleTable {
     rules: Vec<AccentRule>,
-    /// 品詞ペアによる高速引き用インデックス
-    index: HashMap<(String, String), Vec<usize>>,
+    /// 左品詞 → 右品詞 → 規則番号 (追加順)。借用した品詞文字列のまま引く。
+    index: HashMap<String, HashMap<String, Vec<usize>>>,
 }
 
 impl AccentRuleTable {
@@ -103,8 +103,12 @@ impl AccentRuleTable {
 
     fn add_rule(&mut self, rule: AccentRule) {
         let idx = self.rules.len();
-        let key = (rule.left_pos.clone(), rule.right_pos.clone());
-        self.index.entry(key).or_default().push(idx);
+        self.index
+            .entry(rule.left_pos.clone())
+            .or_default()
+            .entry(rule.right_pos.clone())
+            .or_default()
+            .push(idx);
         self.rules.push(rule);
     }
 
@@ -115,25 +119,23 @@ impl AccentRuleTable {
     /// 2. 品詞の詳細度を下げて階層的にフォールバック
     /// 3. ワイルドカードにフォールバック
     /// 4. 最も優先度の高い規則を返す
+    ///
+    /// 優先度が同じなら、左品詞・右品詞とも具体的な候補から順に見て最初の規則を返す。
     pub fn find_rule(&self, left_pos: &str, right_pos: &str) -> Option<&AccentRule> {
-        let left_variants = generate_pos_variants(left_pos);
-        let right_variants = generate_pos_variants(right_pos);
-
         let mut best: Option<&AccentRule> = None;
-
-        for left in &left_variants {
-            for right in &right_variants {
-                if let Some(indices) = self.index.get(&(left.clone(), right.clone())) {
-                    for &idx in indices {
-                        let rule = &self.rules[idx];
-                        if best.is_none() || rule.priority > best.unwrap().priority {
-                            best = Some(rule);
-                        }
+        for left in pos_variants(left_pos) {
+            let Some(by_right) = self.index.get(left) else {
+                continue;
+            };
+            for right in pos_variants(right_pos) {
+                for &idx in by_right.get(right).into_iter().flatten() {
+                    let rule = &self.rules[idx];
+                    if best.is_none_or(|best| rule.priority > best.priority) {
+                        best = Some(rule);
                     }
                 }
             }
         }
-
         best
     }
 
@@ -160,29 +162,16 @@ fn build_full_pos(pos: &str, detail: &str) -> String {
     }
 }
 
-/// 品詞文字列から階層的なバリアント列を生成する
-/// "名詞,接尾,助数詞" → ["名詞,接尾,助数詞", "名詞,接尾", "名詞", "*"]
-fn generate_pos_variants(pos: &str) -> Vec<String> {
-    let mut variants = Vec::new();
-
-    if pos == "*" {
-        variants.push("*".to_string());
-        return variants;
-    }
-
-    // 完全な文字列
-    variants.push(pos.to_string());
-
-    // カンマ区切りの各レベル
-    let parts: Vec<&str> = pos.split(',').collect();
-    for i in (1..parts.len()).rev() {
-        variants.push(parts[..i].join(","));
-    }
-
-    // ワイルドカード
-    variants.push("*".to_string());
-
-    variants
+/// 品詞文字列の階層的なバリアントを、具体的なものから順に返す
+/// "名詞,接尾,助数詞" → "名詞,接尾,助数詞", "名詞,接尾", "名詞", "*"
+///
+/// 上位の階層は元の文字列のカンマまでの接頭辞なので、新しい文字列を作らない。
+/// 入力が "*" のときは "*" を 1 回だけ返す。
+fn pos_variants(pos: &str) -> impl Iterator<Item = &str> {
+    let specific = (pos != "*").then(|| {
+        std::iter::once(pos).chain(pos.rmatch_indices(',').map(move |(comma, _)| &pos[..comma]))
+    });
+    specific.into_iter().flatten().chain(std::iter::once("*"))
 }
 
 /// CSVフィールドから左品詞、右品詞、規則文字列を抽出する
@@ -691,23 +680,49 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_pos_variants() {
-        let variants = generate_pos_variants("名詞,接尾,助数詞");
-        assert_eq!(
-            variants,
-            vec![
-                "名詞,接尾,助数詞".to_string(),
-                "名詞,接尾".to_string(),
-                "名詞".to_string(),
-                "*".to_string(),
-            ]
-        );
+    fn test_pos_variants() {
+        let variants: Vec<_> = pos_variants("名詞,接尾,助数詞").collect();
+        assert_eq!(variants, ["名詞,接尾,助数詞", "名詞,接尾", "名詞", "*"]);
     }
 
     #[test]
-    fn test_generate_pos_variants_wildcard() {
-        let variants = generate_pos_variants("*");
-        assert_eq!(variants, vec!["*".to_string()]);
+    fn test_pos_variants_wildcard() {
+        let variants: Vec<_> = pos_variants("*").collect();
+        assert_eq!(variants, ["*"]);
+    }
+
+    #[test]
+    fn test_pos_variants_keep_empty_levels_and_wildcard_prefix() {
+        // 分割して結合し直す旧実装と同じく、空の階層や "*" の接頭辞もそのまま残す。
+        let variants: Vec<_> = pos_variants("名詞,,接尾").collect();
+        assert_eq!(variants, ["名詞,,接尾", "名詞,", "名詞", "*"]);
+        let variants: Vec<_> = pos_variants("*,一般").collect();
+        assert_eq!(variants, ["*,一般", "*", "*"]);
+        let variants: Vec<_> = pos_variants("").collect();
+        assert_eq!(variants, ["", "*"]);
+    }
+
+    #[test]
+    fn test_find_rule_prefers_specific_candidates_on_equal_priority() {
+        // 同じ優先度の規則が 2 つ当たるとき、左品詞の具体的な候補から見つかったものを返す。
+        let mut table = AccentRuleTable {
+            rules: Vec::new(),
+            index: HashMap::new(),
+        };
+        for (left, right, rule_type) in [
+            ("名詞", "助詞,格助詞", AccentRuleType::Flat),
+            ("名詞,一般", "助詞", AccentRuleType::KeepLeft),
+        ] {
+            table.add_rule(AccentRule {
+                left_pos: left.into(),
+                right_pos: right.into(),
+                rule_type,
+                priority: compute_priority(left, right).unwrap(),
+            });
+        }
+        let rule = table.find_rule("名詞,一般", "助詞,格助詞").unwrap();
+        assert_eq!(rule.rule_type, AccentRuleType::KeepLeft);
+        assert!(table.find_rule("動詞", "助詞,格助詞").is_none());
     }
 
     #[test]
