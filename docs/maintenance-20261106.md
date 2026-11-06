@@ -166,3 +166,17 @@ cargo run --release --locked -p kotonoha --features neural --example text_pipeli
 - 作業ツリーでは点検前から 102 個のファイルが CRLF だった（インデックスは LF。stat キャッシュのため
   `git status` には出ない）。今回編集した 3 ファイルだけを LF に戻し、ほかは変更していない。
 - README は日本語のため `README.ja.md` の追加は不要。
+
+## 追記: hasami 26.11.102
+
+- 点検後に hasami v26.11.102 が公開され、Kotonoha の Release 自動化（`0420af5`、Kotonoha v26.11.102）で
+  `Cargo.toml`・`Cargo.lock`（`471321e`）・`.github/hasami-dictionaries.json` が更新済みだった。
+- v26.11.101..v26.11.102 の変更は、`Token` の判定を `pub(crate)` の述語へまとめたリファクタリング
+  （hasami 側で 3 辞書 × 2 入力の全トークン・全フィールドの一致を確認済み）と、「なら」の回帰テスト、
+  文書と開発用ツールの更新だけ。公開 API と HSD 形式（v6）は変わらず、Kotonoha の追従修正は不要と判断した。
+  HSD は 3 辞書ともサイズが同じで、SHA-256 だけが変わった。
+- 検証: `cargo fmt --check`、clippy（既定・全 feature）、Rust テスト 既定 729 件・全 feature 741 件、
+  Python API 17 件、配布処理 22 件、v6 の推奨 HSD と KNM による ignored の実辞書・推論テスト 6 件が成功。
+- 同じ手元の HSD で `text_pipeline_profile` の出力ダイジェストを v26.11.101 と比べ、ルール経路の
+  3 コーパス（968 文・97 の長文・1,420 の短い句）と KNM 経路の 968 文がすべて一致した。
+  公開 HSD そのものと KNM の組み合わせは、Release ワークフローが検証する。

@@ -268,7 +268,7 @@ Rust から取得する場合は `download` feature を有効にし、
 そのタグの [hasami Release](https://github.com/owayo/hasami/releases) から対応する `.hsd` を取得してください。
 HSD 本体は KNM アーカイブには含まれず、`model download` でも取得しません。
 
-Kotonoha v26.11.100 以降は hasami 26.11.101 を使い、HSD 形式 v6 だけを読みます。
+Kotonoha v26.11.100 以降（hasami 26.11.101 以降）は HSD 形式 v6 だけを読みます。
 v5 以前の `.hsd` は読み込み時に `dictionary format v5 is no longer supported` などのエラーになります。
 記録したタグの Release から取り直すか、hasami で作り直してください。
 
