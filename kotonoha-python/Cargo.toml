@@ -18,7 +18,7 @@ neural = ["kotonoha/neural"]
 
 [dependencies]
 kotonoha = { workspace = true, features = ["download"] }
-hasami = { workspace = true }
+hasami = { workspace = true, features = ["download"] }
 pyo3 = { workspace = true }
 
 [build-dependencies]

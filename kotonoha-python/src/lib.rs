@@ -1,10 +1,11 @@
 //! kotonoha Python バインディング（PyO3）
 
+use ::hasami::download as hasami_download;
 use ::kotonoha::Engine;
 use ::kotonoha::njd::{InputToken, NjdNode};
 use ::kotonoha::normalizer::DictionaryNormalizer as RustDictionaryNormalizer;
 use pyo3::prelude::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 辞書にある記号付き語を発音表記へ写す。モデルは読み込まない。
 #[pyclass]
@@ -510,11 +511,194 @@ fn download_models(
     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+pyo3::create_exception!(
+    kotonoha,
+    DictionaryError,
+    pyo3::exceptions::PyRuntimeError,
+    "辞書を取得・検証できなかったときの例外。`code` に種類（format・conflict・corrupt・download）、`path` に対象のファイル（無ければ None）を持つ。"
+);
+
+/// 種類と対象のファイルを属性に持つ `DictionaryError` を作る。
+fn dictionary_error(py: Python<'_>, code: &str, message: String, path: Option<&Path>) -> PyErr {
+    let error = DictionaryError::new_err(message);
+    let value = error.value(py);
+    // 属性を付けられなくても、メッセージで原因は伝わる
+    let _ = value.setattr("code", code);
+    let _ = value.setattr("path", path.map(Path::to_path_buf));
+    error
+}
+
+/// 組み込みの hasami が辞書を読めなかった理由を、利用側が分岐できる例外に写す。
+fn dict_error_to_py(py: Python<'_>, error: ::hasami::DictError, path: &Path) -> PyErr {
+    use ::hasami::DictError;
+    match error {
+        DictError::Io(source) => PyErr::from(source),
+        DictError::NotFound(_) => pyo3::exceptions::PyFileNotFoundError::new_err(error.to_string()),
+        DictError::UnsupportedVersion(_) | DictError::UnsupportedPlatform => {
+            dictionary_error(py, "format", error.to_string(), Some(path))
+        }
+        DictError::NotHsd | DictError::Corrupt(_) | DictError::Invalid(_) => {
+            dictionary_error(py, "corrupt", error.to_string(), Some(path))
+        }
+    }
+}
+
+/// 辞書の取得で起きた失敗。GIL を外した処理の中では Python の例外を作らない。
+enum DictionaryDownloadFailure {
+    /// 目録に無い辞書の名前
+    UnknownName(String),
+    /// 目録が組み込みの hasami と別の版のもの（ミラーを指定したとき）
+    CatalogVersion { found: String },
+    /// hasami の取得処理の失敗
+    Download(hasami_download::DownloadError),
+}
+
+impl From<hasami_download::DownloadError> for DictionaryDownloadFailure {
+    fn from(error: hasami_download::DownloadError) -> Self {
+        Self::Download(error)
+    }
+}
+
+/// 取得の失敗を、利用側が分岐できる例外に写す。
+fn download_failure_to_py(py: Python<'_>, failure: DictionaryDownloadFailure) -> PyErr {
+    use hasami_download::DownloadError;
+    let error = match failure {
+        DictionaryDownloadFailure::UnknownName(name) => {
+            return pyo3::exceptions::PyValueError::new_err(format!(
+                "unknown dictionary name: {name}"
+            ));
+        }
+        DictionaryDownloadFailure::CatalogVersion { found } => {
+            return dictionary_error(
+                py,
+                "download",
+                format!(
+                    "the catalog is for hasami {found}, but this kotonoha embeds hasami {}",
+                    hasami_version()
+                ),
+                None,
+            );
+        }
+        DictionaryDownloadFailure::Download(error) => error,
+    };
+    let message = error.to_string();
+    match &error {
+        DownloadError::FormatVersion { .. } => dictionary_error(py, "format", message, None),
+        DownloadError::Differs { path, .. } => {
+            dictionary_error(py, "conflict", message, Some(path))
+        }
+        DownloadError::NotDictionary { .. }
+        | DownloadError::Checksum { .. }
+        | DownloadError::Decompress { .. }
+        | DownloadError::Truncated { .. }
+        | DownloadError::Oversized { .. }
+        | DownloadError::ContentLength { .. } => dictionary_error(py, "corrupt", message, None),
+        DownloadError::InvalidDict(_) => pyo3::exceptions::PyValueError::new_err(message),
+        DownloadError::CreateDir { path, .. }
+        | DownloadError::Inspect { path, .. }
+        | DownloadError::TempFile { dir: path, .. }
+        | DownloadError::Write { path, .. }
+        | DownloadError::Persist { path, .. } => {
+            pyo3::exceptions::PyOSError::new_err(format!("{message} ({})", path.display()))
+        }
+        // 目録・通信・HTTP の設定の失敗と、hasami が今後足す失敗
+        _ => dictionary_error(py, "download", message, None),
+    }
+}
+
+/// 組み込みの hasami の版（例: "26.11.102"）を返す。
+#[pyfunction]
+fn hasami_version() -> &'static str {
+    hasami_download::CURRENT_TAG
+        .strip_prefix('v')
+        .unwrap_or(hasami_download::CURRENT_TAG)
+}
+
+/// 組み込みの hasami が読める辞書（HSD）の形式の版を返す。
+#[pyfunction]
+fn dictionary_format_version() -> u32 {
+    ::hasami::hsd::FORMAT_VERSION
+}
+
+/// 辞書の共有保存先を返す。通信やディレクトリの作成は行わない。
+#[pyfunction]
+fn dictionary_dir() -> PyResult<PathBuf> {
+    ::hasami::analyzer::data_dir().ok_or_else(|| {
+        pyo3::exceptions::PyRuntimeError::new_err(
+            "Cannot determine dictionary directory; set HASAMI_DATA_DIR",
+        )
+    })
+}
+
+/// 辞書を組み込みの hasami で読めるかを確かめる。通信しない。
+#[pyfunction]
+fn validate_dictionary(py: Python<'_>, path: PathBuf) -> PyResult<()> {
+    let result = py.detach(|| ::hasami::Dictionary::load(&path).map(drop));
+    result.map_err(|error| dict_error_to_py(py, error, &path))
+}
+
+/// 組み込みの hasami と同じ版の配布辞書を、共有保存先（または dir）へ取得する。
+///
+/// 正しいファイルがすでにあれば辞書は取り直さない（目録だけを確かめる）。
+#[pyfunction]
+#[pyo3(signature = (dir=None, *, name=None, force=false, base_url=None))]
+fn download_dictionary(
+    py: Python<'_>,
+    dir: Option<PathBuf>,
+    name: Option<String>,
+    force: bool,
+    base_url: Option<String>,
+) -> PyResult<PathBuf> {
+    let dir = match dir {
+        Some(dir) => dir,
+        None => dictionary_dir()?,
+    };
+    let result = py.detach(|| -> Result<PathBuf, DictionaryDownloadFailure> {
+        let catalog = match base_url.as_deref() {
+            Some(url) => {
+                let catalog = hasami_download::catalog_from(url)?;
+                // ミラーの目録も、組み込みの hasami と同じ版のものだけを使う
+                if catalog.hasami_version != hasami_version() {
+                    return Err(DictionaryDownloadFailure::CatalogVersion {
+                        found: catalog.hasami_version,
+                    });
+                }
+                catalog
+            }
+            None => hasami_download::catalog(hasami_download::CURRENT_TAG)?,
+        };
+        catalog.check_format()?;
+        let name = match name.as_deref() {
+            Some(name) => name,
+            None if catalog.recommended.is_empty() => hasami_download::RECOMMENDED,
+            None => catalog.recommended.as_str(),
+        };
+        let dict = catalog
+            .find(name)
+            .ok_or_else(|| DictionaryDownloadFailure::UnknownName(name.to_string()))?;
+        let options = hasami_download::DownloadOptions {
+            base_url: base_url.as_deref(),
+            force,
+            ..Default::default()
+        };
+        Ok(hasami_download::download(dict, &dir, options)?
+            .path()
+            .to_path_buf())
+    });
+    result.map_err(|failure| download_failure_to_py(py, failure))
+}
+
 /// kotonoha Python module
 #[pymodule]
 fn kotonoha(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(model_dir, m)?)?;
     m.add_function(wrap_pyfunction!(download_models, m)?)?;
+    m.add_function(wrap_pyfunction!(hasami_version, m)?)?;
+    m.add_function(wrap_pyfunction!(dictionary_format_version, m)?)?;
+    m.add_function(wrap_pyfunction!(dictionary_dir, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_dictionary, m)?)?;
+    m.add_function(wrap_pyfunction!(download_dictionary, m)?)?;
+    m.add("DictionaryError", m.py().get_type::<DictionaryError>())?;
     m.add_class::<KotonohaEngine>()?;
     m.add_class::<DictionaryNormalizer>()?;
     m.add_class::<PyNjdNode>()?;
