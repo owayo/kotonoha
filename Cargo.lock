@@ -599,8 +599,8 @@ dependencies = [
 
 [[package]]
 name = "hasami"
-version = "26.11.101"
-source = "git+https://github.com/owayo/hasami?tag=v26.11.101#6b30d3dea1a738e65ec56364a453fdce3446c3c2"
+version = "26.11.102"
+source = "git+https://github.com/owayo/hasami?tag=v26.11.102#471321eee559be08d4eb5dd3611f008fa3ea9550"
 dependencies = [
  "bytemuck",
  "csv",
@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "kotonoha"
-version = "26.11.101"
+version = "26.11.102"
 dependencies = [
  "criterion",
  "csv",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "kotonoha-cli"
-version = "26.11.101"
+version = "26.11.102"
 dependencies = [
  "clap",
  "hasami",
@@ -887,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "kotonoha-python"
-version = "26.11.101"
+version = "26.11.102"
 dependencies = [
  "hasami",
  "kotonoha",
