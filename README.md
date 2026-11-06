@@ -36,6 +36,7 @@ kotonoha は OpenJTalk の韻律処理を Rust で実装したライブラリで
 `ORT_DYLIB_PATH`、CUDA/cuDNN の導入は不要です。`neural` feature で有効にします。
 旧 `cuda` feature は `neural` の互換エイリアスであり、現在のエンジンは CPU 実装です。
 AVX2/FMA を実行時に検出し、9 students と 2 meta models を Rayon で並列実行します。
+各モデルの双方向 LSTM も、順方向と逆方向を並列に計算します。
 スレッド数は `RAYON_NUM_THREADS` で調整できます。
 
 重みは FP32 のまま可逆圧縮し、本番 13 モデルで約 245 MB → 204.5 MB に削減しています（辞書を除く、10進 MB）。
@@ -267,6 +268,10 @@ Rust から取得する場合は `download` feature を有効にし、
 そのタグの [hasami Release](https://github.com/owayo/hasami/releases) から対応する `.hsd` を取得してください。
 HSD 本体は KNM アーカイブには含まれず、`model download` でも取得しません。
 
+Kotonoha v26.11.100 以降は hasami 26.11.101 を使い、HSD 形式 v6 だけを読みます。
+v5 以前の `.hsd` は読み込み時に `dictionary format v5 is no longer supported` などのエラーになります。
+記録したタグの Release から取り直すか、hasami で作り直してください。
+
 ソースのチェックアウトから、記録済みの推奨 HSD を取得・検証する場合は次を使えます（Python 3.12 以上と GitHub CLI が必要）。
 
 ```bash
@@ -362,7 +367,9 @@ let labels = engine.text_to_labels("今日は良い天気です")?;
 同じ見出し語でも読みが一致しなければ、別の読みのアクセントを流用せず、予測器による推定または既定値を使います。
 アクセント辞書 CSV の `accent_type` は `u8` の整数、アクセント規則 CSV の規則名と数値は
 有効な値を指定してください。不正な値は読み込み時にエラーになります。
-結合規則 CSV の列不足や、品詞階層から計算する優先度が255を超える場合もエラーとして返します。
+アクセント辞書・結合規則 CSV の列不足や、品詞階層から計算する優先度が255を超える場合もエラーとして返します。
+1 つのアクセント辞書 CSV に同じ `(lemma, reading)` が複数あれば、先頭の行を採用します。
+Python の `accent_dict_paths` で複数の CSV を渡した場合は、後の CSV の値で上書きします。
 
 ### CLI
 
@@ -428,6 +435,22 @@ KNM 移行時の測定では、Windows / Ryzen 7 5700X、モデル間8並列、�
 ONNX Runtime の参照パイプライン32.32 ms/発話に対し、専用 Rust パイプラインは29.31 ms/発話でした。
 特徴量処理を含む比較であり、単一モデル・逐次実行・長い入力では ONNX Runtime の方が速い場合があります。
 すべての環境・入力での速度優位を示すものではありません。
+
+実際の HSD と KNM でテキストから韻律出力までを段階別に測るには、`text_pipeline_profile` example を使います。
+
+```bash
+cargo run --release --locked -p kotonoha --features neural --example text_pipeline_profile -- \
+  ipadic-neologd-sudachi.hsd corpus.txt /path/to/kotonoha-models
+```
+
+2026-11-06 の点検（Windows / Ryzen 7 5700X、推奨 HSD と13個の KNM、968文・15,787トークン）では、
+KNM の推論が処理時間の約99%を占めました。双方向 LSTM の2方向を並列に計算するようにし、
+968文の推論時間の合計は中央値で27.51秒から23.68秒へ13.9%短くなりました（各6標本）。
+KNM を使わないルール経路では、結合規則の検索を見直し、968文のアクセント句処理の合計が
+中央値で13.50 msから4.75 msへ64.8%短くなりました。
+どちらも出力のダイジェストが変更前と一致することを確認しています。
+壁時計の測定でホストの負荷の影響を受けるため、条件・生データ・再実行手順は
+[2026-11-06 の点検記録](docs/maintenance-20261106.md) を参照してください。
 
 ## 開発
 

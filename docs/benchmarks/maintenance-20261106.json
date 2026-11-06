@@ -1,0 +1,689 @@
+{
+ "date": "2026-11-06",
+ "base_commit": "96486e9 (chore(deps) の直後、b7b7fb0 = v26.11.100 の次)",
+ "platform": "Windows 11 Home 10.0.26300 x64",
+ "cpu": "AMD Ryzen 7 5700X (8 core / 16 logical CPU)",
+ "rust": "1.99.1 (release, --locked, --features neural)",
+ "rayon_threads": 16,
+ "dictionary": {
+  "name": "ipadic-neologd-sudachi.hsd",
+  "format_version": 6,
+  "size": 210871586,
+  "note": "hasami v26.11.101 の手元再構築。公開カタログとサイズは同じ、SHA-256 は異なる"
+ },
+ "models": "共有先に配置済みの13 KNM。v26.10.104 の Release から取得したもので、models.json の16ファイルのサイズ・SHA-256 と一致 (重みの取得元 kotonoha-models 90820175)",
+ "corpus": {
+  "lines": 968,
+  "tokens": 15787,
+  "source": "README.md・AGENTS.md・training/README.md・docs/*.md の日本語文と kotonoha/tests/fixtures/v66_pipeline.json の50発話。本文は格納しない",
+  "builder": "1行1文。Markdown のコード・表・見出しを除き、。！？で分割した6文字以上の文",
+  "sha256": "e6a121dd2fcb0495be1ba89c39739e9466e22f84c52c2b86ecb7a22e2f6e31f9"
+ },
+ "commands": {
+  "profile": "text_pipeline_profile DICT.hsd CORPUS.txt [MODEL_DIR] (KOTONOHA_PROFILE_ROUNDS、1周目は捨てる)",
+  "stages": "13 KNM を teacher / 9 student 並列 / meta 2並列 / 最終段の順に、コーパスの系列長と同じ形の合成入力で実行する一時プログラム (コミットしない)",
+  "priority": "High (Process.PriorityClass)。最初の通常優先度の計測は参考値"
+ },
+ "variants": {
+  "before": "変更前 (96486e9)",
+  "refactor": "v66 推論段の分割のみ",
+  "after": "分割 + 双方向 LSTM の2方向並列",
+  "final": "上記 + 結合規則検索の改善 + アクセント辞書の修正"
+ },
+ "logits_bit_identity": {
+  "result": "13モデル×8系列長 (1,2,3,5,7,16,33,64) の生ロジット各2,751値が変更前後でビット一致",
+  "digest_all": "ecb7d27bb7734243"
+ },
+ "full_pipeline_high_priority": {
+  "order": [
+   "1:before",
+   "2:after",
+   "3:after",
+   "4:before",
+   "5:before",
+   "6:after"
+  ],
+  "digests": [
+   "36bce5791b714cd7"
+  ],
+  "stages": {
+   "predict": {
+    "before": {
+     "n": 6,
+     "median": 27510.75,
+     "min": 25657.43,
+     "max": 28207.47
+    },
+    "after": {
+     "n": 6,
+     "median": 23677.48,
+     "min": 21495.19,
+     "max": 25130.3
+    },
+    "change_percent": -13.9,
+    "samples_ms": {
+     "before": [
+      27364.1,
+      26525.5,
+      28207.5,
+      27868.0,
+      27657.4,
+      25657.4
+     ],
+     "after": [
+      23071.3,
+      24167.8,
+      24623.7,
+      25130.3,
+      23187.2,
+      21495.2
+     ]
+    }
+   },
+   "total": {
+    "before": {
+     "n": 6,
+     "median": 27829.06,
+     "min": 25950.32,
+     "max": 28510.87
+    },
+    "after": {
+     "n": 6,
+     "median": 23990.16,
+     "min": 21763.76,
+     "max": 25446.84
+    },
+    "change_percent": -13.8,
+    "samples_ms": {
+     "before": [
+      27678.2,
+      26817.9,
+      28510.9,
+      28181.7,
+      27979.9,
+      25950.3
+     ],
+     "after": [
+      23370.5,
+      24491.1,
+      24943.2,
+      25446.8,
+      23489.2,
+      21763.8
+     ]
+    }
+   }
+  }
+ },
+ "v66_stages_high_priority": {
+  "order": [
+   "1:before",
+   "2:after",
+   "3:after",
+   "4:before",
+   "5:before",
+   "6:after"
+  ],
+  "stages": {
+   "teacher": {
+    "before": {
+     "n": 6,
+     "median": 4450.65,
+     "min": 4000.8,
+     "max": 4537.4
+    },
+    "after": {
+     "n": 6,
+     "median": 2922.95,
+     "min": 2727.3,
+     "max": 3040.1
+    },
+    "change_percent": -34.3,
+    "samples_ms": {
+     "before": [
+      4008.0,
+      4475.7,
+      4537.4,
+      4000.8,
+      4455.8,
+      4445.5
+     ],
+     "after": [
+      2960.9,
+      2955.5,
+      2890.4,
+      3040.1,
+      2727.3,
+      2782.1
+     ]
+    }
+   },
+   "students_par": {
+    "before": {
+     "n": 6,
+     "median": 10861.35,
+     "min": 10357.4,
+     "max": 11166.7
+    },
+    "after": {
+     "n": 6,
+     "median": 10024.7,
+     "min": 9859.3,
+     "max": 10126.5
+    },
+    "change_percent": -7.7,
+    "samples_ms": {
+     "before": [
+      10623.2,
+      10879.7,
+      10843.0,
+      10357.4,
+      11166.7,
+      11154.1
+     ],
+     "after": [
+      10021.4,
+      10126.5,
+      10028.0,
+      10095.8,
+      9859.3,
+      10012.4
+     ]
+    }
+   },
+   "meta_par": {
+    "before": {
+     "n": 6,
+     "median": 5386.05,
+     "min": 4825.9,
+     "max": 5693.0
+    },
+    "after": {
+     "n": 6,
+     "median": 3494.6,
+     "min": 3271.4,
+     "max": 3612.4
+    },
+    "change_percent": -35.1,
+    "samples_ms": {
+     "before": [
+      4825.9,
+      5251.9,
+      5520.2,
+      4945.4,
+      5666.7,
+      5693.0
+     ],
+     "after": [
+      3533.5,
+      3529.0,
+      3460.2,
+      3612.4,
+      3271.4,
+      3348.6
+     ]
+    }
+   },
+   "final": {
+    "before": {
+     "n": 6,
+     "median": 4550.25,
+     "min": 4133.1,
+     "max": 4758.8
+    },
+    "after": {
+     "n": 6,
+     "median": 2750.85,
+     "min": 2602.9,
+     "max": 2875.0
+    },
+    "change_percent": -39.5,
+    "samples_ms": {
+     "before": [
+      4133.1,
+      4468.2,
+      4632.3,
+      4172.9,
+      4754.7,
+      4758.8
+     ],
+     "after": [
+      2794.4,
+      2771.7,
+      2730.0,
+      2875.0,
+      2602.9,
+      2633.7
+     ]
+    }
+   },
+   "sum": {
+    "before": {
+     "n": 6,
+     "median": 25304.2,
+     "min": 23476.5,
+     "max": 26051.4
+    },
+    "after": {
+     "n": 6,
+     "median": 19209.4,
+     "min": 18460.9,
+     "max": 19623.3
+    },
+    "change_percent": -24.1,
+    "samples_ms": {
+     "before": [
+      23590.2,
+      25075.5,
+      25532.9,
+      23476.5,
+      26043.9,
+      26051.4
+     ],
+     "after": [
+      19310.2,
+      19382.7,
+      19108.6,
+      19623.3,
+      18460.9,
+      18776.8
+     ]
+    }
+   }
+  }
+ },
+ "v66_input_cases_high_priority": {
+  "long": {
+   "sentences": 97,
+   "tokens": 15802,
+   "before": {
+    "teacher": [
+     3506.6,
+     3610.7,
+     3222.0,
+     3441.3
+    ],
+    "students_par": [
+     7902.7,
+     7958.0,
+     7672.5,
+     7867.9
+    ],
+    "meta_par": [
+     3930.0,
+     4067.9,
+     3642.2,
+     3863.3
+    ],
+    "final": [
+     3569.6,
+     3757.2,
+     3363.4,
+     3483.9
+    ],
+    "sum": [
+     18908.9,
+     19393.8,
+     17900.1,
+     18656.4
+    ]
+   },
+   "after": {
+    "teacher": [
+     2677.0,
+     2512.2,
+     2443.2,
+     2472.1
+    ],
+    "students_par": [
+     7416.9,
+     7463.1,
+     7474.2,
+     7456.9
+    ],
+    "meta_par": [
+     3239.1,
+     3028.7,
+     3025.3,
+     3188.4
+    ],
+    "final": [
+     2717.6,
+     2532.0,
+     2702.7,
+     2797.7
+    ],
+    "sum": [
+     16050.6,
+     15536.0,
+     15645.4,
+     15915.1
+    ]
+   },
+   "median_change_percent": {
+    "teacher": -28.3,
+    "students_par": -5.4,
+    "meta_par": -20.2,
+    "final": -23.2,
+    "sum": -16.0
+   }
+  },
+  "short": {
+   "sentences": 1420,
+   "tokens": 14689,
+   "before": {
+    "teacher": [
+     4550.3,
+     4623.9,
+     4326.8,
+     4120.2
+    ],
+    "students_par": [
+     12021.4,
+     12476.3,
+     11597.1,
+     11376.3
+    ],
+    "meta_par": [
+     5406.4,
+     5536.4,
+     5138.5,
+     4890.6
+    ],
+    "final": [
+     4607.6,
+     4634.4,
+     4484.2,
+     4297.3
+    ],
+    "sum": [
+     26585.7,
+     27271.0,
+     25546.6,
+     24684.4
+    ]
+   },
+   "after": {
+    "teacher": [
+     3203.5,
+     3458.9,
+     3580.1,
+     3437.3
+    ],
+    "students_par": [
+     12037.9,
+     12248.3,
+     12387.9,
+     12358.6
+    ],
+    "meta_par": [
+     3903.8,
+     4196.0,
+     4441.0,
+     4270.4
+    ],
+    "final": [
+     2987.6,
+     3214.7,
+     3668.0,
+     3506.8
+    ],
+    "sum": [
+     22132.8,
+     23117.9,
+     24077.0,
+     23573.1
+    ]
+   },
+   "median_change_percent": {
+    "teacher": -22.3,
+    "students_par": 4.2,
+    "meta_par": -19.7,
+    "final": -26.1,
+    "sum": -10.4
+   }
+  }
+ },
+ "rules_pipeline_high_priority": {
+  "order": [
+   "1:before",
+   "2:final",
+   "3:final",
+   "4:before",
+   "5:before",
+   "6:final",
+   "7:final",
+   "8:before"
+  ],
+  "digests": [
+   "d1df88f02a69ca2d"
+  ],
+  "stages": {
+   "accent": {
+    "before": {
+     "n": 80,
+     "median": 13.5,
+     "min": 9.95,
+     "max": 19.92
+    },
+    "after": {
+     "n": 80,
+     "median": 4.75,
+     "min": 3.65,
+     "max": 7.44
+    },
+    "change_percent": -64.8
+   },
+   "njd": {
+    "before": {
+     "n": 80,
+     "median": 9.64,
+     "min": 7.11,
+     "max": 13.97
+    },
+    "after": {
+     "n": 80,
+     "median": 9.22,
+     "min": 7.25,
+     "max": 15.23
+    },
+    "change_percent": -4.3
+   },
+   "label": {
+    "before": {
+     "n": 80,
+     "median": 59.35,
+     "min": 43.23,
+     "max": 85.79
+    },
+    "after": {
+     "n": 80,
+     "median": 55.7,
+     "min": 44.23,
+     "max": 85.08
+    },
+    "change_percent": -6.2
+   },
+   "tokenize": {
+    "before": {
+     "n": 80,
+     "median": 22.85,
+     "min": 15.41,
+     "max": 34.59
+    },
+    "after": {
+     "n": 80,
+     "median": 22.11,
+     "min": 15.86,
+     "max": 35.45
+    },
+    "change_percent": -3.2
+   },
+   "normalize": {
+    "before": {
+     "n": 80,
+     "median": 26.8,
+     "min": 17.27,
+     "max": 40.82
+    },
+    "after": {
+     "n": 80,
+     "median": 25.9,
+     "min": 18.04,
+     "max": 40.8
+    },
+    "change_percent": -3.3
+   },
+   "total": {
+    "before": {
+     "n": 80,
+     "median": 151.69,
+     "min": 108.05,
+     "max": 219.25
+    },
+    "after": {
+     "n": 80,
+     "median": 134.67,
+     "min": 104.27,
+     "max": 208.59
+    },
+    "change_percent": -11.2
+   }
+  }
+ },
+ "full_pipeline_normal_priority": {
+  "order": [
+   "1:before",
+   "2:refactor",
+   "3:after",
+   "4:after",
+   "5:refactor",
+   "6:before"
+  ],
+  "digests": [
+   "36bce5791b714cd7"
+  ],
+  "predict_samples_ms": {
+   "1:before": [
+    22113.9,
+    22045.2,
+    21913.4
+   ],
+   "2:refactor": [
+    23782.5,
+    24053.8,
+    23840.5
+   ],
+   "3:after": [
+    24089.9,
+    24414.5,
+    24220.4
+   ],
+   "4:after": [
+    21250.8,
+    20195.2,
+    22238.4
+   ],
+   "5:refactor": [
+    23477.8,
+    24294.0,
+    22901.1
+   ],
+   "6:before": [
+    23727.9,
+    23659.9,
+    22359.4
+   ]
+  }
+ },
+ "memory_note": "PeakWorkingSet64 (Windows) before 352.6 / 351.0 MiB, after 351.1 / 352.5 MiB (1 round each, High priority)",
+ "cli_missing_dictionary_ms": {
+  "command": "kotonoha analyze 猫 (--dict なし、共有先に KNM あり、neural)",
+  "samples": [
+   {
+    "run": 1,
+    "variant": "before",
+    "ms": 1084.6,
+    "exit": 1
+   },
+   {
+    "run": 1,
+    "variant": "after",
+    "ms": 1287.9,
+    "exit": 1
+   },
+   {
+    "run": 2,
+    "variant": "before",
+    "ms": 495.5,
+    "exit": 1
+   },
+   {
+    "run": 2,
+    "variant": "after",
+    "ms": 26.2,
+    "exit": 1
+   },
+   {
+    "run": 3,
+    "variant": "before",
+    "ms": 462.8,
+    "exit": 1
+   },
+   {
+    "run": 3,
+    "variant": "after",
+    "ms": 23.0,
+    "exit": 1
+   },
+   {
+    "run": 4,
+    "variant": "before",
+    "ms": 3240.5,
+    "exit": 1
+   },
+   {
+    "run": 4,
+    "variant": "after",
+    "ms": 28.6,
+    "exit": 1
+   },
+   {
+    "run": 5,
+    "variant": "before",
+    "ms": 465.8,
+    "exit": 1
+   },
+   {
+    "run": 5,
+    "variant": "after",
+    "ms": 25.2,
+    "exit": 1
+   },
+   {
+    "run": 6,
+    "variant": "before",
+    "ms": 451.8,
+    "exit": 1
+   },
+   {
+    "run": 6,
+    "variant": "after",
+    "ms": 271.7,
+    "exit": 1
+   },
+   {
+    "run": 7,
+    "variant": "before",
+    "ms": 442.5,
+    "exit": 1
+   },
+   {
+    "run": 7,
+    "variant": "after",
+    "ms": 82.7,
+    "exit": 1
+   }
+  ]
+ }
+}

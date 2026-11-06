@@ -81,6 +81,10 @@ hasami が文脈に応じて補正した読みを尊重し、同じ見出し語�
 アクセント辞書・結合規則の CSV では、不正なアクセント値や規則を平板型・既定規則へ
 置き換えず、読み込みエラーとして返す。入力検証を緩めないこと。
 結合規則の行は左右の品詞と規則の3列以上を必要とし、列不足を読み飛ばさない。
+アクセント辞書の行も lemma・reading・accent_type の3列以上を必要とし、列不足はエラーにする。
+同じ CSV 内で同じ `(lemma, reading)` が重複したら先頭の行を採用し、後続の行も値を検証する。
+`lookup_exact`・`V66Bundle` のマージ・`scripts/package_models.py` の梱包でこの規則をそろえ、
+複数 CSV の間だけを後勝ちにする。
 品詞階層の優先度は `u8` へ変換する前に検証し、255を超える場合はエラーにする。
 CRF 重みファイルのラベル数は 1〜256 に限り、読み込み時に配列を確保する前に検証する。
 `CrfTrainer::train` は `Result` を返す。空データ、ノード数とラベル数の不一致、
@@ -145,6 +149,11 @@ Python API は `uv run --locked --project kotonoha-python python -m unittest dis
 WSL と Windows でチェックアウトを共有し、既存 `.venv` を更新できない場合は、
 `UV_PROJECT_ENVIRONMENT` で Windows 用の別ディレクトリを指定する。
 
+実際の HSD を使う段階別の計測は
+`cargo run --release --locked -p kotonoha --features neural --example text_pipeline_profile -- DICT.hsd CORPUS.txt [MODEL_DIR]`。
+正規化・形態素解析・NJD・KNM 推論・アクセント句・ラベル・PhoneTone・韻律記号の時間と、
+出力のダイジェストを JSON で返す。変更前後でダイジェストが一致することを確かめてから時間を比べる。
+ホストの負荷で ±10% 程度揺れるので、変更前後のバイナリを交互に複数回実行する。
 ラベル生成の計測は `cargo bench --locked -p kotonoha --bench benchmark -- label_scaling`。
 通常文の反復と、同じトークン列を1句にまとめた条件を比較する。
 `cargo run --release --locked -p kotonoha --example label_allocations` は、ラベル生成中の
@@ -185,6 +194,8 @@ hasami の variable `KOTONOHA_APP_CLIENT_ID` と Secret `KOTONOHA_APP_PRIVATE_KE
 比較対象は公開済み Kotonoha Release の `hasami-dictionaries.json`。ビルド前のコミットを処理済み判定に使わない。
 Release は HSD の公開タグ・サイズ・SHA-256 を固定し、実際の HSD と KNM の組み合わせを検証してから公開する。
 タグ作成前に Cargo の hasami 依存も検証済み HSD と同じ公開タグへそろえ、版上げ時に Cargo.lock を追従する。
+hasami 26.11.101 以降の HSD は形式 v6 で、v5 以前は読み込み時にエラーになる。旧形式を読めたように扱う
+回避策は入れず、固定する hasami と検証する HSD の形式版を同じ公開タグでそろえる。
 HSD 更新時も KNM の重みは固定した学習元から生成する。辞書の発音補正とニューラルモデルの再学習を混同しない。
 
 既存モデルは `kotonoha model convert --dir <dir>` で通信なしに変換できる。
@@ -210,7 +221,16 @@ predictions = engine.predict_accent_types(tokens)    # list[int]
 
 `accent_dict_paths` は **bundle 同梱の `accent_dict.csv` の上に後勝ちマージ**
 される。同じ `(lemma, reading)` の値は追加辞書で上書きし、同梱辞書だけにある項目は保持する。
-指定しなくても bundle 同梱辞書は常に使われる。
+1 つの CSV の中で重複した項目は先頭を採用する。指定しなくても bundle 同梱辞書は常に使われる。
+
+### 専用 CPU 推論の性能
+
+KNM を使う経路では、テキスト 1 文の処理時間のほぼすべてが 13 モデルの推論になる。
+各モデルの双方向 LSTM は、方向ごとの再帰行列 (1 MiB) が L2 に収まらず、時刻ごとの
+読み直しが律速になる。2 方向は互いに独立なので `rayon::join` で並列に計算する。
+各方向の演算順は変えず、出力はビット単位で同じになる。9 student は既に並列なので、
+効果は単独で動く teacher・meta・最終段で大きい。並列化や GEMV の分割を変えるときは、
+13 モデルの生ロジットのビット一致と段ごとの時間を変更前後で比べる。
 
 主要環境変数: `KOTONOHA_MODEL_BUNDLE`, `KOTONOHA_MODEL_VARIANT`,
 `KOTONOHA_MODEL_PATH` (11 次元入力の単一 KNM)。詳細は
