@@ -99,50 +99,36 @@ impl NativeModel {
         self.linear(&concatenated, seq, "frontend.input_proj")
     }
 
+    /// 双方向 LSTM の 1 層。出力は時刻ごとに `[順方向, 逆方向]` を並べる。
+    ///
+    /// 方向ごとの再帰行列 (1 MiB) は L2 に収まらず、時刻ごとの読み直しが律速になる。
+    /// 2 方向は互いに独立なので別スレッドで計算する。各方向の演算順は変えない。
     fn lstm(&self, input: &[f32], seq: usize, layer: usize) -> Vec<f32> {
         let width = input.len() / seq;
         let w = self.weight(&format!("lstm.{layer}.input"));
         let r = self.weight(&format!("lstm.{layer}.recurrent"));
         let b = self.weight(&format!("lstm.{layer}.bias"));
-        let mut output = vec![0.; seq * HIDDEN * 2];
-        for direction in 0..2 {
-            let mut projected = packed_projection(
+        let run = |direction: usize| {
+            lstm_direction(
                 input,
                 &w[direction * width * GATES..(direction + 1) * width * GATES],
+                &r[direction * GATES * HIDDEN..(direction + 1) * GATES * HIDDEN],
+                &b[direction * GATES * 2..(direction + 1) * GATES * 2],
                 seq,
-                width,
-            );
-            let bias = &b[direction * GATES * 2..(direction + 1) * GATES * 2];
-            for row in projected.as_chunks_mut::<GATES>().0.iter_mut() {
-                for j in 0..GATES {
-                    row[j] += bias[j] + bias[GATES + j];
-                }
-            }
-            let recurrence = &r[direction * GATES * HIDDEN..(direction + 1) * GATES * HIDDEN];
-            let mut hidden = [0.; HIDDEN];
-            let mut cell = [0.; HIDDEN];
-            let mut gates = [0.; GATES];
-            for step in 0..seq {
-                let t = if direction == 0 { step } else { seq - 1 - step };
-                recurrent_gemv(&hidden, recurrence, &mut gates);
-                let x = &projected[t * GATES..(t + 1) * GATES];
-                for j in (0..HIDDEN).step_by(8) {
-                    use wide::f32x8;
-                    let load = |a: &[f32], start| {
-                        f32x8::from(<[f32; 8]>::try_from(&a[start..start + 8]).unwrap())
-                    };
-                    let i = sigmoid8(load(x, j) + load(&gates, j));
-                    let o = sigmoid8(load(x, HIDDEN + j) + load(&gates, HIDDEN + j));
-                    let f = sigmoid8(load(x, 2 * HIDDEN + j) + load(&gates, 2 * HIDDEN + j));
-                    let g = tanh8(load(x, 3 * HIDDEN + j) + load(&gates, 3 * HIDDEN + j));
-                    let c = f * load(&cell, j) + i * g;
-                    cell[j..j + 8].copy_from_slice(&c.to_array());
-                    hidden[j..j + 8].copy_from_slice(&(o * tanh8(c)).to_array());
-                }
-                output[t * HIDDEN * 2 + direction * HIDDEN
-                    ..t * HIDDEN * 2 + (direction + 1) * HIDDEN]
-                    .copy_from_slice(&hidden);
-            }
+                direction == 1,
+            )
+        };
+        let (forward, backward) = rayon::join(|| run(0), || run(1));
+        let mut output = vec![0.; seq * HIDDEN * 2];
+        for ((row, forward), backward) in output
+            .as_chunks_mut::<{ HIDDEN * 2 }>()
+            .0
+            .iter_mut()
+            .zip(forward.as_chunks::<HIDDEN>().0)
+            .zip(backward.as_chunks::<HIDDEN>().0)
+        {
+            row[..HIDDEN].copy_from_slice(forward);
+            row[HIDDEN..].copy_from_slice(backward);
         }
         output
     }
@@ -220,6 +206,49 @@ impl NativeModel {
         }
         Ok(logits)
     }
+}
+
+/// LSTM の 1 方向を計算し、時刻順に並べた `[seq, HIDDEN]` の隠れ状態を返す。
+///
+/// `reverse` なら末尾の時刻から再帰する。ゲートは `[i, o, f, g]` の順に並ぶ。
+fn lstm_direction(
+    input: &[f32],
+    input_weights: &[f32],
+    recurrence: &[f32],
+    bias: &[f32],
+    seq: usize,
+    reverse: bool,
+) -> Vec<f32> {
+    let width = input.len() / seq;
+    let mut projected = packed_projection(input, input_weights, seq, width);
+    for row in projected.as_chunks_mut::<GATES>().0.iter_mut() {
+        for j in 0..GATES {
+            row[j] += bias[j] + bias[GATES + j];
+        }
+    }
+    let mut hidden = [0.; HIDDEN];
+    let mut cell = [0.; HIDDEN];
+    let mut gates = [0.; GATES];
+    let mut states = vec![0.; seq * HIDDEN];
+    for step in 0..seq {
+        let t = if reverse { seq - 1 - step } else { step };
+        recurrent_gemv(&hidden, recurrence, &mut gates);
+        let x = &projected[t * GATES..(t + 1) * GATES];
+        for j in (0..HIDDEN).step_by(8) {
+            use wide::f32x8;
+            let load =
+                |a: &[f32], start| f32x8::from(<[f32; 8]>::try_from(&a[start..start + 8]).unwrap());
+            let i = sigmoid8(load(x, j) + load(&gates, j));
+            let o = sigmoid8(load(x, HIDDEN + j) + load(&gates, HIDDEN + j));
+            let f = sigmoid8(load(x, 2 * HIDDEN + j) + load(&gates, 2 * HIDDEN + j));
+            let g = tanh8(load(x, 3 * HIDDEN + j) + load(&gates, 3 * HIDDEN + j));
+            let c = f * load(&cell, j) + i * g;
+            cell[j..j + 8].copy_from_slice(&c.to_array());
+            hidden[j..j + 8].copy_from_slice(&(o * tanh8(c)).to_array());
+        }
+        states[t * HIDDEN..(t + 1) * HIDDEN].copy_from_slice(&hidden);
+    }
+    states
 }
 
 fn sigmoid8(value: wide::f32x8) -> wide::f32x8 {
@@ -573,5 +602,74 @@ mod tests {
         assert!(model.predict(&[0.; 10], 1).is_err());
         assert!(model.predict(&[], usize::MAX).is_err());
         assert!(model.predict(&[f32::NAN; 11], 1).is_err());
+    }
+
+    #[test]
+    fn bidirectional_lstm_matches_sequential_reference() {
+        let (width, seq) = (3, 5);
+        let value = |i: usize, scale: f32| (i as f32 * 0.37).sin() * scale;
+        let input_weights: Vec<f32> = (0..2 * width * GATES).map(|i| value(i, 0.2)).collect();
+        let recurrent: Vec<f32> = (0..2 * GATES * HIDDEN)
+            .map(|i| value(i + 7, 0.02))
+            .collect();
+        let bias: Vec<f32> = (0..2 * GATES * 2).map(|i| value(i + 3, 0.1)).collect();
+        let input: Vec<f32> = (0..seq * width).map(|i| value(i + 11, 1.0)).collect();
+        let model = NativeModel {
+            weights: Weights {
+                input_dim: width,
+                source_sha256: String::new(),
+                tensors: [
+                    ("lstm.0.input", &input_weights),
+                    ("lstm.0.recurrent", &recurrent),
+                    ("lstm.0.bias", &bias),
+                ]
+                .into_iter()
+                .map(|(name, values)| (name.to_string(), values.clone()))
+                .collect(),
+            },
+        };
+        let actual = model.lstm(&input, seq, 0);
+
+        // タイル配置を解き、1 方向ずつ逐次に計算した参照値。
+        let tiled = |weights: &[f32], inner: usize, j: usize, k: usize| {
+            weights[(j / 32) * inner * 32 + k * 32 + j % 32]
+        };
+        let sigmoid = |x: f32| 1.0 / (1.0 + (-x).exp());
+        let mut expected = vec![0f32; seq * 2 * HIDDEN];
+        for direction in 0..2 {
+            let w = &input_weights[direction * width * GATES..(direction + 1) * width * GATES];
+            let r = &recurrent[direction * GATES * HIDDEN..(direction + 1) * GATES * HIDDEN];
+            let b = &bias[direction * GATES * 2..(direction + 1) * GATES * 2];
+            let mut hidden = vec![0f32; HIDDEN];
+            let mut cell = vec![0f32; HIDDEN];
+            for step in 0..seq {
+                let t = if direction == 0 { step } else { seq - 1 - step };
+                let gates: Vec<f32> = (0..GATES)
+                    .map(|j| {
+                        let x: f32 = (0..width)
+                            .map(|k| input[t * width + k] * tiled(w, width, j, k))
+                            .sum();
+                        let h: f32 = (0..HIDDEN)
+                            .map(|k| hidden[k] * tiled(r, HIDDEN, j, k))
+                            .sum();
+                        x + h + b[j] + b[GATES + j]
+                    })
+                    .collect();
+                for j in 0..HIDDEN {
+                    let i = sigmoid(gates[j]);
+                    let o = sigmoid(gates[HIDDEN + j]);
+                    let f = sigmoid(gates[2 * HIDDEN + j]);
+                    let g = gates[3 * HIDDEN + j].tanh();
+                    cell[j] = f * cell[j] + i * g;
+                    hidden[j] = o * cell[j].tanh();
+                }
+                let start = t * 2 * HIDDEN + direction * HIDDEN;
+                expected[start..start + HIDDEN].copy_from_slice(&hidden);
+            }
+        }
+        assert_eq!(actual.len(), expected.len());
+        for (index, (a, e)) in actual.iter().zip(&expected).enumerate() {
+            assert!((a - e).abs() < 1e-4, "{index}: {a} != {e}");
+        }
     }
 }
