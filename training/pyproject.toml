@@ -6,9 +6,9 @@ requires-python = ">=3.12"
 dependencies = [
     "torch>=2.12.1",
     "onnx>=1.23.2",
-    "onnxruntime-gpu>=1.31.0; sys_platform != 'darwin'",
-    "onnxruntime>=1.31.0; sys_platform == 'darwin'",
-    "transformers>=5.20.2",
+    "onnxruntime-gpu>=1.31.1; sys_platform != 'darwin'",
+    "onnxruntime>=1.31.1; sys_platform == 'darwin'",
+    "transformers>=5.22.0",
     "fugashi>=1.5.2",
     "unidic-lite>=1.0.8",
     "pyopenjtalk-plus>=0.4.1.post10",
@@ -26,7 +26,7 @@ torch = { index = "pytorch-cu126", marker = "sys_platform != 'darwin'" }
 [dependency-groups]
 dev = [
     "fugashi>=1.5.2",
-    "maturin>=1.15.0",
+    "maturin>=1.16.0",
     "pytorch-crf>=0.7.2",
     "unidic-lite>=1.0.8",
 ]
