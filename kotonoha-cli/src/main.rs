@@ -233,32 +233,23 @@ fn cmd_analyze(
     show_tokens: bool,
     model_bundle: Option<&std::path::Path>,
 ) {
-    let mut engine = kotonoha::Engine::with_default_rules();
-    load_model_bundle(&mut engine, model_bundle);
-
     let Some(dict_path) = dict_path else {
         eprintln!("Warning: No dictionary specified. Use --dict to specify a .hsd dictionary.");
-        eprintln!(
-            "Without a dictionary, use the 'label' subcommand with pre-tokenized JSON input."
+        exit_with_error(
+            "Without a dictionary, use the 'label' subcommand with pre-tokenized JSON input.",
         );
-        std::process::exit(1);
     };
-    let mut analyzer = hasami::Analyzer::load(dict_path).unwrap_or_else(|e| {
-        eprintln!("Error loading dictionary: {e}");
-        std::process::exit(1);
-    });
-
+    // 辞書の検査は、共有先の KNM 13 個 (数百 MB) を読み込む前に済ませる。
+    let mut analyzer = load_analyzer(dict_path);
+    let mut engine = kotonoha::Engine::with_default_rules();
     if let Some(path) = accent_dict_path
         && let Err(e) = engine.load_accent_dict(path)
     {
-        eprintln!("Error loading accent dictionary: {e}");
-        std::process::exit(1);
+        exit_with_error(format_args!("Error loading accent dictionary: {e}"));
     }
+    load_model_bundle(&mut engine, model_bundle);
 
-    let tokens = analyzer.try_tokenize(text).unwrap_or_else(|e| {
-        eprintln!("Error tokenizing text: {e}");
-        std::process::exit(1);
-    });
+    let tokens = tokenize_or_exit(&mut analyzer, text);
     if show_tokens {
         eprint!("{}", hasami::analyzer::format_mecab(&tokens));
     }
@@ -290,21 +281,8 @@ fn cmd_analyze(
 }
 
 fn cmd_tokenize(text: &str, dict_path: &std::path::Path, format: &TokenizeFormat) {
-    let mut analyzer = match hasami::Analyzer::load(dict_path) {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("Error loading dictionary: {e}");
-            std::process::exit(1);
-        }
-    };
-
-    let tokens = match analyzer.try_tokenize(text) {
-        Ok(tokens) => tokens,
-        Err(e) => {
-            eprintln!("Error tokenizing text: {e}");
-            std::process::exit(1);
-        }
-    };
+    let mut analyzer = load_analyzer(dict_path);
+    let tokens = tokenize_or_exit(&mut analyzer, text);
 
     match format {
         TokenizeFormat::Mecab => {
@@ -405,6 +383,25 @@ fn cmd_model(command: ModelCommands) {
     }
 }
 
+/// 失敗内容を標準エラー出力へ書き、終了コード 1 で終える。
+fn exit_with_error(message: impl std::fmt::Display) -> ! {
+    eprintln!("{message}");
+    std::process::exit(1)
+}
+
+/// 形態素解析辞書 (.hsd) を読み込む。読めなければ終了する。
+fn load_analyzer(dict_path: &std::path::Path) -> hasami::Analyzer {
+    hasami::Analyzer::load(dict_path)
+        .unwrap_or_else(|e| exit_with_error(format_args!("Error loading dictionary: {e}")))
+}
+
+/// 形態素解析する。辞書に不正な参照があれば終了する。
+fn tokenize_or_exit(analyzer: &mut hasami::Analyzer, text: &str) -> Vec<hasami::Token> {
+    analyzer
+        .try_tokenize(text)
+        .unwrap_or_else(|e| exit_with_error(format_args!("Error tokenizing text: {e}")))
+}
+
 fn load_model_bundle(engine: &mut kotonoha::Engine, explicit: Option<&std::path::Path>) {
     let dir = explicit.map(std::path::Path::to_path_buf).or_else(|| {
         std::env::var_os("KOTONOHA_MODEL_BUNDLE")
@@ -418,18 +415,15 @@ fn load_model_bundle(engine: &mut kotonoha::Engine, explicit: Option<&std::path:
     };
     #[cfg(feature = "neural")]
     {
-        let bundle = kotonoha::nn::v66::V66Bundle::from_dir(&dir).unwrap_or_else(|e| {
-            eprintln!("Error loading model bundle: {e}");
-            std::process::exit(1);
-        });
+        let bundle = kotonoha::nn::v66::V66Bundle::from_dir(&dir)
+            .unwrap_or_else(|e| exit_with_error(format_args!("Error loading model bundle: {e}")));
         engine
             .set_contextual_accent_predictor(Box::new(kotonoha::nn::v66::V66Pipeline::new(bundle)));
     }
     #[cfg(not(feature = "neural"))]
     {
         let _ = (engine, dir);
-        eprintln!("KNM inference requires building kotonoha-cli with --features neural");
-        std::process::exit(1);
+        exit_with_error("KNM inference requires building kotonoha-cli with --features neural");
     }
 }
 

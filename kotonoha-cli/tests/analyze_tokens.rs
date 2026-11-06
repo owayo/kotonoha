@@ -172,6 +172,38 @@ fn missing_or_invalid_dictionary_fails_without_analysis_output() {
 }
 
 #[test]
+fn dictionary_errors_are_reported_before_loading_models() {
+    let dir = tempfile::tempdir().unwrap();
+    // KNM のないディレクトリ。先に読み込めばモデルのエラーで終了する。
+    let models = dir.path().join("no-models");
+    std::fs::create_dir(&models).unwrap();
+    for (dict, expected) in [
+        (None, "No dictionary specified"),
+        (
+            Some(dir.path().join("missing.hsd")),
+            "Error loading dictionary:",
+        ),
+    ] {
+        let mut command = cli(dir.path());
+        command
+            .env("KOTONOHA_MODEL_BUNDLE", &models)
+            .args(["analyze", "猫"]);
+        if let Some(path) = &dict {
+            command.arg("--dict").arg(path);
+        }
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(expected), "{stderr}");
+        assert!(
+            !stderr.contains("model bundle") && !stderr.contains("KNM"),
+            "{stderr}"
+        );
+    }
+}
+
+#[test]
 fn quantity_readings_reach_cli_tokens_and_analysis() {
     let source =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../kotonoha/tests/fixtures/quantities");
