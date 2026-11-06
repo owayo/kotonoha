@@ -236,6 +236,21 @@ KNM を使う経路では、テキスト 1 文の処理時間のほぼすべて�
 `KOTONOHA_MODEL_PATH` (11 次元入力の単一 KNM)。詳細は
 `kotonoha/src/nn/v66/`。
 
+### 辞書の取得・検証（Python）
+
+`kotonoha.hasami_version()`・`dictionary_format_version()`・`dictionary_dir()`・
+`validate_dictionary(path)`・`download_dictionary(dir=None, *, name=None, force=False, base_url=None)`
+は、組み込みの hasami（`kotonoha-python` は hasami の `download` feature を有効にする）の
+`hasami::download`・`hasami::hsd::FORMAT_VERSION`・`hasami::analyzer::data_dir()` をそのまま使う。
+取得元は `CURRENT_TAG`（組み込みの hasami の版）のリリースで、kotonoha の版からは推測しない。
+ミラーの目録も `hasami_version` が組み込みの版と一致するものだけを使う。利用側が PATH の hasami CLI に
+取得させると、CLI が自分の版のリリースから取るため、形式の合わない辞書を置くことがあった（#25）。
+失敗は `DictionaryError`（`RuntimeError` の派生）の `code`（format・conflict・corrupt・download）と
+`path` で区別し、無いファイルは `FileNotFoundError`、目録に無い名前は `ValueError` にする。
+取得と検証は GIL を外して行い、Python の例外は GIL を持った側で作る。
+テスト (`kotonoha-python/tests/test_dictionary.py`) は CLI の `build-dict` で作った小さな HSD を
+ローカルの HTTP ミラーから取得し、外部へは通信しない。
+
 ### モデルの共有・取得
 
 `kotonoha model download` と Python の `kotonoha.download_models()` は同じ共有先を使う。

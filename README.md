@@ -278,6 +278,29 @@ v5 以前の `.hsd` は読み込み時に `dictionary format v5 is no longer sup
 python scripts/hasami_release.py download --snapshot .github/hasami-dictionaries.json --output-dir target/hsd-release
 ```
 
+Python からは、組み込みの hasami と同じ版の配布辞書を取得・検証できます。
+取得元は組み込みの hasami の版のリリースで、PATH の `hasami` CLI の版には依存しません。
+
+```python
+import kotonoha
+
+print(kotonoha.hasami_version(), kotonoha.dictionary_format_version())  # 例: 26.11.102 6
+print(kotonoha.dictionary_dir())  # 共有保存先（通信・作成なし）
+path = kotonoha.download_dictionary()  # name=..., force=True, base_url=..., dir=... も指定可
+kotonoha.validate_dictionary(path)  # 組み込みの hasami で読めるか（通信なし）
+engine = kotonoha.KotonohaEngine(dict_path=str(path))
+```
+
+- `download_dictionary()` は名前を省くと目録の推奨辞書を取り、置いたファイルのパスを返します。
+  正しいファイルがすでにあれば辞書は取り直しません（目録だけを確かめます）
+- 目録の形式がこの hasami で読めない場合や、ミラー（`base_url`）の目録が別の版の場合は失敗します
+- 中身の違う既存ファイルは `force=True` のときだけ置き換えます。サイズ・SHA-256・読み込みを
+  確かめてから置き換えるので、途中で失敗しても既存の辞書は残ります
+- 失敗は `kotonoha.DictionaryError`（`RuntimeError` の派生）で、`code` 属性が
+  `format`（形式の版が合わない）・`conflict`（中身の違う既存ファイル）・`corrupt`（壊れている）・
+  `download`（目録や通信の失敗）のどれか、`path` 属性が対象のファイル（無ければ `None`）です。
+  無いファイルは `FileNotFoundError`、目録に無い名前は `ValueError` になります
+
 IPAdic だけの辞書を自分で作る場合は、同梱のスクリプトを使います。
 
 ```bash
