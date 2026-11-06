@@ -32,6 +32,10 @@ impl AccentDict {
     }
 
     /// CSVファイルから辞書を読み込む
+    ///
+    /// 各行は lemma・reading・accent_type の3列以上が必要で、不足する行はエラーにする。
+    /// 同じ CSV に同じ `(lemma, reading)` が複数あれば先頭の行を採用する
+    /// ([`lookup_exact`](Self::lookup_exact) と配布物の梱包と同じ)。後続の行も値は検証する。
     pub fn from_csv(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let mut dict = Self::new();
 
@@ -43,19 +47,23 @@ impl AccentDict {
         for result in reader.records() {
             let record = result?;
             if record.len() < 3 {
-                continue;
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "アクセント辞書には lemma・reading・accent_type の3列以上が必要です",
+                )
+                .into());
             }
-            let lemma = record[0].trim().to_string();
-            let reading = record[1].trim().to_string();
+            let lemma = record[0].trim();
+            let reading = record[1].trim();
             let accent_type: u8 = record[2].trim().parse()?;
 
-            dict.entries
-                .entry(lemma)
-                .or_default()
-                .push(AccentDictEntry {
-                    reading,
+            let entries = dict.entries.entry(lemma.to_string()).or_default();
+            if !entries.iter().any(|entry| entry.reading == reading) {
+                entries.push(AccentDictEntry {
+                    reading: reading.to_string(),
                     accent_type,
                 });
+            }
         }
 
         Ok(dict)
@@ -216,6 +224,45 @@ mod tests {
 
         let result = AccentDict::from_csv(&path);
         std::fs::remove_file(&path).unwrap();
+        assert!(result.is_err());
+    }
+
+    fn csv_dict(name: &str, content: &str) -> Result<AccentDict, Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(name);
+        std::fs::write(&path, content).unwrap();
+        AccentDict::from_csv(&path)
+    }
+
+    #[test]
+    fn test_from_csv_rejects_rows_without_accent_column() {
+        // ヘッダから2列の CSV は、どの行も読み飛ばされて空の辞書になっていた。
+        let result = csv_dict("two-columns.csv", "lemma,reading\n猫,ネコ\n");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_csv_keeps_first_duplicate_entry() {
+        let dict = csv_dict(
+            "duplicates.csv",
+            "lemma,reading,accent_type\n猫,ネコ,1\n猫,ネコ,2\n猫,ビョウ,0\n",
+        )
+        .unwrap();
+        assert_eq!(dict.lookup_exact("猫", "ネコ"), Some(1));
+        assert_eq!(dict.lookup("猫", None), Some(1));
+        // マージ側が反復する項目にも、隠れた後続の値を残さない。
+        let mut entries: Vec<_> = dict.iter_entries().collect();
+        entries.sort();
+        assert_eq!(entries, [("猫", "ネコ", 1), ("猫", "ビョウ", 0)]);
+        assert_eq!(dict.len(), 2);
+    }
+
+    #[test]
+    fn test_from_csv_validates_shadowed_duplicates() {
+        let result = csv_dict(
+            "invalid-duplicate.csv",
+            "lemma,reading,accent_type\n猫,ネコ,1\n猫,ネコ,不正\n",
+        );
         assert!(result.is_err());
     }
 

@@ -180,3 +180,26 @@ pub enum BundleError {
     #[error("failed to load accent_dict at {0}: {1}")]
     AccentDict(PathBuf, String),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accent_dicts_keep_first_entry_within_csv_and_last_across_csvs() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("accent_dict.csv"),
+            "lemma,reading,accent_type\n猫,ネコ,1\n猫,ネコ,2\n犬,イヌ,1\n",
+        )
+        .unwrap();
+        let extra = dir.path().join("extra.csv");
+        std::fs::write(&extra, "lemma,reading,accent_type\n犬,イヌ,2\n犬,イヌ,3\n").unwrap();
+
+        let dict = load_accent_dicts(dir.path(), &[&extra]).unwrap();
+        // 同じ CSV 内は先頭 (Engine::load_accent_dict・梱包と同じ)、CSV 間は後勝ち。
+        assert_eq!(dict.lookup_exact("猫", "ネコ"), Some(1));
+        assert_eq!(dict.lookup_exact("犬", "イヌ"), Some(2));
+        assert_eq!(dict.len(), 2);
+    }
+}
