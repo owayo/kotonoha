@@ -54,6 +54,7 @@ class HasamiReleaseTests(unittest.TestCase):
         source = source_manifest.read_text(encoding="utf-8")
         record = snapshot()
         expected = tomllib.loads(source)
+        expected["workspace"]["dependencies"]["hasami"].pop("rev", None)
         expected["workspace"]["dependencies"]["hasami"]["tag"] = record["tag"]
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -93,12 +94,51 @@ class HasamiReleaseTests(unittest.TestCase):
                 hsd.pin_dependency(snapshot(), manifest)
             write.assert_not_called()
 
+    def test_full_commit_pin_returns_to_the_verified_release_tag(self):
+        """完全なコミット固定からタグへ戻し、feature・別の依存・コメントを保つ。"""
+        for revision in ["a1" * 20, "A1" * 20]:
+            source = (
+                "[workspace.dependencies]\n"
+                f'# hasami = {{ rev = "{revision}" }}\n'
+                'hasami = { git = "https://github.com/owayo/hasami", '
+                f'rev = "{revision}", default-features = false, '
+                'features = ["analyzer"] } # preserved\n'
+                f'other = {{ rev = "{revision}" }}\n'
+            )
+            expected = source.replace(
+                f'rev = "{revision}", default-features',
+                f'tag = "{snapshot()["tag"]}", default-features',
+            )
+            with tempfile.TemporaryDirectory() as temporary:
+                manifest = Path(temporary) / "Cargo.toml"
+                manifest.write_text(source, encoding="utf-8")
+                hsd.pin_dependency(snapshot(), manifest)
+                self.assertEqual(manifest.read_text(encoding="utf-8"), expected)
+                dependency = tomllib.loads(expected)["workspace"]["dependencies"][
+                    "hasami"
+                ]
+                self.assertNotIn("rev", dependency)
+                self.assertEqual(dependency["tag"], snapshot()["tag"])
+
     def test_invalid_dependency_pin_does_not_change_the_manifest(self):
         """別の取得元や競合する指定、想定外の TOML は書き換える前に拒否する。"""
         entries = [
             'hasami = "1"',
             'hasami = { git = "https://example.com/other", tag = "v1" }',
             'hasami = { git = "https://github.com/owayo/hasami", rev = "abc" }',
+            'hasami = { git = "https://github.com/owayo/hasami", rev = "main" }',
+            (
+                'hasami = { git = "https://github.com/owayo/hasami", '
+                f'rev = "{"a" * 40}", branch = "main" }}'
+            ),
+            (
+                'hasami = { git = "https://github.com/owayo/hasami", '
+                f'rev = "{"a" * 40}", path = "other" }}'
+            ),
+            (
+                'hasami = { git = "https://github.com/owayo/hasami", '
+                f'rev = "{"a" * 40}", tag = "v1" }}'
+            ),
             'hasami = { git = "https://github.com/owayo/hasami", '
             'tag = "v1", branch = "main" }',
             'hasami = { git = "https://github.com/owayo/hasami", '

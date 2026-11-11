@@ -158,7 +158,7 @@ def published_snapshot(tag: str = "") -> dict:
 
 
 def pin_dependency(snapshot: dict, manifest: Path) -> None:
-    """検証済み HSD と Cargo の hasami タグをそろえ、他の依存設定を保持する。
+    """検証済み HSD のタグへ hasami のタグまたは固定コミットをそろえる。
 
     Raises:
         ValueError: HSD 記録や既存の hasami 指定が想定した形式でない場合。
@@ -168,13 +168,24 @@ def pin_dependency(snapshot: dict, manifest: Path) -> None:
     source = manifest.read_text(encoding="utf-8")
     expected = tomllib.loads(source)
     dependency = expected["workspace"]["dependencies"]["hasami"]
+    selector = None
+    if isinstance(dependency, dict):
+        if isinstance(dependency.get("tag"), str) and "rev" not in dependency:
+            selector = "tag"
+        elif (
+            isinstance(dependency.get("rev"), str)
+            and re.fullmatch(r"[0-9a-fA-F]{40}", dependency["rev"])
+            and "tag" not in dependency
+        ):
+            selector = "rev"
     if (
         not isinstance(dependency, dict)
         or dependency.get("git") != f"https://github.com/{UPSTREAM}"
-        or not isinstance(dependency.get("tag"), str)
-        or {"rev", "branch", "path"}.intersection(dependency)
+        or selector is None
+        or {"branch", "path"}.intersection(dependency)
     ):
-        raise ValueError("Expected a tagged hasami git dependency")
+        raise ValueError("Expected a tagged or full-commit hasami git dependency")
+    del dependency[selector]
     dependency["tag"] = snapshot["tag"]
     section = re.search(
         r"(?ms)^\[workspace\.dependencies\][^\S\n]*\n(?:(?!^\[).)*", source
@@ -185,8 +196,8 @@ def pin_dependency(snapshot: dict, manifest: Path) -> None:
     if entry is None:
         raise ValueError("Expected an inline hasami dependency")
     pinned, count = re.subn(
-        r'(\btag[ \t]*=[ \t]*)"[^"\n]*"',
-        lambda match: f'{match[1]}"{snapshot["tag"]}"',
+        rf'\b{selector}([ \t]*=[ \t]*)"[^"\n]*"',
+        lambda match: f'tag{match[1]}"{snapshot["tag"]}"',
         entry[0],
     )
     start = section.start() + entry.start()

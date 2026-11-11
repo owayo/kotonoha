@@ -1,4 +1,4 @@
-//! hasami の年読み・未知単位品詞・震度の文脈読みを、HSD読込から音声処理まで検証する。
+//! hasami の文脈上の読み・品詞を、HSD読込から音声処理まで検証する。
 
 use hasami::dict::{DictBuilder, DictEntry, UnkEntry};
 use kotonoha::njd::{InputToken, Pos};
@@ -90,6 +90,34 @@ fn fixture() -> Fixture {
             "",
         ),
         ("を", "助詞,格助詞,一般,*", "を", "ヲ", "ヲ", "", ""),
+        (
+            "行く",
+            "動詞,自立,*,*",
+            "行く",
+            "イク",
+            "イク",
+            "五段・カ行促音便",
+            "基本形",
+        ),
+        (
+            "等",
+            "名詞,固有名詞,人名,名",
+            "等",
+            "ヒトシ",
+            "ヒトシ",
+            "",
+            "",
+        ),
+        (
+            "山田",
+            "名詞,固有名詞,人名,姓",
+            "山田",
+            "ヤマダ",
+            "ヤマダ",
+            "",
+            "",
+        ),
+        ("さん", "名詞,接尾,人名,*", "さん", "サン", "サン", "", ""),
         (
             "観測",
             "名詞,サ変接続,*,*",
@@ -237,6 +265,39 @@ fn calendar_year_terminal_four_reaches_input_njd_and_speech() {
     // IDに埋め込まれた同形の数詞では年読みを新たに認可しない。
     let tokens = f.analyzer.try_tokenize("ID2024年11月1日").unwrap();
     assert_eq!(input(&tokens, "2024").pronunciation, "ニセンニジューヨン");
+}
+
+#[test]
+fn direct_clause_enumeration_and_person_name_keep_distinct_speech() {
+    let mut f = fixture();
+    for (text, reading, pos, detail, speech) in [
+        ("行く等を", "ナド", Pos::Joshi, "副助詞", "イクナドヲ"),
+        (
+            "山田等さん",
+            "ヒトシ",
+            Pos::Meishi,
+            "固有名詞",
+            "ヤマダヒトシサン",
+        ),
+    ] {
+        let raw = f.analyzer.try_tokenize(text).unwrap();
+        let converted = input(&raw, "等");
+        assert_eq!(converted.pos_detail1, detail);
+        assert_eq!(converted.reading, reading);
+        assert_eq!(converted.pronunciation, reading);
+        assert_eq!(
+            (converted.ctype.as_str(), converted.cform.as_str()),
+            ("*", "*")
+        );
+        let nodes = f.engine.text_to_analyze(text).unwrap();
+        let target = nodes.iter().find(|n| n.surface == "等").unwrap();
+        assert_eq!(target.pos, pos);
+        assert_eq!(target.pos_detail1, detail);
+        assert_eq!(target.reading, reading);
+        assert_eq!(target.pronunciation, reading);
+        assert_eq!(target.mora_count, mora::count_mora(reading));
+        assert_speech(&f.engine, text, speech);
+    }
 }
 
 #[test]
