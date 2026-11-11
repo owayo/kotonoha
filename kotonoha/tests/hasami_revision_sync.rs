@@ -15,6 +15,24 @@ struct Fixture {
 fn fixture() -> Fixture {
     let mut builder = DictBuilder::new();
     for (surface, pos, base, reading, pronunciation, kind, form) in [
+        // ASCII comma直後の年代も、字ごとの既知数詞から合成させる。
+        ("2", "名詞,数,*,*", "2", "ニ", "ニ", "", ""),
+        ("六", "名詞,数,*,*", "六", "ロク", "ロク", "", ""),
+        ("七", "名詞,数,*,*", "七", "ナナ", "ナナ", "", ""),
+        ("〇", "名詞,数,*,*", "〇", "レイ", "レイ", "", ""),
+        ("零", "名詞,数,*,*", "零", "ゼロ", "ゼロ", "", ""),
+        (
+            "年代",
+            "名詞,接尾,助数詞,*",
+            "年代",
+            "ネンダイ",
+            "ネンダイ",
+            "",
+            "",
+        ),
+        (",", "記号,読点,*,*", ",", ",", ",", "", ""),
+        (".", "記号,句点,*,*", ".", ".", ".", "", ""),
+        ("、", "記号,読点,*,*", "、", "、", "、", "", ""),
         (
             "2024",
             "名詞,数,*,*",
@@ -555,4 +573,133 @@ fn seismic_measurement_and_quoted_alias_keep_distinct_readings_through_speech() 
         assert_eq!(alias.mora_count, mora_count);
         assert_speech(&f.engine, text, speech);
     }
+}
+
+#[test]
+fn ascii_comma_decades_reach_input_njd_and_speech() {
+    let mut f = fixture();
+    for (text, surface, reading, pronunciation, speech) in [
+        (
+            "観測は,六〇年代。",
+            "六〇",
+            "ロクジュウ",
+            "ロクジュー",
+            "カンソクワロクジュウネンダイ",
+        ),
+        (
+            "観測は,七〇年代。",
+            "七〇",
+            "ナナジュウ",
+            "ナナジュー",
+            "カンソクワナナジュウネンダイ",
+        ),
+        (
+            "観測は,六零年代。",
+            "六零",
+            "ロクジュウ",
+            "ロクジュー",
+            "カンソクワロクジュウネンダイ",
+        ),
+        // 元入力末尾の単独ASCII句点も年代の終端にする。
+        (
+            "観測は,六〇年代.",
+            "六〇",
+            "ロクジュウ",
+            "ロクジュー",
+            "カンソクワロクジュウネンダイ",
+        ),
+        (
+            "観測は,七〇年代.",
+            "七〇",
+            "ナナジュウ",
+            "ナナジュー",
+            "カンソクワナナジュウネンダイ",
+        ),
+        // 和文読点と文頭で元から正しい読みも保つ。
+        (
+            "観測は、六〇年代。",
+            "六〇",
+            "ロクジュウ",
+            "ロクジュー",
+            "カンソクワロクジュウネンダイ",
+        ),
+        (
+            "六〇年代。",
+            "六〇",
+            "ロクジュウ",
+            "ロクジュー",
+            "ロクジュウネンダイ",
+        ),
+        // 人名の等ヒトシを、後続の年代合成で変更しない。
+        (
+            "山田等さん,六〇年代。",
+            "六〇",
+            "ロクジュウ",
+            "ロクジュー",
+            "ヤマダヒトシサンロクジュウネンダイ",
+        ),
+    ] {
+        let raw = f.analyzer.try_tokenize(text).unwrap();
+        assert!(
+            raw.iter().any(|t| t.surface.as_ref() == surface),
+            "{text}: {raw:?}"
+        );
+        let number = input(&raw, surface);
+        assert_eq!(number.lemma, surface, "{text}");
+        assert_eq!(
+            (number.pos.as_str(), number.pos_detail1.as_str()),
+            ("名詞", "数")
+        );
+        assert_eq!((number.ctype.as_str(), number.cform.as_str()), ("*", "*"));
+        assert_eq!(number.reading, reading, "{text}");
+        assert_eq!(number.pronunciation, pronunciation, "{text}");
+        let nodes = f.engine.text_to_analyze(text).unwrap();
+        let number = nodes.iter().find(|n| n.surface == surface).unwrap();
+        assert_eq!(number.pos, Pos::Meishi);
+        assert_eq!(number.pos_detail1, "数");
+        assert_eq!(number.reading, reading, "{text}");
+        assert_eq!(number.pronunciation, reading, "{text}");
+        assert_eq!(number.mora_count, mora::count_mora(reading));
+        assert_speech(&f.engine, text, speech);
+    }
+}
+
+#[test]
+fn ascii_comma_decade_nonmatches_preserve_identifier_and_separator_guards() {
+    let mut f = fixture();
+    for (text, speech) in [
+        ("ID,六〇年代。", "アイディイロクレイネンダイ"),
+        (",六〇年代。", "ロクレイネンダイ"),
+        ("観測は,,六〇年代。", "カンソクワロクレイネンダイ"),
+        ("観測は,六〇年代A", "カンソクワロクレイネンダイエエ"),
+        // 小数・識別子へ続くperiodは句点終端として広げない。
+        ("観測は,六〇年代.2", "カンソクワロクレイネンダイニ"),
+        ("観測は,六〇年代.A", "カンソクワロクレイネンダイエエ"),
+    ] {
+        let raw = f.analyzer.try_tokenize(text).unwrap();
+        assert!(
+            !raw.iter().any(|t| t.surface.as_ref() == "六〇"),
+            "{text}: {raw:?}"
+        );
+        let six = input(&raw, "六");
+        let zero = input(&raw, "〇");
+        assert_eq!(
+            (six.reading.as_str(), six.pronunciation.as_str()),
+            ("ロク", "ロク")
+        );
+        assert_eq!(
+            (zero.reading.as_str(), zero.pronunciation.as_str()),
+            ("レイ", "レイ")
+        );
+        assert_speech(&f.engine, text, speech);
+    }
+    // 既存の西暦末尾4・月日とID保護も、このfixture拡張で変えない。
+    assert_speech(
+        &f.engine,
+        "2024年11月1日",
+        "ニセンニジュウヨネンジュウイチガツツイタチ",
+    );
+    let raw = f.analyzer.try_tokenize("ID2024年11月1日").unwrap();
+    assert_eq!(input(&raw, "2024").pronunciation, "ニセンニジューヨン");
+    assert_speech(&f.engine, "山田等さん", "ヤマダヒトシサン");
 }

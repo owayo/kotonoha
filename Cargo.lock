@@ -600,7 +600,7 @@ dependencies = [
 [[package]]
 name = "hasami"
 version = "26.11.102"
-source = "git+https://github.com/owayo/hasami?rev=50ea90c451d34f84f9ceb2664a94c90b705d2443#50ea90c451d34f84f9ceb2664a94c90b705d2443"
+source = "git+https://github.com/owayo/hasami?rev=32a4561a2e32cd1fc68ff4c472170d45095a7485#32a4561a2e32cd1fc68ff4c472170d45095a7485"
 dependencies = [
  "bytemuck",
  "csv",
