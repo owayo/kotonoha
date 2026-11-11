@@ -100,6 +100,62 @@ fn fixture() -> Fixture {
             "基本形",
         ),
         (
+            "する",
+            "動詞,自立,*,*",
+            "する",
+            "スル",
+            "スル",
+            "サ変・スル",
+            "基本形",
+        ),
+        (
+            "学ぶ",
+            "動詞,自立,*,*",
+            "学ぶ",
+            "マナブ",
+            "マナブ",
+            "五段・バ行",
+            "基本形",
+        ),
+        // 活用情報が無い動詞を、表層だけで基本形とみなさない。
+        ("試す", "動詞,自立,*,*", "試す", "タメス", "タメス", "", ""),
+        (
+            "を通じて",
+            "助詞,格助詞,連語,*",
+            "を通じて",
+            "ヲツウジテ",
+            "ヲツージテ",
+            "",
+            "",
+        ),
+        (
+            "を通して",
+            "助詞,格助詞,連語,*",
+            "を通して",
+            "ヲトオシテ",
+            "ヲトーシテ",
+            "",
+            "",
+        ),
+        (
+            "を通じ",
+            "助詞,格助詞,連語,*",
+            "を通じ",
+            "ヲツウジ",
+            "ヲツージ",
+            "",
+            "",
+        ),
+        (
+            "を巡って",
+            "助詞,格助詞,連語,*",
+            "を巡って",
+            "ヲメグッテ",
+            "ヲメグッテ",
+            "",
+            "",
+        ),
+        (
             "等",
             "名詞,固有名詞,人名,名",
             "等",
@@ -298,6 +354,105 @@ fn direct_clause_enumeration_and_person_name_keep_distinct_speech() {
         assert_eq!(target.mora_count, mora::count_mora(reading));
         assert_speech(&f.engine, text, speech);
     }
+}
+
+#[test]
+fn compound_case_enumeration_reaches_input_njd_and_speech() {
+    let mut f = fixture();
+    for (text, speech) in [
+        (
+            "観測する等を通じて学ぶ。",
+            "カンソクスルナドヲツウジテマナブ",
+        ),
+        (
+            "観測する等を通して学ぶ。",
+            "カンソクスルナドヲトオシテマナブ",
+        ),
+        ("観測する等を通じ学ぶ。", "カンソクスルナドヲツウジマナブ"),
+    ] {
+        let raw = f.analyzer.try_tokenize(text).unwrap();
+        let verb = input(&raw, "する");
+        assert_eq!(verb.cform, "基本形");
+        assert_eq!(verb.ctype, "サ変・スル");
+        let converted = input(&raw, "等");
+        assert_eq!(
+            (converted.pos.as_str(), converted.pos_detail1.as_str()),
+            ("助詞", "副助詞"),
+            "{text}"
+        );
+        assert_eq!(converted.lemma, "等");
+        assert_eq!(converted.reading, "ナド");
+        assert_eq!(converted.pronunciation, "ナド");
+        assert_eq!(
+            (converted.ctype.as_str(), converted.cform.as_str()),
+            ("*", "*")
+        );
+        let nodes = f.engine.text_to_analyze(text).unwrap();
+        let target = nodes.iter().find(|n| n.surface == "等").unwrap();
+        assert_eq!(target.pos, Pos::Joshi);
+        assert_eq!(target.pos_detail1, "副助詞");
+        assert_eq!(target.reading, "ナド");
+        assert_eq!(target.pronunciation, "ナド");
+        assert_eq!(target.mora_count, 2);
+        assert_speech(&f.engine, text, speech);
+    }
+}
+
+#[test]
+fn compound_case_nonmatches_keep_person_reading_through_speech() {
+    let mut f = fixture();
+    for (text, speech) in [
+        ("山田等を通じて学ぶ。", "ヤマダヒトシヲツウジテマナブ"),
+        (
+            "観測する等を巡って学ぶ。",
+            "カンソクスルヒトシヲメグッテマナブ",
+        ),
+        (
+            "観測する 等を通じて学ぶ。",
+            "カンソクスルヒトシヲツウジテマナブ",
+        ),
+        (
+            "観測する等 を通じて学ぶ。",
+            "カンソクスルヒトシヲツウジテマナブ",
+        ),
+        (
+            "観測する\t等を通じて学ぶ。",
+            "カンソクスルヒトシヲツウジテマナブ",
+        ),
+        ("観測し等を通じて学ぶ。", "カンソクシヒトシヲツウジテマナブ"),
+        ("試す等を通じて学ぶ。", "タメスヒトシヲツウジテマナブ"),
+    ] {
+        let raw = f.analyzer.try_tokenize(text).unwrap();
+        let converted = input(&raw, "等");
+        assert_eq!(
+            (
+                converted.pos.as_str(),
+                converted.pos_detail1.as_str(),
+                converted.pos_detail2.as_str(),
+                converted.pos_detail3.as_str(),
+            ),
+            ("名詞", "固有名詞", "人名", "名"),
+            "{text}"
+        );
+        assert_eq!(converted.reading, "ヒトシ");
+        assert_eq!(converted.pronunciation, "ヒトシ");
+        let nodes = f.engine.text_to_analyze(text).unwrap();
+        let target = nodes.iter().find(|n| n.surface == "等").unwrap();
+        assert_eq!(target.pos, Pos::Meishi);
+        assert_eq!(target.pos_detail1, "固有名詞");
+        assert_eq!(target.reading, "ヒトシ");
+        assert_eq!(target.pronunciation, "ヒトシ");
+        assert_eq!(target.mora_count, 3);
+        assert_speech(&f.engine, text, speech);
+    }
+    let raw = f.analyzer.try_tokenize("観測し等を通じて学ぶ。").unwrap();
+    assert_eq!(input(&raw, "し").cform, "連用形");
+    let raw = f.analyzer.try_tokenize("試す等を通じて学ぶ。").unwrap();
+    let incomplete = input(&raw, "試す");
+    assert_eq!(
+        (incomplete.ctype.as_str(), incomplete.cform.as_str()),
+        ("*", "*")
+    );
 }
 
 #[test]
