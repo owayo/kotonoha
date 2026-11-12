@@ -148,6 +148,10 @@ Python API は `uv run --locked --project kotonoha-python python -m unittest dis
 -s kotonoha-python/tests -v`、配布処理は `python -m unittest discover -s scripts/tests -v`。
 WSL と Windows でチェックアウトを共有し、既存 `.venv` を更新できない場合は、
 `UV_PROJECT_ENVIRONMENT` で Windows 用の別ディレクトリを指定する。
+hasami の配布辞書更新では `kotonoha/tests/reviewed_readings.rs` の ignored テストも実行する。
+`KOTONOHA_TEST_DICT` に検証する公開 HSD、`KOTONOHA_RELEASE_MODELS` に13個の KNM がある
+ディレクトリを指定し、`mise exec -- cargo test --locked -p kotonoha --all-features
+--test reviewed_readings -- --ignored` で辞書の読み・活用境界と実推論後の音素・ラベルを確認する。
 
 実際の HSD を使う段階別の計測は
 `cargo run --release --locked -p kotonoha --features neural --example text_pipeline_profile -- DICT.hsd CORPUS.txt [MODEL_DIR]`。

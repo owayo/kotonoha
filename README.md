@@ -284,7 +284,7 @@ Python からは、組み込みの hasami と同じ版の配布辞書を取得�
 ```python
 import kotonoha
 
-print(kotonoha.hasami_version(), kotonoha.dictionary_format_version())  # 例: 26.11.102 6
+print(kotonoha.hasami_version(), kotonoha.dictionary_format_version())  # 例: 26.11.103 6
 print(kotonoha.dictionary_dir())  # 共有保存先（通信・作成なし）
 path = kotonoha.download_dictionary()  # name=..., force=True, base_url=..., dir=... も指定可
 kotonoha.validate_dictionary(path)  # 組み込みの hasami で読めるか（通信なし）

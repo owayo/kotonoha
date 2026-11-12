@@ -76,6 +76,17 @@ fn distributed_reviewed_readings_reach_phonemes_and_moras() {
 // 辞書の一般語・人名の読み分けと数詞の音便を、意味から決めた期待発音で確認する。
 // 例文は独立に作成し、数詞は最小の数量表現を使う。
 const LEXICAL_AND_COUNTER_READINGS: &[(&str, &str)] = &[
+    (
+        "学生寮は来月閉寮する。",
+        "ガクセイリョーワライゲツヘイリョースル",
+    ),
+    ("閉寮の予定を知らせる。", "ヘイリョーノヨテイヲシラセル"),
+    ("閉寮を延期する。", "ヘイリョーヲエンキスル"),
+    ("今月は閉寮しない。", "コンゲツワヘイリョーシナイ"),
+    ("閉校", "ヘイコー"),
+    ("閉館", "ヘイカン"),
+    ("入寮", "ニューリョー"),
+    ("寮", "リョー"),
     ("作図する等を試す。", "サクズスルナドヲタメス"),
     ("描いた等を報告する。", "エガイタナドヲホーコクスル"),
     ("山田等さんに聞く。", "ヤマダヒトシサンニキク"),
@@ -158,6 +169,46 @@ const LEXICAL_AND_COUNTER_READINGS: &[(&str, &str)] = &[
     ("三品親王", "サンボンシンノー"),
     ("四品親王", "シホンシンノー"),
 ];
+
+#[test]
+#[ignore = "KOTONOHA_TEST_DICT に監査済みの配布辞書を指定する"]
+fn distributed_dormitory_closure_preserves_njd_and_conjugation_boundaries() {
+    let dictionary = std::env::var("KOTONOHA_TEST_DICT").expect("KOTONOHA_TEST_DICT is required");
+    let mut engine = Engine::default();
+    engine
+        .load_dictionary(std::path::Path::new(&dictionary))
+        .unwrap();
+    for (text, following, following_pos) in [
+        ("学生寮は来月閉寮する。", "する", kotonoha::njd::Pos::Doushi),
+        ("閉寮の予定を知らせる。", "の", kotonoha::njd::Pos::Joshi),
+        ("閉寮を延期する。", "を", kotonoha::njd::Pos::Joshi),
+        ("今月は閉寮しない。", "し", kotonoha::njd::Pos::Doushi),
+    ] {
+        let nodes = engine.text_to_analyze(text).unwrap();
+        let index = nodes
+            .iter()
+            .position(|node| node.surface == "閉寮")
+            .unwrap_or_else(|| panic!("{text}: {nodes:?}"));
+        let noun = &nodes[index];
+        assert_eq!(noun.pos, kotonoha::njd::Pos::Meishi, "{text}");
+        assert_eq!(noun.pos_detail1, "サ変接続", "{text}");
+        assert_eq!(noun.lemma, "閉寮", "{text}");
+        assert_eq!(noun.reading, "ヘイリョウ", "{text}");
+        assert_eq!(noun.pronunciation, "ヘイリョオ", "{text}");
+        assert_eq!(noun.mora_count, 4, "{text}");
+        assert_eq!(noun.ctype, "*", "{text}");
+        assert_eq!(noun.cform, "*", "{text}");
+        let next = &nodes[index + 1];
+        assert_eq!(next.surface, following, "{text}");
+        assert_eq!(next.pos, following_pos, "{text}");
+        if following == "し" {
+            assert_eq!(next.lemma, "する", "{text}");
+            assert_eq!(next.cform, "未然形", "{text}");
+            assert_eq!(nodes[index + 2].surface, "ない", "{text}");
+            assert_eq!(nodes[index + 2].pos, kotonoha::njd::Pos::Jodoushi, "{text}");
+        }
+    }
+}
 
 fn assert_lexical_and_counter_readings(
     engine: &Engine,
