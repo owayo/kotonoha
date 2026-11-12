@@ -1,8 +1,9 @@
 # 開発と CI で同じツールチェーンを使う。
 [tools]
 rust = { version = "1.99.1", profile = "minimal", components = ["rustfmt", "clippy"] }
+# 学習用の onnxruntime-gpu 1.31.1 は CPython 3.15 の wheel を提供していない。
 python = "3.14.10"
-uv = "0.13.6"
+uv = "0.13.7"
 
 [env]
 UV_PYTHON_PREFERENCE = "only-system"
