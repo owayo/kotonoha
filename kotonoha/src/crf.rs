@@ -127,23 +127,23 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
     let node = &nodes[position];
     let len = nodes.len();
 
-    // 1. POS one-hot
+    // 1. 品詞のワンホット特徴量
     let pos_id = pos_to_id(&node.pos);
     features.push((feature_hash_num("pos", pos_id), 1.0));
 
-    // 2. POS detail1 (hashed)
+    // 2. 品詞細分類1のハッシュ
     features.push((feature_hash("pos_d1", &node.pos_detail1), 1.0));
 
-    // 3. POS detail2 (hashed)
+    // 3. 品詞細分類2のハッシュ
     if node.pos_detail2 != "*" && !node.pos_detail2.is_empty() {
         features.push((feature_hash("pos_d2", &node.pos_detail2), 1.0));
     }
 
-    // 4. POS + detail1 conjunction (richer POS representation)
+    // 4. 品詞と細分類1の組み合わせ
     let pos_d1_combo = format!("{}_{}", node.pos.to_label_str(), node.pos_detail1);
     features.push((feature_hash("pos_pd1", &pos_d1_combo), 1.0));
 
-    // 5. POS + detail1 + detail2 conjunction
+    // 5. 品詞と細分類1・2の組み合わせ
     if node.pos_detail2 != "*" && !node.pos_detail2.is_empty() {
         let pos_d12_combo = format!(
             "{}_{}_{}",
@@ -154,43 +154,43 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("pos_pd12", &pos_d12_combo), 1.0));
     }
 
-    // 6. Mora count (capped at 10)
+    // 6. モーラ数（上限10）
     let mora = node.mora_count.min(10);
     features.push((feature_hash_num("mora", mora), 1.0));
 
-    // 7. Reading length
+    // 7. 読みの文字数
     let reading_len = node.reading.chars().count().min(20);
     features.push((feature_hash_num("rlen", reading_len), 1.0));
 
-    // 8. Kana group of first character
+    // 8. 読みの先頭文字の仮名グループ
     features.push((feature_hash("kgrp", kana_group(&node.reading)), 1.0));
 
-    // 9. Surface form (hashed) - for common words
+    // 9. 頻出語を識別する表層形のハッシュ
     features.push((feature_hash("surf", &node.surface), 1.0));
 
-    // 10. Previous word POS
+    // 10. 前の語の品詞
     if position > 0 {
         let prev = &nodes[position - 1];
         let prev_pos = pos_to_id(&prev.pos);
         features.push((feature_hash_num("prev_pos", prev_pos), 1.0));
-        // Previous word POS detail1
+        // 前の語の品詞細分類1
         features.push((feature_hash("prev_d1", &prev.pos_detail1), 1.0));
     } else {
         features.push((feature_hash("prev_pos", "NONE"), 1.0));
     }
 
-    // 11. Next word POS
+    // 11. 次の語の品詞
     if position + 1 < len {
         let next = &nodes[position + 1];
         let next_pos = pos_to_id(&next.pos);
         features.push((feature_hash_num("next_pos", next_pos), 1.0));
-        // Next word POS detail1
+        // 次の語の品詞細分類1
         features.push((feature_hash("next_d1", &next.pos_detail1), 1.0));
     } else {
         features.push((feature_hash("next_pos", "NONE"), 1.0));
     }
 
-    // 12. Position in sentence
+    // 12. 文中の位置
     let sent_pos = if position == 0 {
         SentencePosition::Beginning
     } else if position == len - 1 {
@@ -200,7 +200,7 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
     };
     features.push((feature_hash("spos", sent_pos.as_str()), 1.0));
 
-    // 13. Function word / content word
+    // 13. 機能語・内容語の分類
     if node.pos.is_function_word() {
         features.push((feature_hash("wtype", "func"), 1.0));
     } else if node.pos.is_content_word() {
@@ -209,7 +209,7 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("wtype", "other"), 1.0));
     }
 
-    // 14. Conjugation type (detailed)
+    // 14. 活用型の有無と値
     if node.ctype != "*" && !node.ctype.is_empty() {
         features.push((feature_hash("ctype", "present"), 1.0));
         features.push((feature_hash("ctype_v", &node.ctype), 1.0));
@@ -217,7 +217,7 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("ctype", "absent"), 1.0));
     }
 
-    // 15. Conjugation form (detailed)
+    // 15. 活用形の有無と値
     if node.cform != "*" && !node.cform.is_empty() {
         features.push((feature_hash("cform", "present"), 1.0));
         features.push((feature_hash("cform_v", &node.cform), 1.0));
@@ -225,33 +225,33 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("cform", "absent"), 1.0));
     }
 
-    // 16. Conjugation type + form conjunction
+    // 16. 活用型と活用形の組み合わせ
     if node.ctype != "*" && !node.ctype.is_empty() && node.cform != "*" && !node.cform.is_empty() {
         let ct_cf = format!("{}_{}", node.ctype, node.cform);
         features.push((feature_hash("ctcf", &ct_cf), 1.0));
     }
 
-    // 17. Bigram: POS pair with previous
+    // 17. 前の語と現在の語の品詞ペア
     if position > 0 {
         let prev_pos = pos_to_id(&nodes[position - 1].pos);
         let bigram = format!("{}_{}", prev_pos, pos_id);
         features.push((feature_hash("pos_bi", &bigram), 1.0));
     }
 
-    // 18. Bigram: POS pair with next
+    // 18. 現在の語と次の語の品詞ペア
     if position + 1 < len {
         let next_pos = pos_to_id(&nodes[position + 1].pos);
         let bigram = format!("{}_{}", pos_id, next_pos);
         features.push((feature_hash("pos_bi_n", &bigram), 1.0));
     }
 
-    // 19. Kana group of last character of reading
+    // 19. 読みの末尾文字の仮名グループ
     if let Some(last_ch) = node.reading.chars().last() {
         let last_str = last_ch.to_string();
         features.push((feature_hash("kgrp_end", kana_group(&last_str)), 1.0));
     }
 
-    // 20. Pronunciation differs from reading (long vowel expansion marker)
+    // 20. 読みと発音の相違（長音展開などの目印）
     if node.pronunciation != node.reading
         && !node.pronunciation.is_empty()
         && node.pronunciation != "*"
@@ -259,9 +259,7 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("pron_diff", "yes"), 1.0));
     }
 
-    // === New features ===
-
-    // 21. Trigram POS features (prev-current-next)
+    // 21. 前後の語を含む3語の品詞の組み合わせ
     if position > 0 && position + 1 < len {
         let prev_pos = pos_to_id(&nodes[position - 1].pos);
         let next_pos = pos_to_id(&nodes[position + 1].pos);
@@ -269,7 +267,7 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("pos_tri", &trigram), 1.0));
     }
 
-    // 22. Reading suffix features (last 1-2 mora strongly correlate with accent)
+    // 22. アクセントと関係の強い読み末尾1〜2モーラ
     if !node.reading.is_empty() {
         let suffix1 = reading_suffix(&node.reading, 1);
         features.push((feature_hash("rsuf1", &suffix1), 1.0));
@@ -277,12 +275,12 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         features.push((feature_hash("rsuf2", &suffix2), 1.0));
     }
 
-    // 23. Word length feature (number of characters in surface)
+    // 23. 表層形の文字数
     let surface_len = node.surface.chars().count().min(15);
     features.push((feature_hash_num("slen", surface_len), 1.0));
 
-    // 24. Morpheme boundary features (compound word detection)
-    // A function word following a content word suggests a phrase boundary
+    // 24. 複合語を識別する形態素境界の特徴量
+    // 内容語から機能語への接続などを境界の手掛かりにする。
     if position > 0 {
         let prev = &nodes[position - 1];
         if prev.pos.is_content_word() && node.pos.is_function_word() {
@@ -294,20 +292,20 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         if prev.pos.is_function_word() && node.pos.is_content_word() {
             features.push((feature_hash("bnd", "func_cont"), 1.0));
         }
-        // Prefix detection (接頭詞 followed by content word)
+        // 前の語が接頭詞の場合
         if prev.pos == Pos::Settoushi {
             features.push((feature_hash("bnd", "prefix"), 1.0));
         }
     }
     if position + 1 < len {
         let next = &nodes[position + 1];
-        // Suffix detection (content word followed by 接尾辞-like subcategory)
+        // 内容語の次に接尾辞に相当する細分類が続く場合
         if node.pos.is_content_word() && next.pos_detail1.contains("接尾") {
             features.push((feature_hash("bnd", "suffix_next"), 1.0));
         }
     }
 
-    // 25. Reading prefix (first 2 chars of reading)
+    // 25. 読みの先頭2文字
     {
         let chars: Vec<char> = node.reading.chars().collect();
         if chars.len() >= 2 {
@@ -316,19 +314,19 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         }
     }
 
-    // 26. POS + mora conjunction (accent type strongly depends on POS + length)
+    // 26. アクセント型と関係の強い品詞とモーラ数の組み合わせ
     {
         let pos_mora = format!("{}_{}", pos_id, mora);
         features.push((feature_hash("pos_mora", &pos_mora), 1.0));
     }
 
-    // 27. Surface + POS conjunction for common short words
+    // 27. 頻出する短い語の表層形と品詞の組み合わせ
     if surface_len <= 3 {
         let sp = format!("{}_{}", node.surface, pos_id);
         features.push((feature_hash("sp", &sp), 1.0));
     }
 
-    // 28. Previous word's reading suffix + current POS (cross-word accent interaction)
+    // 28. 語をまたぐアクセントを捉える、前の語の読み末尾と現在の品詞の組み合わせ
     if position > 0 {
         let prev = &nodes[position - 1];
         if !prev.reading.is_empty() {
@@ -338,12 +336,12 @@ pub fn extract_features(nodes: &[NjdNode], position: usize) -> Vec<(usize, f32)>
         }
     }
 
-    // 29. Lemma feature (base form often determines accent)
+    // 29. アクセントの決定に使う原形
     if !node.lemma.is_empty() && node.lemma != "*" {
         features.push((feature_hash("lemma", &node.lemma), 1.0));
     }
 
-    // 30. Relative position in sentence (bucketed)
+    // 30. 文中の相対位置を5段階に分けた値
     if len > 1 {
         let rel_pos = (position * 4) / (len - 1); // 0..4
         features.push((feature_hash_num("rpos", rel_pos), 1.0));
